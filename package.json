@@ -1,0 +1,75 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "work-todo",
+  "title": "Worktodo",
+  "description": "A local-first personal task manager for Raycast.",
+  "version": "0.0.0",
+  "private": true,
+  "author": "jsn",
+  "license": "MIT",
+  "icon": "extension-icon.png",
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Productivity"
+  ],
+  "engines": {
+    "node": ">=22.22.2 <25"
+  },
+  "packageManager": "npm@11.16.0",
+  "scripts": {
+    "dev": "ray develop",
+    "dev:mcp": "npm run build:mcp && node dist/mcp/server.js",
+    "build": "npm run build:raycast && npm run build:mcp",
+    "build:raycast": "ray build",
+    "build:mcp": "tsc -p tsconfig.mcp.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.mcp.json",
+    "lint": "ray lint && eslint mcp tests",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "test": "npm run build:mcp && vitest run",
+    "verify": "npm run format && npm run lint && npm run typecheck && npm test && npm run build",
+    "publish": "npx @raycast/api@latest publish",
+    "prepublishOnly": "node -e \"throw new Error('Use npm run publish for the Raycast Store')\""
+  },
+  "commands": [
+    {
+      "name": "my-tasks",
+      "title": "My Tasks",
+      "description": "View Worktodo tasks",
+      "mode": "view"
+    },
+    {
+      "name": "runtime-check",
+      "title": "Check Runtime",
+      "description": "Show the extension runtime versions",
+      "mode": "no-view"
+    },
+    {
+      "name": "menu-bar",
+      "title": "Worktodo Menu Bar",
+      "description": "Show the Worktodo menu-bar item",
+      "mode": "menu-bar"
+    }
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "@raycast/api": "2.0.5",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@raycast/eslint-config": "2.2.0",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "eslint": "10.9.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "fsevents": false
+  }
+}
