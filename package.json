@@ -24,11 +24,13 @@
     "build": "npm run build:raycast && npm run build:mcp",
     "build:raycast": "ray build",
     "build:mcp": "tsc -p tsconfig.mcp.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.mcp.json",
-    "lint": "ray lint && eslint mcp tests",
+    "build:spike": "tsc -p tsconfig.spike.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.mcp.json && tsc --noEmit -p tsconfig.spike.json",
+    "lint": "ray lint && eslint mcp scripts tests",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "test": "npm run build:mcp && vitest run",
+    "test": "npm run build:mcp && npm run build:spike && vitest run",
+    "validate:sqlite": "npm run build:spike && node dist/scripts/sqlite-spike/coordinator.js",
     "verify": "npm run format && npm run lint && npm run typecheck && npm test && npm run build",
     "publish": "npx @raycast/api@latest publish",
     "prepublishOnly": "node -e \"throw new Error('Use npm run publish for the Raycast Store')\""
@@ -44,6 +46,12 @@
       "name": "runtime-check",
       "title": "Check Runtime",
       "description": "Show the extension runtime versions",
+      "mode": "no-view"
+    },
+    {
+      "name": "sqlite-spike",
+      "title": "SQLite Runtime Validation",
+      "description": "Run the temporary cross-runtime SQLite validation",
       "mode": "no-view"
     },
     {

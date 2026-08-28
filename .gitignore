@@ -7,5 +7,7 @@ raycast-env.d.ts
 .env
 .env.*
 *.sqlite
+*.sqlite-journal
 *.sqlite-shm
 *.sqlite-wal
+*.partial
