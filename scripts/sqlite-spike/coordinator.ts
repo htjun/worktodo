@@ -38,7 +38,7 @@ import {
   writeJsonAtomic,
 } from "../../src/shared/sqlite-spike/protocol";
 
-const RAYCAST_DEEP_LINK = "raycast://extensions/jsn/work-todo/sqlite-spike";
+const RAYCAST_DEEP_LINK = "raycast://extensions/jsn/worktodo/sqlite-spike";
 const WORKER_PATH = join(__dirname, "worker.js");
 
 type WorkerHandle = {

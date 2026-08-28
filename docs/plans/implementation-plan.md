@@ -75,7 +75,7 @@ The repository and package layout remain provisional until the API scaffold and 
 Use a single npm package with the Raycast extension at the repository root:
 
 ```text
-work-todo/
+worktodo/
 ├── assets/                     # Extension and command icons
 ├── docs/
 │   ├── research/              # Evidence and validation notes

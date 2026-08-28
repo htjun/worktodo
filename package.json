@@ -1,6 +1,6 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "work-todo",
+  "name": "worktodo",
   "title": "Worktodo",
   "description": "A local-first personal task manager for Raycast.",
   "version": "0.0.0",
