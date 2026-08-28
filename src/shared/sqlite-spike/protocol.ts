@@ -116,7 +116,7 @@ export function validateSpikeSession(value: unknown, now = Date.now()): SpikeSes
   if (!Number.isFinite(createdTime) || !Number.isFinite(expiryTime) || expiryTime <= createdTime) {
     throw new Error("Invalid SQLite spike session timestamps");
   }
-  if (now > expiryTime) {
+  if (now >= expiryTime) {
     throw new Error("SQLite spike session has expired");
   }
   if (createdTime > now + 5_000) {
@@ -245,7 +245,47 @@ export async function waitForJson(path: string, timeoutMs = 30_000): Promise<unk
   throw new Error(`Timed out waiting for ${path}`);
 }
 
-export async function createSpikeSession(now = Date.now()): Promise<SpikeSession> {
+export function assertSpikeSessionActive(session: SpikeSession): void {
+  if (Date.now() >= Date.parse(session.expiresAt)) {
+    throw new Error("SQLite spike session has expired");
+  }
+}
+
+export async function writeSessionMarker(
+  session: SpikeSession,
+  path: string,
+  details: Record<string, unknown> = {},
+): Promise<void> {
+  assertSpikeSessionActive(session);
+  await writeJsonAtomic(path, {
+    ...details,
+    protocolVersion: session.protocolVersion,
+    sessionId: session.sessionId,
+    at: Date.now(),
+  });
+}
+
+export async function waitForSessionMarker(
+  session: SpikeSession,
+  path: string,
+  timeoutMs = 30_000,
+): Promise<Record<string, unknown>> {
+  assertSpikeSessionActive(session);
+  let value: unknown;
+  try {
+    value = await waitForJson(path, Math.min(timeoutMs, Date.parse(session.expiresAt) - Date.now()));
+  } catch (error) {
+    assertSpikeSessionActive(session);
+    throw error;
+  }
+  assertSpikeSessionActive(session);
+  if (!isRecord(value) || value.protocolVersion !== session.protocolVersion || value.sessionId !== session.sessionId) {
+    throw new Error("Invalid SQLite spike session marker");
+  }
+  return value;
+}
+
+export async function createSpikeSession(now = Date.now(), activate = true): Promise<SpikeSession> {
   const sessionId = randomUUID();
   const sessionDirectory = join(SPIKE_ROOT_DIRECTORY, sessionId);
   const session: SpikeSession = {
@@ -260,7 +300,9 @@ export async function createSpikeSession(now = Date.now()): Promise<SpikeSession
   await mkdir(SPIKE_ROOT_DIRECTORY, { recursive: true });
   await mkdir(sessionDirectory, { recursive: false });
   await writeJsonAtomic(sessionDescriptorPath(session), session);
-  await writeJsonAtomic(activeSessionPath(), session);
+  if (activate) {
+    await writeJsonAtomic(activeSessionPath(), session);
+  }
   return session;
 }
 

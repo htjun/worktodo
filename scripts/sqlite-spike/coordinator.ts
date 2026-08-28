@@ -14,16 +14,17 @@ import {
   sqliteErrorCode,
   verifySpikeDatabase,
 } from "../../src/shared/sqlite-spike/database";
+import { coordinateMigrationRace, validateMigrationContention } from "../../src/shared/sqlite-spike/migration";
 import {
   clearActiveSpikeSession,
   createSpikeRequest,
   createSpikeSession,
   eventPath,
-  gatePath,
   readyPath,
   reportPath,
   requestPath,
   responsePath,
+  sessionDescriptorPath,
   SpikeCheck,
   SpikeReport,
   SpikeRequest,
@@ -32,6 +33,8 @@ import {
   validateSpikeReport,
   validateSpikeResponse,
   waitForJson,
+  waitForSessionMarker,
+  writeSessionMarker,
   writeJsonAtomic,
 } from "../../src/shared/sqlite-spike/protocol";
 
@@ -297,10 +300,21 @@ async function runValidation(): Promise<SpikeReport> {
 
     await check("Node 24 waits for a short Raycast write", async () => {
       const dispatched = await dispatchRaycast(session, "hold-write", { label: "raycast-short-holder" });
-      await waitForJson(eventPath(session, dispatched.request.requestId, "started"));
+      await waitForSessionMarker(session, eventPath(session, dispatched.request.requestId, "started"));
+      const reader = openSpikeDatabase(session.databasePath);
+      let uncommittedCount;
+      try {
+        uncommittedCount = Number(
+          reader.prepare("SELECT COUNT(*) AS count FROM spike_marker WHERE label = ?").get("raycast-short-holder")
+            ?.count,
+        );
+        assertCondition(uncommittedCount === 0, "Node 24 observed Raycast's uncommitted row");
+      } finally {
+        reader.close();
+      }
       const worker = startWorker(["write-marker", session.databasePath, "node-after-raycast-short"]);
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 350));
-      await writeJsonAtomic(eventPath(session, dispatched.request.requestId, "release"), { commit: true });
+      await writeSessionMarker(session, eventPath(session, dispatched.request.requestId, "release"), { commit: true });
       const [workerOutput, response] = await Promise.all([worker.result, dispatched.response]);
       assertCondition(response.status === "ok", "Raycast short lock holder failed");
       const elapsedMs = requireNumber(workerOutput, "elapsedMs");
@@ -312,15 +326,15 @@ async function runValidation(): Promise<SpikeReport> {
         elapsedMs >= 200 && elapsedMs < SPIKE_BUSY_TIMEOUT_MS,
         "Node 24 wait was outside the expected window",
       );
-      return { worker: workerOutput, raycast: response.output ?? {} };
+      return { uncommittedCount, worker: workerOutput, raycast: response.output ?? {} };
     });
 
     await check("Node 24 times out on a long Raycast write", async () => {
       const dispatched = await dispatchRaycast(session, "hold-write", { label: "raycast-long-holder" });
-      await waitForJson(eventPath(session, dispatched.request.requestId, "started"));
+      await waitForSessionMarker(session, eventPath(session, dispatched.request.requestId, "started"));
       const worker = startWorker(["write-marker", session.databasePath, "node-raycast-timeout"]);
       const workerOutput = await worker.result;
-      await writeJsonAtomic(eventPath(session, dispatched.request.requestId, "release"), { commit: false });
+      await writeSessionMarker(session, eventPath(session, dispatched.request.requestId, "release"), { commit: false });
       const response = await dispatched.response;
       assertCondition(response.status === "ok", "Raycast long lock holder failed");
       const elapsedMs = requireNumber(workerOutput, "elapsedMs");
@@ -333,10 +347,15 @@ async function runValidation(): Promise<SpikeReport> {
     });
 
     await check("migration lock applies the migration exactly once", async () => {
-      const migrationGate = gatePath(session, "migration");
-      const dispatched = await dispatchRaycast(session, "migrate", { gatePath: migrationGate });
-      const worker = startWorker(["migrate", session.databasePath, "node24-worker", migrationGate]);
-      await writeJsonAtomic(migrationGate, { openedAt: new Date().toISOString() });
+      const dispatched = await dispatchRaycast(session, "migrate");
+      const worker = startWorker([
+        "migrate",
+        session.databasePath,
+        "node24-worker",
+        sessionDescriptorPath(session),
+        "waiter",
+      ]);
+      const synchronization = await coordinateMigrationRace(session);
       const [workerOutput, response] = await Promise.all([worker.result, dispatched.response]);
       assertCondition(response.status === "ok", "Raycast migration failed");
       const nodeMigration = requireRecord(workerOutput.migration, "Node 24 migration result");
@@ -344,13 +363,8 @@ async function runValidation(): Promise<SpikeReport> {
         requireRecord(response.output, "Raycast migration output").migration,
         "Raycast migration result",
       );
-      const appliedCount = Number(nodeMigration.applied === true) + Number(raycastMigration.applied === true);
-      assertCondition(appliedCount === 1, `Expected exactly one migration application, observed ${appliedCount}`);
-      assertCondition(
-        nodeMigration.userVersion === 1 && raycastMigration.userVersion === 1,
-        "Both runtimes did not observe user_version 1",
-      );
-      return { node24: nodeMigration, raycast: raycastMigration };
+      validateMigrationContention(raycastMigration, nodeMigration, synchronization.released);
+      return { node24: nodeMigration, raycast: raycastMigration, synchronization };
     });
 
     await check("foreign keys are enforced in both runtimes", async () => {
@@ -386,7 +400,8 @@ async function runValidation(): Promise<SpikeReport> {
       const startedPath = join(session.sessionDirectory, "events", "crash-worker.started.json");
       const worker = startWorker(["crash-hold", session.databasePath, label, startedPath]);
       worker.result.catch(() => undefined);
-      await waitForJson(startedPath);
+      const started = requireRecord(await waitForJson(startedPath), "crash writer evidence");
+      assertCondition(started.journalHeader === "d9d505f920a163d7", "Crash probe did not flush a recoverable journal");
       worker.child.kill("SIGKILL");
       await new Promise<void>((resolvePromise) => worker.child.once("exit", () => resolvePromise()));
 
@@ -401,7 +416,11 @@ async function runValidation(): Promise<SpikeReport> {
           verification.integrity === "ok" && verification.foreignKeyViolations === 0,
           "Database failed recovery checks",
         );
-        return { count, verification };
+        assertCondition(
+          !(await fileExists(`${session.databasePath}-journal`)),
+          "Recovery did not remove the hot journal",
+        );
+        return { count, verification, journalHeaderBeforeKill: started.journalHeader };
       } finally {
         db.close();
       }
@@ -410,9 +429,9 @@ async function runValidation(): Promise<SpikeReport> {
     await check("online backup remains valid with an active Raycast reader", async () => {
       const backupPath = join(session.sessionDirectory, "verified-backup.sqlite");
       const dispatched = await dispatchRaycast(session, "hold-read");
-      await waitForJson(eventPath(session, dispatched.request.requestId, "started"));
+      await waitForSessionMarker(session, eventPath(session, dispatched.request.requestId, "started"));
       const nodeVerification = await createVerifiedBackup(session.databasePath, backupPath);
-      await writeJsonAtomic(eventPath(session, dispatched.request.requestId, "release"), { release: true });
+      await writeSessionMarker(session, eventPath(session, dispatched.request.requestId, "release"), { release: true });
       const holdResponse = await dispatched.response;
       assertCondition(holdResponse.status === "ok", "Raycast reader failed during backup");
       const raycastVerification = await callRaycast(session, "verify-backup", { backupPath });

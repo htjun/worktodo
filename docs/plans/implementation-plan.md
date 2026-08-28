@@ -2,7 +2,7 @@
 
 **Status:** Foundation validation
 
-**Updated:** 2026-08-24
+**Updated:** 2026-08-28
 
 **Research:** [Raycast v2 foundation](../research/raycast-v2-foundation.md)
 
@@ -46,7 +46,7 @@ Not in V1: accounts, cloud sync, collaboration, OS notifications, recurrence, la
 7. Use MCP stdio for agents. Do not add a CLI or daemon unless a demonstrated requirement appears.
 8. Use Raycast's `menu-bar` command for V1. Do not build a native helper unless Raycast cannot meet a measured requirement.
 9. Keep stdout protocol-only in the MCP process; diagnostics go to stderr.
-10. Do not commit to database placement, journal mode, MCP packaging, or an external menu-refresh bridge until the corresponding validation gate passes.
+10. Use the [validated SQLite policy](../research/sqlite-runtime-validation.md): DELETE journal mode, synchronous FULL, foreign keys, disabled extensions/DQS, a provisional 2-second busy timeout, short BEGIN IMMEDIATE writes, locked migrations, and verified no-clobber backups. Database placement, MCP packaging, and an external menu-refresh bridge remain subject to their own gates.
 
 ## Provisional system boundary
 
@@ -112,7 +112,7 @@ Keep manifest-mapped files at the top of `src/` because Raycast resolves a comma
 Complete these before locking the storage or package architecture:
 
 1. **Complete:** The clean `@raycast/api` 2.0.5 scaffold builds and runs in Raycast v2.0.5. The managed extension runtime is Node 22.22.2 with SQLite 3.51.2. See [runtime validation](../research/raycast-v2-runtime-validation.md).
-2. Prove two-process SQLite behavior using the intended Raycast and MCP runtimes: concurrent reads/writes, busy handling, migration races, interruption, backup, and rollback-journal behavior. Do not test or enable WAL until Raycast embeds a SQLite release containing the documented WAL race fix.
+2. **Complete:** Cross-runtime SQLite validation passed all 12 native checks using Raycast Node 22.22.2/SQLite 3.51.2 and Node 24.18.0/SQLite 3.53.1. Controlled migration contention, committed-read isolation, bidirectional busy handling, rollback, killed-writer recovery, and verified backup passed; the separate automated suite passes 19 tests. See [SQLite runtime validation](../research/sqlite-runtime-validation.md). WAL remains prohibited. Keep `sqlite-spike` through Phase 0 and remove the command before product implementation or release; retain the policies and reusable tests.
 3. Prove an official TypeScript SDK MCP stdio server against the installed Codex build: negotiation, discovery, structured results, errors, cancellation, shutdown, restart, and approvals.
 4. Establish the personal-use database path and test discovery from both processes without silently creating a second database.
 5. Measure menu freshness after Raycast and MCP writes, including menu-open refresh, background refresh, cached restoration, and Raycast restart.
@@ -202,4 +202,4 @@ Deferred until personal use is stable. Revalidate Raycast Store policy, package 
 
 ## Current next action
 
-Run Phase 0 spike 2 against Raycast's Node 22.22.2/SQLite 3.51.2 runtime and the pinned Node 24.18.0 MCP runtime. Establish the rollback-journal transaction, busy-timeout, migration-lock, interruption, and backup policies before adding the task schema.
+Design the actual project, section, task, note, and due-date model using the validated SQLite policies. This is model design, not permission to implement product persistence yet. Phase 0 gates 3–7 remain unresolved: Codex MCP acceptance, database placement, menu freshness, Quick Add arguments, and public-release packaging. Do not mark the whole foundation phase complete.

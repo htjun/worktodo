@@ -1,11 +1,12 @@
+import { readFile } from "node:fs/promises";
 import {
   openSpikeDatabase,
-  applySyntheticMigration,
   insertMarker,
   sqliteErrorCode,
   withImmediateTransaction,
 } from "../../src/shared/sqlite-spike/database";
-import { waitForJson, writeJsonAtomic } from "../../src/shared/sqlite-spike/protocol";
+import { runMigrationContender } from "../../src/shared/sqlite-spike/migration";
+import { readJson, validateSpikeSession, writeJsonAtomic } from "../../src/shared/sqlite-spike/protocol";
 
 type WorkerOutput = Record<string, unknown>;
 
@@ -48,14 +49,12 @@ async function run(): Promise<void> {
 
   if (action === "migrate") {
     const actor = requiredArgument(4, "actor");
-    const gate = requiredArgument(5, "gate path");
-    await waitForJson(gate);
-    const db = openSpikeDatabase(databasePath);
-    try {
-      writeOutput({ migration: applySyntheticMigration(db, actor) });
-    } finally {
-      db.close();
+    const session = validateSpikeSession(await readJson(requiredArgument(5, "session descriptor path")));
+    const role = requiredArgument(6, "migration role");
+    if (databasePath !== session.databasePath || (role !== "holder" && role !== "waiter")) {
+      throw new Error("Invalid migration worker session or role");
     }
+    writeOutput({ migration: await runMigrationContender(session, actor, role) });
     return;
   }
 
@@ -63,12 +62,18 @@ async function run(): Promise<void> {
     const label = requiredArgument(4, "marker label");
     const startedPath = requiredArgument(5, "started event path");
     const db = openSpikeDatabase(databasePath);
+    db.exec("PRAGMA cache_size = 10; PRAGMA cache_spill = ON");
     db.exec("BEGIN IMMEDIATE");
     db.prepare("INSERT INTO spike_marker(actor, label, payload) VALUES (?, ?, zeroblob(1048576))").run(
       "node24-crash-worker",
       label,
     );
-    await writeJsonAtomic(startedPath, { pid: process.pid, startedAt: new Date().toISOString() });
+    const journal = await readFile(`${databasePath}-journal`);
+    await writeJsonAtomic(startedPath, {
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      journalHeader: journal.subarray(0, 8).toString("hex"),
+    });
     const keepAlive = setInterval(() => undefined, 1_000);
     await new Promise<void>(() => undefined);
     clearInterval(keepAlive);

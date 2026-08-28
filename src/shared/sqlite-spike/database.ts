@@ -1,4 +1,4 @@
-import { access, rename, rm } from "node:fs/promises";
+import { link, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { backup, DatabaseSync } from "node:sqlite";
 
@@ -25,6 +25,12 @@ export type SpikeMigrationResult = {
   actor: string;
   applied: boolean;
   elapsedMs: number;
+  attemptedAt: number;
+  acquiredAt: number;
+  committedAt: number;
+  lockWaitMs: number;
+  versionAfterLock: number;
+  migrationAuditCount: number;
   userVersion: number;
 };
 
@@ -155,36 +161,57 @@ export function countMarker(db: DatabaseSync, label: string): number {
   return Number(row?.count ?? 0);
 }
 
-export function applySyntheticMigration(db: DatabaseSync, actor: string): SpikeMigrationResult {
+export async function applySyntheticMigration(
+  db: DatabaseSync,
+  actor: string,
+  hooks: { beforeBegin?: () => Promise<void>; afterLock?: () => Promise<void> } = {},
+): Promise<SpikeMigrationResult> {
+  await hooks.beforeBegin?.();
+  const attemptedAt = Date.now();
   const startedAt = performance.now();
   let applied = false;
+  db.exec("BEGIN IMMEDIATE");
+  const acquiredAt = Date.now();
+  const lockWaitMs = performance.now() - startedAt;
 
-  withImmediateTransaction(db, () => {
-    const currentVersion = Number(pragmaScalar(db, "PRAGMA user_version"));
-    if (currentVersion >= 1) {
-      return;
+  try {
+    const versionAfterLock = Number(pragmaScalar(db, "PRAGMA user_version"));
+    await hooks.afterLock?.();
+    if (versionAfterLock < 1) {
+      db.exec(`
+        CREATE TABLE spike_migrated_probe (
+          id INTEGER PRIMARY KEY,
+          value TEXT NOT NULL
+        ) STRICT;
+      `);
+      db.prepare("INSERT INTO spike_migration_audit(target_version, actor, applied_at) VALUES (1, ?, ?)").run(
+        actor,
+        new Date().toISOString(),
+      );
+      db.exec("PRAGMA user_version = 1");
+      applied = true;
     }
-
-    db.exec(`
-      CREATE TABLE spike_migrated_probe (
-        id INTEGER PRIMARY KEY,
-        value TEXT NOT NULL
-      ) STRICT;
-    `);
-    db.prepare("INSERT INTO spike_migration_audit(target_version, actor, applied_at) VALUES (1, ?, ?)").run(
+    const userVersion = Number(pragmaScalar(db, "PRAGMA user_version"));
+    const migrationAuditCount = Number(db.prepare("SELECT COUNT(*) AS count FROM spike_migration_audit").get()?.count);
+    db.exec("COMMIT");
+    return {
       actor,
-      new Date().toISOString(),
-    );
-    db.exec("PRAGMA user_version = 1");
-    applied = true;
-  });
-
-  return {
-    actor,
-    applied,
-    elapsedMs: performance.now() - startedAt,
-    userVersion: Number(pragmaScalar(db, "PRAGMA user_version")),
-  };
+      applied,
+      elapsedMs: performance.now() - startedAt,
+      attemptedAt,
+      acquiredAt,
+      committedAt: Date.now(),
+      lockWaitMs,
+      versionAfterLock,
+      migrationAuditCount,
+      userVersion,
+    };
+  } catch (error) {
+    if (db.isTransaction) {
+      db.exec("ROLLBACK");
+    }
+    throw error;
+  }
 }
 
 export function verifySpikeDatabase(db: DatabaseSync): SpikeVerification {
@@ -219,30 +246,16 @@ export function sqliteErrorCode(error: unknown): string | null {
   return null;
 }
 
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function createVerifiedBackup(sourcePath: string, destinationPath: string): Promise<SpikeVerification> {
-  if (await pathExists(destinationPath)) {
-    throw new Error(`Refusing to replace an existing verified backup: ${destinationPath}`);
-  }
-
   const partialPath = `${destinationPath}.${randomUUID()}.partial`;
-  const source = openSpikeDatabase(sourcePath);
-
   try {
-    await backup(source, partialPath, { rate: 1 });
-  } finally {
-    source.close();
-  }
+    const source = openSpikeDatabase(sourcePath);
+    try {
+      await backup(source, partialPath, { rate: 1 });
+    } finally {
+      source.close();
+    }
 
-  try {
     const candidate = openSpikeDatabase(partialPath, { readOnly: true });
     let verification: SpikeVerification;
     try {
@@ -255,10 +268,16 @@ export async function createVerifiedBackup(sourcePath: string, destinationPath: 
       throw new Error(`Backup verification failed: ${JSON.stringify(verification)}`);
     }
 
-    await rename(partialPath, destinationPath);
+    try {
+      await link(partialPath, destinationPath);
+    } catch (error) {
+      if (sqliteErrorCode(error) === "EEXIST") {
+        throw new Error(`Refusing to replace an existing verified backup: ${destinationPath}`, { cause: error });
+      }
+      throw error;
+    }
     return verification;
-  } catch (error) {
+  } finally {
     await rm(partialPath, { force: true });
-    throw error;
   }
 }
