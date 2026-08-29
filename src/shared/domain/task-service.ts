@@ -9,7 +9,15 @@ import {
   type Section,
   type Task,
 } from "./model";
-import { queryCompleted, queryInbox, queryToday, queryTrash, type TodayResult } from "./queries";
+import {
+  queryCompleted,
+  queryInbox,
+  queryProject,
+  querySection,
+  queryToday,
+  queryTrash,
+  type TodayResult,
+} from "./queries";
 import type { TaskRepository } from "./repository";
 import {
   validateDueValue,
@@ -506,6 +514,18 @@ export class TaskService {
 
   listInbox(): Task[] {
     return queryInbox(this.repository.listTasks());
+  }
+
+  listProjectTasks(projectId: string): Task[] {
+    const validProjectId = validateId(projectId);
+    this.requireProject(validProjectId);
+    return queryProject(this.repository.listTasks(), validProjectId);
+  }
+
+  listSectionTasks(sectionId: string): Task[] {
+    const validSectionId = validateId(sectionId);
+    this.requireSection(validSectionId);
+    return querySection(this.repository.listTasks(), validSectionId);
   }
 
   listCompleted(): Task[] {

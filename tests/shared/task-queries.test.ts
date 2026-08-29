@@ -3,6 +3,8 @@ import type { DueValue, Priority, Task } from "../../src/shared/domain/model";
 import {
   queryCompleted,
   queryInbox,
+  queryProject,
+  querySection,
   queryToday,
   queryTrash,
   startOfCalendarDate,
@@ -123,6 +125,24 @@ describe("task queries", () => {
       task(6, { kind: "none" }, { projectId: id(100) }),
     ];
     expect(queryInbox(tasks).map((task) => task.id)).toEqual([id(3), id(2), id(1)]);
+  });
+
+  it("returns active incomplete project and section tasks in canonical ordinary order", () => {
+    const projectId = id(100);
+    const sectionId = id(101);
+    const otherProjectId = id(102);
+    const tasks = [
+      task(1, { kind: "none" }, { projectId, priority: "none", position: 1_024 }),
+      task(2, { kind: "none" }, { projectId, sectionId, priority: "high", position: 2_048 }),
+      task(3, { kind: "none" }, { projectId, sectionId, priority: "high", position: 1_024 }),
+      task(4, { kind: "none" }, { projectId, sectionId, completedAtMs: 2_000 }),
+      task(5, { kind: "none" }, { projectId, trashedAtMs: 2_000 }),
+      task(6, { kind: "none" }, { projectId: otherProjectId, sectionId }),
+      task(7, { kind: "none" }),
+    ];
+
+    expect(queryProject(tasks, projectId).map((value) => value.id)).toEqual([id(3), id(2), id(1)]);
+    expect(querySection(tasks, sectionId).map((value) => value.id)).toEqual([id(3), id(2), id(6)]);
   });
 
   it("separates completed and trashed tasks while preserving ordinary ordering", () => {

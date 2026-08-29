@@ -47,6 +47,18 @@ export function queryInbox(tasks: readonly Task[]): Task[] {
     .sort(compareOrdinaryTasks);
 }
 
+export function queryProject(tasks: readonly Task[], projectId: string): Task[] {
+  return tasks
+    .filter((task) => task.projectId === projectId && task.completedAtMs === null && task.trashedAtMs === null)
+    .sort(compareOrdinaryTasks);
+}
+
+export function querySection(tasks: readonly Task[], sectionId: string): Task[] {
+  return tasks
+    .filter((task) => task.sectionId === sectionId && task.completedAtMs === null && task.trashedAtMs === null)
+    .sort(compareOrdinaryTasks);
+}
+
 export function queryCompleted(tasks: readonly Task[]): Task[] {
   return tasks.filter((task) => task.completedAtMs !== null && task.trashedAtMs === null).sort(compareOrdinaryTasks);
 }

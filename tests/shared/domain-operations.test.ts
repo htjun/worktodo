@@ -224,6 +224,8 @@ describe("shared domain operations", () => {
       expect(service.moveTask(task.id, { kind: "section", projectId: project.id, sectionId: section.id })).toEqual(
         moved,
       );
+      expect(service.listProjectTasks(project.id)).toEqual([moved]);
+      expect(service.listSectionTasks(section.id)).toEqual([moved]);
     } finally {
       db.close();
     }
