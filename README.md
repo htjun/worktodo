@@ -19,4 +19,4 @@ npm run dev
 
 Use `npm run verify` for the complete automated check. Build and run the diagnostic MCP server with `npm run dev:mcp`.
 
-Research lives in `docs/research/`. The living implementation plan is `docs/plans/implementation-plan.md`.
+Durable product research lives in `docs/research/`.
