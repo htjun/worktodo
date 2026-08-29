@@ -166,12 +166,16 @@ describe("shared domain operations", () => {
       context.setNow(500);
       const completed = service.completeTask(task.id);
       expect(completed.completedAtMs).toBe(1_001);
+      expect(service.listCompleted()).toEqual([completed]);
+      expect(service.listTrash()).toEqual([]);
       context.setNow(9_000);
       expect(service.completeTask(task.id)).toEqual(completed);
 
       context.setNow(500);
       const trashed = service.trashTask(task.id);
       expect(trashed).toMatchObject({ completedAtMs: 1_001, trashedAtMs: 1_002, updatedAtMs: 1_002 });
+      expect(service.listCompleted()).toEqual([]);
+      expect(service.listTrash()).toEqual([trashed]);
       expect(service.trashTask(task.id)).toEqual(trashed);
       expectDomainError(() => service.updateTask(task.id, { title: "Blocked" }), "TASK_TRASHED");
       expectDomainError(() => service.moveTask(task.id, { kind: "inbox" }), "TASK_TRASHED");
@@ -180,9 +184,13 @@ describe("shared domain operations", () => {
 
       const restored = service.restoreTask(task.id);
       expect(restored).toMatchObject({ completedAtMs: 1_001, trashedAtMs: null, updatedAtMs: 1_003 });
+      expect(service.listCompleted()).toEqual([restored]);
+      expect(service.listTrash()).toEqual([]);
       expect(service.restoreTask(task.id)).toEqual(restored);
       const reopened = service.reopenTask(task.id);
       expect(reopened).toMatchObject({ completedAtMs: null, trashedAtMs: null, updatedAtMs: 1_004 });
+      expect(service.listCompleted()).toEqual([]);
+      expect(service.listTrash()).toEqual([]);
       expect(service.reopenTask(task.id)).toEqual(reopened);
     } finally {
       db.close();

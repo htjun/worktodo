@@ -47,6 +47,14 @@ export function queryInbox(tasks: readonly Task[]): Task[] {
     .sort(compareOrdinaryTasks);
 }
 
+export function queryCompleted(tasks: readonly Task[]): Task[] {
+  return tasks.filter((task) => task.completedAtMs !== null && task.trashedAtMs === null).sort(compareOrdinaryTasks);
+}
+
+export function queryTrash(tasks: readonly Task[]): Task[] {
+  return tasks.filter((task) => task.trashedAtMs !== null).sort(compareOrdinaryTasks);
+}
+
 function dateFormatter(timeZone: string): Intl.DateTimeFormat {
   const existing = formatterCache.get(timeZone);
   if (existing) {

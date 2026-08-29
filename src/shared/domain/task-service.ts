@@ -9,7 +9,7 @@ import {
   type Section,
   type Task,
 } from "./model";
-import { queryInbox, queryToday, type TodayResult } from "./queries";
+import { queryCompleted, queryInbox, queryToday, queryTrash, type TodayResult } from "./queries";
 import type { TaskRepository } from "./repository";
 import {
   validateDueValue,
@@ -506,6 +506,14 @@ export class TaskService {
 
   listInbox(): Task[] {
     return queryInbox(this.repository.listTasks());
+  }
+
+  listCompleted(): Task[] {
+    return queryCompleted(this.repository.listTasks());
+  }
+
+  listTrash(): Task[] {
+    return queryTrash(this.repository.listTasks());
   }
 
   listToday(evaluationInstantMs: number, viewerTimeZone: string): TodayResult {

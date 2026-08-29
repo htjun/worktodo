@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DueValue, Priority, Task } from "../../src/shared/domain/model";
-import { queryInbox, queryToday, startOfCalendarDate, todayWindow } from "../../src/shared/domain/queries";
+import {
+  queryCompleted,
+  queryInbox,
+  queryToday,
+  queryTrash,
+  startOfCalendarDate,
+  todayWindow,
+} from "../../src/shared/domain/queries";
 
 function id(index: number): string {
   return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
@@ -29,7 +36,7 @@ function task(
   };
 }
 
-describe("Today and Inbox queries", () => {
+describe("task queries", () => {
   it("uses exact 23-hour and 25-hour Melbourne calendar boundaries", () => {
     expect(todayWindow(Date.parse("2026-10-04T01:00:00.000Z"), "Australia/Melbourne")).toEqual({
       localDate: "2026-10-04",
@@ -116,5 +123,18 @@ describe("Today and Inbox queries", () => {
       task(6, { kind: "none" }, { projectId: id(100) }),
     ];
     expect(queryInbox(tasks).map((task) => task.id)).toEqual([id(3), id(2), id(1)]);
+  });
+
+  it("separates completed and trashed tasks while preserving ordinary ordering", () => {
+    const tasks = [
+      task(1, { kind: "none" }),
+      task(2, { kind: "none" }, { completedAtMs: 2_000, priority: "low" }),
+      task(3, { kind: "none" }, { completedAtMs: 2_000, priority: "high", position: 2_048 }),
+      task(4, { kind: "none" }, { trashedAtMs: 2_000, priority: "high" }),
+      task(5, { kind: "none" }, { completedAtMs: 2_000, trashedAtMs: 3_000 }),
+    ];
+
+    expect(queryCompleted(tasks).map((value) => value.id)).toEqual([id(3), id(2)]);
+    expect(queryTrash(tasks).map((value) => value.id)).toEqual([id(4), id(5)]);
   });
 });
