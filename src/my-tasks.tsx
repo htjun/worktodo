@@ -57,6 +57,7 @@ function TaskForm({
 }) {
   const { pop } = useNavigation();
   const defaults = useMemo(() => taskFormDefaults(task, viewerTimeZone), [task, viewerTimeZone]);
+  const [priority, setPriority] = useState<Priority>(defaults.priority);
   const [dueKind, setDueKind] = useState<DueValue["kind"]>(defaults.dueKind);
   const [titleError, setTitleError] = useState<string>();
   const [dueError, setDueError] = useState<string>();
@@ -73,7 +74,7 @@ function TaskForm({
     const mapped: TaskFormValues = {
       title: values.title,
       notes: values.notes,
-      priority: values.priority as Priority,
+      priority,
       dueKind: values.dueKind as DueValue["kind"],
       dueAtMs: values.dueAt?.getTime() ?? null,
     };
@@ -117,7 +118,12 @@ function TaskForm({
         onChange={() => setTitleError(undefined)}
       />
       <Form.TextArea id="notes" title="Notes" defaultValue={defaults.notes} />
-      <Form.Dropdown id="priority" title="Priority" defaultValue={defaults.priority}>
+      <Form.Dropdown
+        id="priority"
+        title="Priority"
+        value={priority}
+        onChange={(value) => setPriority(value as Priority)}
+      >
         <Form.Dropdown.Item value="none" title="None" />
         <Form.Dropdown.Item value="low" title="Low" />
         <Form.Dropdown.Item value="medium" title="Medium" />
@@ -136,16 +142,15 @@ function TaskForm({
         <Form.Dropdown.Item value="allDay" title="All Day" />
         <Form.Dropdown.Item value="timed" title="Date and Time" />
       </Form.Dropdown>
-      {dueKind !== "none" ? (
-        <Form.DatePicker
-          id="dueAt"
-          title={dueKind === "allDay" ? "Due Date" : "Due Date and Time"}
-          type={dueKind === "allDay" ? Form.DatePicker.Type.Date : Form.DatePicker.Type.DateTime}
-          defaultValue={defaults.dueAtMs === null ? null : new Date(defaults.dueAtMs)}
-          error={dueError}
-          onChange={() => setDueError(undefined)}
-        />
-      ) : null}
+      <Form.DatePicker
+        id="dueAt"
+        title={dueKind === "timed" ? "Due Date and Time" : "Due Date"}
+        info={dueKind === "none" ? "Ignored while No Due Date is selected." : undefined}
+        type={dueKind === "timed" ? Form.DatePicker.Type.DateTime : Form.DatePicker.Type.Date}
+        defaultValue={defaults.dueAtMs === null ? null : new Date(defaults.dueAtMs)}
+        error={dueError}
+        onChange={() => setDueError(undefined)}
+      />
       {formError ? <Form.Description title="Error" text={formError} /> : null}
     </Form>
   );
