@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Project, Section, Task } from "../../src/shared/domain/model";
 import { formToCreateTask, formToUpdateTask, taskFormDefaults } from "../../src/shared/presentation/task-form";
 import { buildTaskListItems } from "../../src/shared/presentation/task-list";
+import { placementFromKey, placementKey } from "../../src/shared/presentation/placement";
 
 const project: Project = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -54,6 +55,13 @@ describe("task presentation mapping", () => {
       placement: { kind: "inbox" },
       due: { kind: "allDay", date: "2026-10-04" },
     });
+    expect(
+      formToCreateTask(values, "Australia/Melbourne", {
+        kind: "section",
+        projectId: project.id,
+        sectionId: section.id,
+      }).placement,
+    ).toEqual({ kind: "section", projectId: project.id, sectionId: section.id });
     expect(formToUpdateTask({ ...values, dueKind: "timed" }, "Australia/Melbourne")).toEqual({
       title: "Review plan",
       notes: "Details",
@@ -64,6 +72,21 @@ describe("task presentation mapping", () => {
     expect(
       formToCreateTask({ ...values, dueAtMs: Date.parse("1960-01-01T14:00:00.000Z") }, "Australia/Melbourne").due,
     ).toEqual({ kind: "allDay", date: "1960-01-02" });
+  });
+
+  it("round-trips valid placement selections and rejects missing containers", () => {
+    const projectPlacement = { kind: "project", projectId: project.id } as const;
+    const sectionPlacement = {
+      kind: "section",
+      projectId: project.id,
+      sectionId: section.id,
+    } as const;
+
+    expect(placementFromKey(placementKey({ kind: "inbox" }), [project], [section])).toEqual({ kind: "inbox" });
+    expect(placementFromKey(placementKey(projectPlacement), [project], [section])).toEqual(projectPlacement);
+    expect(placementFromKey(placementKey(sectionPlacement), [project], [section])).toEqual(sectionPlacement);
+    expect(() => placementFromKey(`project:${project.id}`, [], [])).toThrow("Choose an existing task location");
+    expect(() => placementFromKey(`section:${section.id}`, [project], [])).toThrow("Choose an existing task location");
   });
 
   it("round-trips task defaults for all due kinds", () => {

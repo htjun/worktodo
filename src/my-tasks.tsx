@@ -1,236 +1,36 @@
-import { Action, ActionPanel, Form, Icon, Keyboard, List, showToast, Toast, useNavigation } from "@raycast/api";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Action, ActionPanel, Icon, Keyboard, List, showToast, Toast } from "@raycast/api";
+import { useCallback, useEffect, useState } from "react";
+import { ProjectsView } from "./project-management";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import { DomainError, type DueValue, type Priority, type Task } from "./shared/domain/model";
-import type { TaskService } from "./shared/domain/task-service";
+import { placementOf, type Project, type Section } from "./shared/domain/model";
+import type { TaskListItem } from "./shared/presentation/task-list";
+import { MoveTaskForm, TaskForm } from "./task-form";
 import {
-  formToCreateTask,
-  formToUpdateTask,
-  taskFormDefaults,
-  type TaskFormValues,
-} from "./shared/presentation/task-form";
-import { buildTaskListItems, type TaskListEntry, type TaskListItem } from "./shared/presentation/task-list";
+  initialPlacementForTaskView,
+  lifecycleActionForTaskView,
+  loadTaskViewItems,
+  normalizeTaskView,
+  TaskViewDropdown,
+  taskViewContent,
+  taskViewKey,
+  type TaskView,
+} from "./task-views";
 
-type View = "today" | "inbox" | "completed" | "trash";
 type ListState = {
   isLoading: boolean;
   error: string | null;
   mutationError: string | null;
   items: TaskListItem[];
+  projects: Project[];
+  sections: Section[];
 };
-
-type FormValues = {
-  title: string;
-  notes: string;
-  priority: string;
-  dueKind: string;
-  dueAt: Date | null;
-};
-
-const VIEW_CONTENT = {
-  today: {
-    title: "Today",
-    icon: Icon.Calendar,
-    taskIcon: Icon.Circle,
-    searchPlaceholder: "Search Today",
-    emptyTitle: "Nothing due today",
-    emptyDescription: "Overdue and due-today tasks appear here.",
-  },
-  inbox: {
-    title: "Inbox",
-    icon: Icon.Tray,
-    taskIcon: Icon.Circle,
-    searchPlaceholder: "Search Inbox",
-    emptyTitle: "Inbox is empty",
-    emptyDescription: "Create a task to capture it.",
-  },
-  completed: {
-    title: "Completed",
-    icon: Icon.CheckCircle,
-    taskIcon: Icon.CheckCircle,
-    searchPlaceholder: "Search Completed",
-    emptyTitle: "No completed tasks",
-    emptyDescription: "Completed tasks appear here.",
-  },
-  trash: {
-    title: "Trash",
-    icon: Icon.Trash,
-    taskIcon: Icon.Trash,
-    searchPlaceholder: "Search Trash",
-    emptyTitle: "Trash is empty",
-    emptyDescription: "Tasks moved to Trash appear here.",
-  },
-} as const;
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "An unexpected error occurred";
 }
 
-function loadItems(session: WorktodoSession, view: View, viewerTimeZone: string): TaskListItem[] {
-  const projects = session.service.listProjects();
-  const sections = session.service.listSections();
-  let entries: TaskListEntry[];
-  switch (view) {
-    case "today":
-      entries = session.service.listToday(Date.now(), viewerTimeZone).tasks.map(({ task, status }) => ({
-        task,
-        todayStatus: status,
-      }));
-      break;
-    case "inbox":
-      entries = session.service.listInbox().map((task) => ({ task }));
-      break;
-    case "completed":
-      entries = session.service.listCompleted().map((task) => ({ task }));
-      break;
-    case "trash":
-      entries = session.service.listTrash().map((task) => ({ task }));
-      break;
-  }
-  return buildTaskListItems(entries, projects, sections, viewerTimeZone);
-}
-
-function lifecycleAction(view: View, service: TaskService, taskId: string) {
-  switch (view) {
-    case "trash":
-      return {
-        title: "Restore Task",
-        icon: Icon.ArrowCounterClockwise,
-        successTitle: "Task restored",
-        operation: () => service.restoreTask(taskId),
-      };
-    case "completed":
-      return {
-        title: "Reopen Task",
-        icon: Icon.Circle,
-        successTitle: "Task reopened",
-        operation: () => service.reopenTask(taskId),
-      };
-    case "today":
-    case "inbox":
-      return {
-        title: "Complete Task",
-        icon: Icon.CheckCircle,
-        successTitle: "Task completed",
-        operation: () => service.completeTask(taskId),
-      };
-  }
-}
-
-function TaskForm({
-  service,
-  task,
-  viewerTimeZone,
-  onSaved,
-}: {
-  service: TaskService;
-  task?: Task;
-  viewerTimeZone: string;
-  onSaved: () => void;
-}) {
-  const { pop } = useNavigation();
-  const defaults = useMemo(() => taskFormDefaults(task, viewerTimeZone), [task, viewerTimeZone]);
-  const [priority, setPriority] = useState<Priority>(defaults.priority);
-  const [dueKind, setDueKind] = useState<DueValue["kind"]>(defaults.dueKind);
-  const [titleError, setTitleError] = useState<string>();
-  const [dueError, setDueError] = useState<string>();
-  const [formError, setFormError] = useState<string>();
-
-  async function submit(values: FormValues): Promise<boolean> {
-    setTitleError(undefined);
-    setDueError(undefined);
-    setFormError(undefined);
-    if (values.title.trim().length === 0) {
-      setTitleError("Title cannot be empty");
-      return false;
-    }
-    const mapped: TaskFormValues = {
-      title: values.title,
-      notes: values.notes,
-      priority,
-      dueKind: values.dueKind as DueValue["kind"],
-      dueAtMs: values.dueAt?.getTime() ?? null,
-    };
-    try {
-      if (task) {
-        service.updateTask(task.id, formToUpdateTask(mapped, viewerTimeZone));
-      } else {
-        service.createTask(formToCreateTask(mapped, viewerTimeZone));
-      }
-      onSaved();
-      await showToast(Toast.Style.Success, task ? "Task updated" : "Task created");
-      pop();
-      return true;
-    } catch (error) {
-      const message = messageFrom(error);
-      if (error instanceof DomainError && error.code === "INVALID_DUE_VALUE") {
-        setDueError(message);
-      } else {
-        setFormError(message);
-      }
-      await showToast(Toast.Style.Failure, task ? "Unable to update task" : "Unable to create task", message);
-      return false;
-    }
-  }
-
-  return (
-    <Form
-      navigationTitle={task ? "Edit Task" : "New Inbox Task"}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm title={task ? "Save Task" : "Create Task"} icon={Icon.Check} onSubmit={submit} />
-        </ActionPanel>
-      }
-    >
-      <Form.TextField
-        id="title"
-        title="Title"
-        defaultValue={defaults.title}
-        error={titleError}
-        autoFocus
-        onChange={() => setTitleError(undefined)}
-      />
-      <Form.TextArea id="notes" title="Notes" defaultValue={defaults.notes} />
-      <Form.Dropdown
-        id="priority"
-        title="Priority"
-        value={priority}
-        onChange={(value) => setPriority(value as Priority)}
-      >
-        <Form.Dropdown.Item value="none" title="None" />
-        <Form.Dropdown.Item value="low" title="Low" />
-        <Form.Dropdown.Item value="medium" title="Medium" />
-        <Form.Dropdown.Item value="high" title="High" />
-      </Form.Dropdown>
-      <Form.Dropdown
-        id="dueKind"
-        title="Due"
-        value={dueKind}
-        onChange={(value) => {
-          setDueKind(value as DueValue["kind"]);
-          setDueError(undefined);
-        }}
-      >
-        <Form.Dropdown.Item value="none" title="No Due Date" />
-        <Form.Dropdown.Item value="allDay" title="All Day" />
-        <Form.Dropdown.Item value="timed" title="Date and Time" />
-      </Form.Dropdown>
-      <Form.DatePicker
-        id="dueAt"
-        title={dueKind === "timed" ? "Due Date and Time" : "Due Date"}
-        info={dueKind === "none" ? "Ignored while No Due Date is selected." : undefined}
-        type={dueKind === "timed" ? Form.DatePicker.Type.DateTime : Form.DatePicker.Type.Date}
-        defaultValue={defaults.dueAtMs === null ? null : new Date(defaults.dueAtMs)}
-        error={dueError}
-        onChange={() => setDueError(undefined)}
-      />
-      {formError ? <Form.Description title="Error" text={formError} /> : null}
-    </Form>
-  );
-}
-
 export default function Command() {
-  const [view, setView] = useState<View>("today");
+  const [view, setView] = useState<TaskView>({ kind: "today" });
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [session, setSession] = useState<WorktodoSession | null>(null);
   const [state, setState] = useState<ListState>({
@@ -238,6 +38,8 @@ export default function Command() {
     error: null,
     mutationError: null,
     items: [],
+    projects: [],
+    sections: [],
   });
 
   useEffect(() => {
@@ -246,7 +48,14 @@ export default function Command() {
       opened = openProductionWorktodo();
       setSession(opened);
     } catch (error) {
-      setState({ isLoading: false, error: messageFrom(error), mutationError: null, items: [] });
+      setState({
+        isLoading: false,
+        error: messageFrom(error),
+        mutationError: null,
+        items: [],
+        projects: [],
+        sections: [],
+      });
     }
     return () => opened?.close();
   }, []);
@@ -257,14 +66,28 @@ export default function Command() {
     }
     setState((current) => ({ ...current, isLoading: true, error: null }));
     try {
+      const projects = session.service.listProjects();
+      const sections = session.service.listSections();
+      const nextView = normalizeTaskView(view, projects, sections);
+      if (taskViewKey(nextView) !== taskViewKey(view)) {
+        setView(nextView);
+      }
       setState({
         isLoading: false,
         error: null,
         mutationError: null,
-        items: loadItems(session, view, viewerTimeZone),
+        items: loadTaskViewItems(session, nextView, viewerTimeZone),
+        projects,
+        sections,
       });
     } catch (error) {
-      setState({ isLoading: false, error: messageFrom(error), mutationError: null, items: [] });
+      setState((current) => ({
+        ...current,
+        isLoading: false,
+        error: messageFrom(error),
+        mutationError: null,
+        items: [],
+      }));
     }
   }, [session, view, viewerTimeZone]);
 
@@ -285,48 +108,54 @@ export default function Command() {
     [refresh],
   );
 
+  const content = taskViewContent(view, state.projects, state.sections);
   const createTarget = session ? (
-    <TaskForm service={session.service} viewerTimeZone={viewerTimeZone} onSaved={refresh} />
+    <TaskForm
+      service={session.service}
+      projects={state.projects}
+      sections={state.sections}
+      initialPlacement={initialPlacementForTaskView(view)}
+      viewerTimeZone={viewerTimeZone}
+      onSaved={refresh}
+    />
   ) : null;
-  const viewContent = VIEW_CONTENT[view];
+  const projectsTarget = session ? <ProjectsView service={session.service} onChanged={refresh} /> : null;
 
   return (
     <List
       isLoading={state.isLoading}
-      searchBarPlaceholder={viewContent.searchPlaceholder}
+      searchBarPlaceholder={content.searchPlaceholder}
       searchBarAccessory={
-        <List.Dropdown tooltip="Task View" value={view} onChange={(value) => setView(value as View)}>
-          <List.Dropdown.Item value="today" title="Today" icon={Icon.Calendar} />
-          <List.Dropdown.Item value="inbox" title="Inbox" icon={Icon.Tray} />
-          <List.Dropdown.Item value="completed" title="Completed" icon={Icon.CheckCircle} />
-          <List.Dropdown.Item value="trash" title="Trash" icon={Icon.Trash} />
-        </List.Dropdown>
+        <TaskViewDropdown view={view} projects={state.projects} sections={state.sections} onChange={setView} />
       }
     >
       {state.error ? (
         <List.EmptyView icon={Icon.Warning} title="Unable to open Worktodo" description={state.error} />
       ) : state.items.length === 0 ? (
         <List.EmptyView
-          icon={viewContent.icon}
-          title={viewContent.emptyTitle}
-          description={viewContent.emptyDescription}
+          icon={content.icon}
+          title={content.emptyTitle}
+          description={content.emptyDescription}
           actions={
-            createTarget ? (
+            createTarget || projectsTarget ? (
               <ActionPanel>
-                <Action.Push title="Create Inbox Task" icon={Icon.Plus} target={createTarget} />
+                {createTarget ? <Action.Push title="Create Task" icon={Icon.Plus} target={createTarget} /> : null}
+                {projectsTarget ? (
+                  <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
+                ) : null}
               </ActionPanel>
             ) : undefined
           }
         />
       ) : (
-        <List.Section title={state.mutationError ? `Action failed: ${state.mutationError}` : viewContent.title}>
+        <List.Section title={state.mutationError ? `Action failed: ${state.mutationError}` : content.title}>
           {state.items.map((item) => {
-            const lifecycle = session ? lifecycleAction(view, session.service, item.id) : null;
+            const lifecycle = session ? lifecycleActionForTaskView(view, session.service, item.id) : null;
             return (
               <List.Item
                 key={item.id}
                 id={item.id}
-                icon={viewContent.taskIcon}
+                icon={content.taskIcon}
                 title={item.title}
                 subtitle={item.subtitle}
                 keywords={item.keywords}
@@ -339,7 +168,7 @@ export default function Command() {
                         icon={lifecycle.icon}
                         onAction={() => runMutation(lifecycle.operation, lifecycle.successTitle)}
                       />
-                      {view !== "trash" ? (
+                      {view.kind !== "trash" ? (
                         <Action.Push
                           title="Edit Task"
                           icon={Icon.Pencil}
@@ -348,27 +177,48 @@ export default function Command() {
                             <TaskForm
                               service={session.service}
                               task={item.task}
+                              projects={state.projects}
+                              sections={state.sections}
+                              initialPlacement={placementOf(item.task)}
                               viewerTimeZone={viewerTimeZone}
                               onSaved={refresh}
                             />
                           }
                         />
                       ) : null}
-                      {view !== "trash" ? (
+                      {view.kind !== "trash" ? (
+                        <Action.Push
+                          title="Move Task"
+                          icon={Icon.ArrowRight}
+                          target={
+                            <MoveTaskForm
+                              service={session.service}
+                              task={item.task}
+                              projects={state.projects}
+                              sections={state.sections}
+                              onSaved={refresh}
+                            />
+                          }
+                        />
+                      ) : null}
+                      {createTarget ? (
+                        <Action.Push
+                          title="Create Task"
+                          icon={Icon.Plus}
+                          shortcut={Keyboard.Shortcut.Common.New}
+                          target={createTarget}
+                        />
+                      ) : null}
+                      {projectsTarget ? (
+                        <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
+                      ) : null}
+                      {view.kind !== "trash" ? (
                         <Action
                           title="Move to Trash"
                           icon={Icon.Trash}
                           style={Action.Style.Destructive}
                           shortcut={Keyboard.Shortcut.Common.Remove}
                           onAction={() => runMutation(() => session.service.trashTask(item.id), "Task moved to Trash")}
-                        />
-                      ) : null}
-                      {createTarget ? (
-                        <Action.Push
-                          title="Create Inbox Task"
-                          icon={Icon.Plus}
-                          shortcut={Keyboard.Shortcut.Common.New}
-                          target={createTarget}
                         />
                       ) : null}
                       <Action

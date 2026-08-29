@@ -1,4 +1,4 @@
-import { DomainError, type DueValue, type Priority, type Task } from "../domain/model";
+import { DomainError, type DueValue, type Placement, type Priority, type Task } from "../domain/model";
 import { calendarDateAt, startOfCalendarDate } from "../domain/queries";
 import type { CreateTaskInput, UpdateTaskInput } from "../domain/task-service";
 
@@ -28,12 +28,16 @@ function dueFromForm(values: TaskFormValues, viewerTimeZone: string): DueValue {
   return { kind: "timed", instantMs: values.dueAtMs, timeZone: viewerTimeZone };
 }
 
-export function formToCreateTask(values: TaskFormValues, viewerTimeZone: string): CreateTaskInput {
+export function formToCreateTask(
+  values: TaskFormValues,
+  viewerTimeZone: string,
+  placement: Placement = { kind: "inbox" },
+): CreateTaskInput {
   return {
     title: values.title,
     notes: values.notes,
     priority: values.priority,
-    placement: { kind: "inbox" },
+    placement,
     due: dueFromForm(values, viewerTimeZone),
   };
 }
