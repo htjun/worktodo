@@ -9,9 +9,9 @@ import {
   taskFormDefaults,
   type TaskFormValues,
 } from "./shared/presentation/task-form";
-import { buildTaskListItems, type TaskListItem } from "./shared/presentation/task-list";
+import { buildTaskListItems, type TaskListEntry, type TaskListItem } from "./shared/presentation/task-list";
 
-type View = "today" | "inbox";
+type View = "today" | "inbox" | "completed" | "trash";
 type ListState = {
   isLoading: boolean;
   error: string | null;
@@ -27,6 +27,41 @@ type FormValues = {
   dueAt: Date | null;
 };
 
+const VIEW_CONTENT = {
+  today: {
+    title: "Today",
+    icon: Icon.Calendar,
+    taskIcon: Icon.Circle,
+    searchPlaceholder: "Search Today",
+    emptyTitle: "Nothing due today",
+    emptyDescription: "Overdue and due-today tasks appear here.",
+  },
+  inbox: {
+    title: "Inbox",
+    icon: Icon.Tray,
+    taskIcon: Icon.Circle,
+    searchPlaceholder: "Search Inbox",
+    emptyTitle: "Inbox is empty",
+    emptyDescription: "Create a task to capture it.",
+  },
+  completed: {
+    title: "Completed",
+    icon: Icon.CheckCircle,
+    taskIcon: Icon.CheckCircle,
+    searchPlaceholder: "Search Completed",
+    emptyTitle: "No completed tasks",
+    emptyDescription: "Completed tasks appear here.",
+  },
+  trash: {
+    title: "Trash",
+    icon: Icon.Trash,
+    taskIcon: Icon.Trash,
+    searchPlaceholder: "Search Trash",
+    emptyTitle: "Trash is empty",
+    emptyDescription: "Tasks moved to Trash appear here.",
+  },
+} as const;
+
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "An unexpected error occurred";
 }
@@ -34,14 +69,52 @@ function messageFrom(error: unknown): string {
 function loadItems(session: WorktodoSession, view: View, viewerTimeZone: string): TaskListItem[] {
   const projects = session.service.listProjects();
   const sections = session.service.listSections();
-  const entries =
-    view === "today"
-      ? session.service.listToday(Date.now(), viewerTimeZone).tasks.map(({ task, status }) => ({
-          task,
-          todayStatus: status,
-        }))
-      : session.service.listInbox().map((task) => ({ task }));
+  let entries: TaskListEntry[];
+  switch (view) {
+    case "today":
+      entries = session.service.listToday(Date.now(), viewerTimeZone).tasks.map(({ task, status }) => ({
+        task,
+        todayStatus: status,
+      }));
+      break;
+    case "inbox":
+      entries = session.service.listInbox().map((task) => ({ task }));
+      break;
+    case "completed":
+      entries = session.service.listCompleted().map((task) => ({ task }));
+      break;
+    case "trash":
+      entries = session.service.listTrash().map((task) => ({ task }));
+      break;
+  }
   return buildTaskListItems(entries, projects, sections, viewerTimeZone);
+}
+
+function lifecycleAction(view: View, service: TaskService, taskId: string) {
+  switch (view) {
+    case "trash":
+      return {
+        title: "Restore Task",
+        icon: Icon.ArrowCounterClockwise,
+        successTitle: "Task restored",
+        operation: () => service.restoreTask(taskId),
+      };
+    case "completed":
+      return {
+        title: "Reopen Task",
+        icon: Icon.Circle,
+        successTitle: "Task reopened",
+        operation: () => service.reopenTask(taskId),
+      };
+    case "today":
+    case "inbox":
+      return {
+        title: "Complete Task",
+        icon: Icon.CheckCircle,
+        successTitle: "Task completed",
+        operation: () => service.completeTask(taskId),
+      };
+  }
 }
 
 function TaskForm({
@@ -215,15 +288,18 @@ export default function Command() {
   const createTarget = session ? (
     <TaskForm service={session.service} viewerTimeZone={viewerTimeZone} onSaved={refresh} />
   ) : null;
+  const viewContent = VIEW_CONTENT[view];
 
   return (
     <List
       isLoading={state.isLoading}
-      searchBarPlaceholder={`Search ${view === "today" ? "Today" : "Inbox"}`}
+      searchBarPlaceholder={viewContent.searchPlaceholder}
       searchBarAccessory={
         <List.Dropdown tooltip="Task View" value={view} onChange={(value) => setView(value as View)}>
           <List.Dropdown.Item value="today" title="Today" icon={Icon.Calendar} />
           <List.Dropdown.Item value="inbox" title="Inbox" icon={Icon.Tray} />
+          <List.Dropdown.Item value="completed" title="Completed" icon={Icon.CheckCircle} />
+          <List.Dropdown.Item value="trash" title="Trash" icon={Icon.Trash} />
         </List.Dropdown>
       }
     >
@@ -231,9 +307,9 @@ export default function Command() {
         <List.EmptyView icon={Icon.Warning} title="Unable to open Worktodo" description={state.error} />
       ) : state.items.length === 0 ? (
         <List.EmptyView
-          icon={view === "today" ? Icon.Calendar : Icon.Tray}
-          title={view === "today" ? "Nothing due today" : "Inbox is empty"}
-          description={view === "today" ? "Overdue and due-today tasks appear here." : "Create a task to capture it."}
+          icon={viewContent.icon}
+          title={viewContent.emptyTitle}
+          description={viewContent.emptyDescription}
           actions={
             createTarget ? (
               <ActionPanel>
@@ -243,58 +319,70 @@ export default function Command() {
           }
         />
       ) : (
-        <List.Section
-          title={state.mutationError ? `Action failed: ${state.mutationError}` : view === "today" ? "Today" : "Inbox"}
-        >
-          {state.items.map((item) => (
-            <List.Item
-              key={item.id}
-              id={item.id}
-              icon={Icon.Circle}
-              title={item.title}
-              subtitle={item.subtitle}
-              keywords={item.keywords}
-              accessories={item.metadata.map((text) => ({ text }))}
-              actions={
-                session ? (
-                  <ActionPanel>
-                    <Action
-                      title="Complete Task"
-                      icon={Icon.CheckCircle}
-                      onAction={() => runMutation(() => session.service.completeTask(item.id), "Task completed")}
-                    />
-                    <Action.Push
-                      title="Edit Task"
-                      icon={Icon.Pencil}
-                      shortcut={Keyboard.Shortcut.Common.Edit}
-                      target={
-                        <TaskForm
-                          service={session.service}
-                          task={item.task}
-                          viewerTimeZone={viewerTimeZone}
-                          onSaved={refresh}
-                        />
-                      }
-                    />
-                    {createTarget ? (
-                      <Action.Push
-                        title="Create Inbox Task"
-                        icon={Icon.Plus}
-                        shortcut={Keyboard.Shortcut.Common.New}
-                        target={createTarget}
+        <List.Section title={state.mutationError ? `Action failed: ${state.mutationError}` : viewContent.title}>
+          {state.items.map((item) => {
+            const lifecycle = session ? lifecycleAction(view, session.service, item.id) : null;
+            return (
+              <List.Item
+                key={item.id}
+                id={item.id}
+                icon={viewContent.taskIcon}
+                title={item.title}
+                subtitle={item.subtitle}
+                keywords={item.keywords}
+                accessories={item.metadata.map((text) => ({ text }))}
+                actions={
+                  session && lifecycle ? (
+                    <ActionPanel>
+                      <Action
+                        title={lifecycle.title}
+                        icon={lifecycle.icon}
+                        onAction={() => runMutation(lifecycle.operation, lifecycle.successTitle)}
                       />
-                    ) : null}
-                    <Action
-                      title="Refresh"
-                      icon={Icon.ArrowClockwise}
-                      shortcut={Keyboard.Shortcut.Common.Refresh}
-                      onAction={refresh}
-                    />
-                  </ActionPanel>
-                ) : undefined
-              }
-            />
-          ))}
+                      {view !== "trash" ? (
+                        <Action.Push
+                          title="Edit Task"
+                          icon={Icon.Pencil}
+                          shortcut={Keyboard.Shortcut.Common.Edit}
+                          target={
+                            <TaskForm
+                              service={session.service}
+                              task={item.task}
+                              viewerTimeZone={viewerTimeZone}
+                              onSaved={refresh}
+                            />
+                          }
+                        />
+                      ) : null}
+                      {view !== "trash" ? (
+                        <Action
+                          title="Move to Trash"
+                          icon={Icon.Trash}
+                          style={Action.Style.Destructive}
+                          shortcut={Keyboard.Shortcut.Common.Remove}
+                          onAction={() => runMutation(() => session.service.trashTask(item.id), "Task moved to Trash")}
+                        />
+                      ) : null}
+                      {createTarget ? (
+                        <Action.Push
+                          title="Create Inbox Task"
+                          icon={Icon.Plus}
+                          shortcut={Keyboard.Shortcut.Common.New}
+                          target={createTarget}
+                        />
+                      ) : null}
+                      <Action
+                        title="Refresh"
+                        icon={Icon.ArrowClockwise}
+                        shortcut={Keyboard.Shortcut.Common.Refresh}
+                        onAction={refresh}
+                      />
+                    </ActionPanel>
+                  ) : undefined
+                }
+              />
+            );
+          })}
         </List.Section>
       )}
     </List>

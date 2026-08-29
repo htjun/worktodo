@@ -43,6 +43,22 @@ function dueLabel(entry: TaskListEntry, viewerTimeZone: string): string | null {
   return `${prefix} ${value}`;
 }
 
+function lifecycleLabel(
+  prefix: "Completed" | "Trashed",
+  instantMs: number | null,
+  viewerTimeZone: string,
+): string | null {
+  if (instantMs === null) {
+    return null;
+  }
+  const value = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: viewerTimeZone,
+  }).format(new Date(instantMs));
+  return `${prefix} ${value}`;
+}
+
 export function buildTaskListItems(
   entries: readonly TaskListEntry[],
   projects: readonly Project[],
@@ -56,12 +72,14 @@ export function buildTaskListItems(
     const placement = placementLabel(entry.task, projectMap, sectionMap);
     const due = dueLabel(entry, viewerTimeZone);
     const priority = entry.task.priority === "none" ? null : `${entry.task.priority} priority`;
+    const completed = lifecycleLabel("Completed", entry.task.completedAtMs, viewerTimeZone);
+    const trashed = lifecycleLabel("Trashed", entry.task.trashedAtMs, viewerTimeZone);
     return {
       id: entry.task.id,
       title: entry.task.title,
       subtitle: placement,
       keywords: [placement, entry.task.notes],
-      metadata: [priority, due].filter((value): value is string => value !== null),
+      metadata: [priority, due, completed, trashed].filter((value): value is string => value !== null),
       task: entry.task,
     };
   });

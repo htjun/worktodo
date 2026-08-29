@@ -113,4 +113,34 @@ describe("task presentation mapping", () => {
     });
     expect(items[1]).toMatchObject({ subtitle: "Inbox", metadata: [] });
   });
+
+  it("shows independent completion and trash timestamps", () => {
+    const completedAtMs = Date.parse("2026-10-04T01:00:00.000Z");
+    const trashedAtMs = Date.parse("2026-10-04T02:00:00.000Z");
+    const format = new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Australia/Melbourne",
+    });
+    const [item] = buildTaskListItems(
+      [
+        {
+          task: task({
+            priority: "none",
+            due: { kind: "none" },
+            completedAtMs,
+            trashedAtMs,
+          }),
+        },
+      ],
+      [project],
+      [section],
+      "Australia/Melbourne",
+    );
+
+    expect(item.metadata).toEqual([
+      `Completed ${format.format(new Date(completedAtMs))}`,
+      `Trashed ${format.format(new Date(trashedAtMs))}`,
+    ]);
+  });
 });
