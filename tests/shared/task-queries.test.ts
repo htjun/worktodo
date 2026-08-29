@@ -41,6 +41,10 @@ describe("Today and Inbox queries", () => {
       startOfDayMs: Date.parse("2026-04-04T13:00:00.000Z"),
       startOfNextDayMs: Date.parse("2026-04-05T14:00:00.000Z"),
     });
+    expect(startOfCalendarDate("0001-01-01", "UTC")).toBe(-62_135_596_800_000);
+    for (const timeZone of ["Australia/Melbourne", "Pacific/Kiritimati", "America/Los_Angeles"]) {
+      expect(Math.abs(startOfCalendarDate("0001-01-01", timeZone) + 62_135_596_800_000)).toBeLessThan(86_400_000);
+    }
   });
 
   it("reproduces the approved Today boundary and lifecycle truth table", () => {

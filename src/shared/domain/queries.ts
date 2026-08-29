@@ -8,6 +8,7 @@ const PRIORITY_RANK: Record<Priority, number> = {
   high: 3,
 };
 const MILLISECONDS_PER_DAY = 86_400_000;
+const MILLISECONDS_PER_HOUR = 3_600_000;
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
 
 export type TodayTask = {
@@ -70,9 +71,11 @@ function calendarDateAtUnchecked(instantMs: number, timeZone: string): string {
 }
 
 export function calendarDateAt(instantMs: number, timeZone: string): string {
-  const validInstant = validateNonNegativeInteger(instantMs, "Evaluation instant");
+  if (!Number.isSafeInteger(instantMs) || Number.isNaN(new Date(instantMs).getTime())) {
+    throw new DomainError("INVALID_ARGUMENT", "Calendar instant must be a valid safe integer");
+  }
   const canonicalTimeZone = canonicalizeTimeZone(timeZone);
-  return calendarDateAtUnchecked(validInstant, canonicalTimeZone);
+  return calendarDateAtUnchecked(instantMs, canonicalTimeZone);
 }
 
 function utcDateStart(date: string): number {
@@ -81,6 +84,28 @@ function utcDateStart(date: string): number {
   value.setUTCFullYear(year, month - 1, day);
   value.setUTCHours(0, 0, 0, 0);
   return value.getTime();
+}
+
+function startOfMinimumCalendarDate(estimate: number, timeZone: string): number {
+  let previous = estimate - 2 * MILLISECONDS_PER_DAY;
+  const end = estimate + 2 * MILLISECONDS_PER_DAY;
+  for (let current = previous + MILLISECONDS_PER_HOUR; current <= end; current += MILLISECONDS_PER_HOUR) {
+    if (calendarDateAtUnchecked(current, timeZone) === "0001-01-01") {
+      let low = previous + 1;
+      let high = current;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (calendarDateAtUnchecked(middle, timeZone) === "0001-01-01") {
+          high = middle;
+        } else {
+          low = middle + 1;
+        }
+      }
+      return low;
+    }
+    previous = current;
+  }
+  throw new DomainError("INVALID_DUE_VALUE", "Unable to resolve the minimum calendar date in this timezone");
 }
 
 export function addCalendarDays(date: string, days: number): string {
@@ -97,6 +122,9 @@ export function startOfCalendarDate(date: string, timeZone: string): number {
   const validDate = validateCalendarDate(date);
   const canonicalTimeZone = canonicalizeTimeZone(timeZone);
   const estimate = utcDateStart(validDate);
+  if (validDate === "0001-01-01") {
+    return startOfMinimumCalendarDate(estimate, canonicalTimeZone);
+  }
   let low = estimate - 2 * MILLISECONDS_PER_DAY;
   let high = estimate + 2 * MILLISECONDS_PER_DAY;
 

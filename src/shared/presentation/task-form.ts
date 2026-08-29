@@ -16,11 +16,14 @@ function dueFromForm(values: TaskFormValues, viewerTimeZone: string): DueValue {
   if (values.dueKind === "none") {
     return { kind: "none" };
   }
-  if (values.dueAtMs === null || !Number.isSafeInteger(values.dueAtMs) || values.dueAtMs < 0) {
+  if (values.dueAtMs === null || !Number.isSafeInteger(values.dueAtMs)) {
     throw new DomainError("INVALID_DUE_VALUE", "Choose a due date");
   }
   if (values.dueKind === "allDay") {
     return { kind: "allDay", date: calendarDateAt(values.dueAtMs, viewerTimeZone) };
+  }
+  if (values.dueAtMs < 0) {
+    throw new DomainError("INVALID_DUE_VALUE", "Timed due value cannot precede 1970");
   }
   return { kind: "timed", instantMs: values.dueAtMs, timeZone: viewerTimeZone };
 }

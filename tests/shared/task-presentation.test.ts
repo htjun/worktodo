@@ -61,6 +61,9 @@ describe("task presentation mapping", () => {
       due: { kind: "timed", instantMs: allDayMs, timeZone: "Australia/Melbourne" },
     });
     expect(() => formToCreateTask({ ...values, dueAtMs: null }, "Australia/Melbourne")).toThrow("Choose a due date");
+    expect(
+      formToCreateTask({ ...values, dueAtMs: Date.parse("1960-01-01T14:00:00.000Z") }, "Australia/Melbourne").due,
+    ).toEqual({ kind: "allDay", date: "1960-01-02" });
   });
 
   it("round-trips task defaults for all due kinds", () => {
