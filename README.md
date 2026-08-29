@@ -2,7 +2,9 @@
 
 Worktodo is a local-first personal task manager built for Raycast, with a local MCP interface for agents.
 
-The project is currently validating its Raycast v2 and MCP foundations. Task storage and product behavior have not been implemented yet.
+The current Raycast slice provides persistent Today and Inbox views backed by a production SQLite database. Users can create, edit, and complete tasks with notes, priority, and optional all-day or timed due values.
+
+Project and section management, Completed and Trash views, Quick Add, menu-bar behavior, and task-domain MCP tools remain deferred.
 
 ## Requirements
 
@@ -17,6 +19,8 @@ npm install
 npm run dev
 ```
 
-Use `npm run verify` for the complete automated check. Build and run the diagnostic MCP server with `npm run dev:mcp`.
+Use `npm run verify` for the complete automated check. Build and run the MCP server, which currently exposes its diagnostic `ping` tool, with `npm run dev:mcp`.
+
+Worktodo stores personal task data at `~/Library/Application Support/Worktodo/worktodo.sqlite`.
 
 Durable product research lives in `docs/research/`.

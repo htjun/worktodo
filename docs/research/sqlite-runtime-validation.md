@@ -2,7 +2,7 @@
 
 **Validated:** 2026-08-28 on macOS 26.6.1 (25G76), Raycast 2.1.1.0, and `@raycast/api` 2.0.5.
 
-**Outcome:** All 13 native checks passed. The automated suite separately passes 22 tests, including MCP stdio and the task-model schema. This validates the temporary harness and proposed schema design, not product persistence, a production database location, or the remaining Phase 0 experiments.
+**Outcome:** All 13 native checks passed. At validation time, the automated suite separately passed 22 tests, including MCP stdio and the task-model schema. This evidence validated the temporary harness and proposed schema design before product persistence was implemented.
 
 ## Runtime and connection policy
 
@@ -54,10 +54,8 @@ This temporary path may be cleared by macOS; the measured summary above is the d
 - Back up with `node:sqlite`, verify a new sibling candidate read-only, then publish with an atomic hard link. EEXIST is a conflict, never permission to replace a destination. Clean up only the current attempt's candidate.
 - Bound the peer by its ten-minute session deadline. Polling and marker waits reject expired sessions; expiry rolls back held transactions and is reported as failure.
 
-## Reproduce and maintain
+## Archived harness
 
-Use the pinned Node/npm versions. In one terminal run `npm run dev`; in another run `npm run validate:sqlite`. Keep Raycast unlocked and approve **Run Command** within the 45-second startup window. The terminal reports pass/fail and the session's JSON location. The Raycast HUD only reports that the command finished; the coordinator report is authoritative.
+The temporary Raycast command, coordinator, and synthetic spike tests were removed after production persistence and the shared task domain shipped. The measured results above remain the durable native evidence; the temporary session path may no longer exist.
 
-Run `npm run verify` separately. Its 22 tests cover configuration, rollback, controlled migration contention and missing readiness, concurrent no-clobber backup publication, failed backup verification, hot-journal recovery, session/marker validation, idle and in-transaction expiry, normal finish, task-model schema validation, runtime metadata, and the existing MCP protocol lifecycle.
-
-Keep the temporary command through Phase 0, then remove it before product implementation or release. Retain these policies and adapt the reusable SQLite tests. The project, section, task, note, lifecycle, priority, due-value, Today, and relational contracts are now defined in the [shared task model](task-model.md). Other foundation gates remain open.
+Run `npm run verify` for current production database, migration, domain, query, presentation, and MCP regression coverage. The retained connection and migration tests enforce the approved policies against the shipped implementation. The project, section, task, note, lifecycle, priority, due-value, Today, and relational contracts remain defined in the [shared task model](task-model.md).

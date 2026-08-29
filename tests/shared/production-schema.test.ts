@@ -4,9 +4,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { extractTaskModelSchema } from "../../src/shared/sqlite-spike/task-model";
 import { openWorktodoDatabase } from "../../src/shared/storage/database";
 import { applyMigrations, PRODUCTION_SCHEMA_SQL, UnsupportedSchemaVersionError } from "../../src/shared/storage/schema";
+import { extractTaskModelSchema } from "../helpers/extract-task-model-schema";
 
 const executeFile = promisify(execFile);
 const temporaryDirectories: string[] = [];
