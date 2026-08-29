@@ -96,7 +96,11 @@ function appendPosition<T extends OrderedEntity>(items: T[], update: (item: T) =
   }
 
   const ordered = [...items].sort(compareOrdered);
-  ordered.forEach((item, index) => update({ ...item, position: (index + 1) * POSITION_STEP }));
+  ordered.forEach((item, index) => {
+    const position = (index + 1) * POSITION_STEP;
+    update({ ...item, position });
+    item.position = position;
+  });
   return (ordered.length + 1) * POSITION_STEP;
 }
 

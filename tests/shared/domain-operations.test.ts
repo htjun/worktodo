@@ -243,7 +243,7 @@ describe("shared domain operations", () => {
 
   it("normalizes every task before removing its section or project", async () => {
     const context = await createContext();
-    const { service, db } = context;
+    const { service, repository, db } = context;
     try {
       const inbox = service.createTask({ title: "Existing inbox", placement: { kind: "inbox" } });
       const project = service.createProject("Project");
@@ -271,6 +271,7 @@ describe("shared domain operations", () => {
       service.completeTask(sectionFirst.id);
       context.setNow(3_000);
       service.trashTask(sectionSecond.id);
+      repository.updateTask({ ...service.getTask(inbox.id), position: Number.MAX_SAFE_INTEGER });
       context.setNow(4_000);
       service.removeProject(project.id);
 
