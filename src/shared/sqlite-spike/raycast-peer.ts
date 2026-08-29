@@ -11,6 +11,7 @@ import {
   withImmediateTransaction,
 } from "./database";
 import { runMigrationContender } from "./migration";
+import { validateTaskModelSchema } from "./task-model";
 import {
   assertSpikeSessionActive,
   eventPath,
@@ -56,6 +57,12 @@ async function handleRequest(session: SpikeSession, request: SpikeRequest): Prom
     } finally {
       db.close();
     }
+  }
+
+  if (request.action === "task-model-schema") {
+    const schema = requiredParameter(request, "schema");
+    const databasePath = join(session.sessionDirectory, `task-model-raycast-${request.requestId}.sqlite`);
+    return { validation: validateTaskModelSchema(databasePath, schema) };
   }
 
   const db = openSpikeDatabase(session.databasePath);

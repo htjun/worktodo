@@ -22,6 +22,7 @@ export type SpikeRequestAction =
   | "write-marker"
   | "hold-write"
   | "migrate"
+  | "task-model-schema"
   | "foreign-key"
   | "rollback-exception"
   | "hold-read"
@@ -352,6 +353,7 @@ export function validateSpikeRequest(value: unknown, session: SpikeSession): Spi
     "write-marker",
     "hold-write",
     "migrate",
+    "task-model-schema",
     "foreign-key",
     "rollback-exception",
     "hold-read",

@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getRuntimeInfo } from "../../src/shared/runtime-info";
 import {
@@ -15,6 +15,11 @@ import {
   verifySpikeDatabase,
 } from "../../src/shared/sqlite-spike/database";
 import { coordinateMigrationRace, validateMigrationContention } from "../../src/shared/sqlite-spike/migration";
+import {
+  extractTaskModelSchema,
+  TaskModelSchemaValidation,
+  validateTaskModelSchema,
+} from "../../src/shared/sqlite-spike/task-model";
 import {
   clearActiveSpikeSession,
   createSpikeRequest,
@@ -69,6 +74,17 @@ function assertCondition(condition: unknown, message: string): asserts condition
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function validateTaskModelEvidence(value: unknown, runtime: string): TaskModelSchemaValidation {
+  const validation = requireRecord(value, `${runtime} task model validation`) as TaskModelSchemaValidation;
+  assertCondition(validation.schemaVersion === 1, `${runtime} did not apply task model schema version 1`);
+  assertCondition(validation.strictTables?.length === 3, `${runtime} did not create three STRICT model tables`);
+  assertCondition(validation.validRoundTrips === 3, `${runtime} did not round-trip all valid placements`);
+  assertCondition(validation.rejectedCases?.length === 9, `${runtime} did not reject every invalid model row`);
+  assertCondition(validation.integrity === "ok", `${runtime} task model database failed integrity_check`);
+  assertCondition(validation.foreignKeyViolations === 0, `${runtime} task model database has foreign-key violations`);
+  return validation;
 }
 
 async function launchRaycastCommand(): Promise<void> {
@@ -237,6 +253,22 @@ async function runValidation(): Promise<SpikeReport> {
         );
       }
       return { node24: nodeRuntime, raycast: raycastRuntime };
+    });
+
+    await check("task model schema is lossless and constrained in both runtimes", async () => {
+      const markdown = await readFile(join(process.cwd(), "docs", "research", "task-model.md"), "utf8");
+      const schema = extractTaskModelSchema(markdown);
+      const node24 = validateTaskModelEvidence(
+        validateTaskModelSchema(join(session.sessionDirectory, "task-model-node24.sqlite"), schema),
+        "Node 24",
+      );
+      const raycastOutput = await callRaycast(session, "task-model-schema", { schema });
+      const raycast = validateTaskModelEvidence(raycastOutput.validation, "Raycast");
+      assertCondition(
+        JSON.stringify(node24) === JSON.stringify(raycast),
+        "Task model validation evidence differs between Node 24 and Raycast",
+      );
+      return { node24, raycast };
     });
 
     await check("reader sees only committed data", async () => {

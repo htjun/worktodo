@@ -2,7 +2,7 @@
 
 **Validated:** 2026-08-28 on macOS 26.6.1 (25G76), Raycast 2.1.1.0, and `@raycast/api` 2.0.5.
 
-**Outcome:** All 12 native checks passed. The automated suite separately passes 19 tests, including MCP stdio. This validates the temporary synthetic harness, not a task schema, production database location, or the remaining Phase 0 experiments.
+**Outcome:** All 13 native checks passed. The automated suite separately passes 22 tests, including MCP stdio and the task-model schema. This validates the temporary harness and proposed schema design, not product persistence, a production database location, or the remaining Phase 0 experiments.
 
 ## Runtime and connection policy
 
@@ -15,7 +15,8 @@ Raycast's application version advanced since the scaffold check; its embedded No
 
 ## Native evidence
 
-Session: `9b3c07aa-980b-44dd-9ed4-16723a017333`, 12:42:51–12:43:04 UTC.
+Concurrency session: `9b3c07aa-980b-44dd-9ed4-16723a017333`, 12:42:51–12:43:04 UTC.
+Task-model session: `5fe15631-b8e0-41e3-94c4-371a2f0e0407`, 06:25:48–06:26:11 UTC.
 
 | Scenario                                          | Measured result                                                                                            |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -26,6 +27,7 @@ Session: `9b3c07aa-980b-44dd-9ed4-16723a017333`, 12:42:51–12:43:04 UTC.
 | Node 24 waits for Raycast, long hold              | SQLITE_BUSY after 2,096.8 ms                                                                               |
 | Competing migrations                              | Raycast applied once; Node waited 366.9 ms, then read version 1 under its lock and no-opped; one audit row |
 | Foreign-key violations, both runtimes             | Rejected with SQLITE_CONSTRAINT_FOREIGNKEY                                                                 |
+| Proposed task-model schema, both runtimes         | Identical version-1 `STRICT` schema evidence; valid states round-tripped and nine invalid cases rejected   |
 | Raycast transaction exception                     | Explicit rollback; row absent; no open transaction                                                         |
 | Node writer killed with SIGKILL                   | Uncommitted row absent; integrity/FK checks passed; hot journal removed                                    |
 | Online backup with an active Raycast reader       | Verified read-only by both runtimes; matching four markers and one migration audit row                     |
@@ -56,6 +58,6 @@ This temporary path may be cleared by macOS; the measured summary above is the d
 
 Use the pinned Node/npm versions. In one terminal run `npm run dev`; in another run `npm run validate:sqlite`. Keep Raycast unlocked and approve **Run Command** within the 45-second startup window. The terminal reports pass/fail and the session's JSON location. The Raycast HUD only reports that the command finished; the coordinator report is authoritative.
 
-Run `npm run verify` separately. Its 19 tests cover configuration, rollback, controlled migration contention and missing readiness, concurrent no-clobber backup publication, failed backup verification, hot-journal recovery, session/marker validation, idle and in-transaction expiry, normal finish, runtime metadata, and the existing MCP protocol lifecycle.
+Run `npm run verify` separately. Its 22 tests cover configuration, rollback, controlled migration contention and missing readiness, concurrent no-clobber backup publication, failed backup verification, hot-journal recovery, session/marker validation, idle and in-transaction expiry, normal finish, task-model schema validation, runtime metadata, and the existing MCP protocol lifecycle.
 
-Keep the temporary command through Phase 0, then remove it before product implementation or release. Retain these policies and adapt the reusable SQLite tests. Next: design the actual project, section, task, note, and due-date model; other foundation gates remain open in the [living plan](../plans/implementation-plan.md).
+Keep the temporary command through Phase 0, then remove it before product implementation or release. Retain these policies and adapt the reusable SQLite tests. The project, section, task, note, lifecycle, priority, due-value, Today, and relational contracts are now defined in the [shared task model](task-model.md). Other foundation gates remain open.

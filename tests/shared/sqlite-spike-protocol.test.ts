@@ -13,6 +13,7 @@ import {
   SPIKE_PROTOCOL_VERSION,
   SpikeSession,
   validateSpikeReport,
+  validateSpikeRequest,
   validateSpikeSession,
   waitForJson,
   waitForSessionMarker,
@@ -73,6 +74,14 @@ describe("SQLite spike protocol", () => {
     expect(() => validateSpikeReport({ ...report, checks: [{ ...report.checks[0], durationMs: -1 }] })).toThrow(
       "duration",
     );
+  });
+
+  it("accepts the task model schema validation action", async () => {
+    const session = await createSpikeSession();
+    sessions.push(session);
+    const request = createSpikeRequest(session, "task-model-schema", { schema: "SELECT 1;" });
+
+    expect(validateSpikeRequest(request, session)).toEqual(request);
   });
 
   it("does not let stale cleanup remove a replacement active session", async () => {
