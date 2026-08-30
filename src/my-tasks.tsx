@@ -188,7 +188,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       message,
       primaryAction: {
         title: nextPresentation.title,
-        shortcut: TASK_HISTORY_SHORTCUTS[nextState.direction],
         onAction: () => void performTaskHistoryRef.current(nextState),
       },
     });

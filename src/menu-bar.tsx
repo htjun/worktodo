@@ -107,7 +107,6 @@ export default function Command() {
       message,
       primaryAction: {
         title: nextPresentation.title,
-        shortcut: TASK_HISTORY_SHORTCUTS[nextState.direction],
         onAction: () => void performTaskHistoryRef.current(nextState),
       },
     });
