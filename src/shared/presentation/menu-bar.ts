@@ -24,11 +24,10 @@ export type MenuBarVisibility = {
   clearStoredHidden: boolean;
 };
 
-export function resolveMenuBarVisibility(storedHidden: unknown, userInitiated: boolean): MenuBarVisibility {
-  const hidden = storedHidden === true;
+export function resolveMenuBarVisibility(storedHidden: boolean, userInitiated: boolean): MenuBarVisibility {
   return {
-    hidden: hidden && !userInitiated,
-    clearStoredHidden: hidden && userInitiated,
+    hidden: storedHidden && !userInitiated,
+    clearStoredHidden: storedHidden && userInitiated,
   };
 }
 
