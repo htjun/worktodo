@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Project, Section, Task } from "../../src/shared/domain/model";
-import { lifecycleActionIntentForViewKind, TASK_LIFECYCLE_SHORTCUT } from "../../src/shared/presentation/task-actions";
+import { lifecycleActionIntentForViewKind } from "../../src/shared/presentation/task-actions";
 import { formToCreateTask, formToUpdateTask, taskFormDefaults } from "../../src/shared/presentation/task-form";
 import { buildTaskListItems, extractTaskNoteLinks, taskNotesMarkdown } from "../../src/shared/presentation/task-list";
 import { placementFromKey, placementKey } from "../../src/shared/presentation/placement";
@@ -210,7 +210,7 @@ describe("task presentation mapping", () => {
     ).toEqual(["https://example.com/path", "https://example.org/a_(b)", "http://localhost:8080/test"]);
   });
 
-  it("maps lifecycle actions to a deliberate Command-Return shortcut", () => {
+  it("maps lifecycle actions for safe secondary placement", () => {
     for (const viewKind of ["today", "upcoming", "inbox", "project", "section"]) {
       expect(lifecycleActionIntentForViewKind(viewKind)).toEqual({
         kind: "complete",
@@ -228,7 +228,6 @@ describe("task presentation mapping", () => {
       title: "Restore Task",
       successTitle: "Task restored",
     });
-    expect(TASK_LIFECYCLE_SHORTCUT).toEqual({ modifiers: ["cmd"], key: "enter" });
   });
 
   it("shows independent completion and trash timestamps", () => {

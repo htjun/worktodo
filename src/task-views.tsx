@@ -3,7 +3,7 @@ import type { WorktodoSession } from "./shared/application/worktodo";
 import type { Placement, Project, Section } from "./shared/domain/model";
 import { addCalendarDays, startOfCalendarDate } from "./shared/domain/queries";
 import type { TaskService } from "./shared/domain/task-service";
-import { lifecycleActionIntentForViewKind, TASK_LIFECYCLE_SHORTCUT } from "./shared/presentation/task-actions";
+import { lifecycleActionIntentForViewKind } from "./shared/presentation/task-actions";
 import { buildTaskListItems, type TaskListEntry, type TaskListItem } from "./shared/presentation/task-list";
 
 export type TaskView =
@@ -225,7 +225,6 @@ export function lifecycleActionForTaskView(view: TaskView, service: TaskService,
       return {
         title: intent.title,
         icon: Icon.ArrowCounterClockwise,
-        shortcut: TASK_LIFECYCLE_SHORTCUT,
         successTitle: intent.successTitle,
         operation: () => service.restoreTask(taskId),
       };
@@ -233,7 +232,6 @@ export function lifecycleActionForTaskView(view: TaskView, service: TaskService,
       return {
         title: intent.title,
         icon: Icon.Circle,
-        shortcut: TASK_LIFECYCLE_SHORTCUT,
         successTitle: intent.successTitle,
         operation: () => service.reopenTask(taskId),
       };
@@ -241,7 +239,6 @@ export function lifecycleActionForTaskView(view: TaskView, service: TaskService,
       return {
         title: intent.title,
         icon: Icon.CheckCircle,
-        shortcut: TASK_LIFECYCLE_SHORTCUT,
         successTitle: intent.successTitle,
         operation: () => service.completeTask(taskId),
       };

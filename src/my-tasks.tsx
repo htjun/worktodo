@@ -259,10 +259,10 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                           icon={isShowingDetail ? Icon.EyeDisabled : Icon.Eye}
                           onAction={() => setIsShowingDetail((current) => !current)}
                         />
+                        {/* Raycast reserves Command-Return for the second action and rejects it as an explicit shortcut. */}
                         <Action
                           title={lifecycle.title}
                           icon={lifecycle.icon}
-                          shortcut={lifecycle.shortcut}
                           onAction={() => runMutation(lifecycle.operation, lifecycle.successTitle)}
                         />
                         {item.detail.links.map((url, index) => (

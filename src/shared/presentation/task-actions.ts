@@ -4,11 +4,6 @@ export type TaskLifecycleActionIntent = {
   successTitle: "Task completed" | "Task reopened" | "Task restored";
 };
 
-export const TASK_LIFECYCLE_SHORTCUT: { modifiers: ["cmd"]; key: "enter" } = {
-  modifiers: ["cmd"],
-  key: "enter",
-};
-
 export function lifecycleActionIntentForViewKind(viewKind: string): TaskLifecycleActionIntent {
   if (viewKind === "trash") {
     return { kind: "restore", title: "Restore Task", successTitle: "Task restored" };
