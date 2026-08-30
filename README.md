@@ -2,9 +2,9 @@
 
 Worktodo is a local-first personal task manager built for Raycast, with a local MCP interface for agents.
 
-The current Raycast app provides persistent Today, Upcoming, Inbox, project, section, Completed, and Trash views backed by a production SQLite database. Users can create, edit, move, complete, reopen, trash, and restore tasks with notes, priority, and optional all-day or timed due values. Projects and sections can be created, renamed, and removed without deleting their tasks.
+The current Raycast app provides persistent Today, Upcoming, Inbox, project, section, Completed, and Trash views backed by a production SQLite database. Users can create, edit, move, complete, reopen, trash, and restore tasks with notes, priority, and optional all-day or timed due values. Projects and sections can be created, renamed, and removed without deleting their tasks. A title-first Quick Add command captures a task directly to Inbox.
 
-Quick Add, actionable menu-bar behavior, JSON backup/export/import, and task-domain MCP tools remain deferred.
+Actionable menu-bar behavior, JSON backup/export/import, and task-domain MCP tools remain deferred.
 
 ## Requirements
 
