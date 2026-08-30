@@ -385,164 +385,171 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     >
       {state.error ? (
         <List.EmptyView icon={Icon.Warning} title="Unable to open Worktodo" description={state.error} />
-      ) : taskCount === 0 ? (
-        <List.EmptyView
-          icon={content.icon}
-          title={content.emptyTitle}
-          description={content.emptyDescription}
-          actions={
-            createTarget || projectsTarget || taskHistoryState ? (
-              <ActionPanel>
-                {createTarget ? <Action.Push title="Create Task" icon={Icon.Plus} target={createTarget} /> : null}
-                {projectsTarget ? (
-                  <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
-                ) : null}
-                {taskHistoryState ? <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} /> : null}
-              </ActionPanel>
-            ) : undefined
-          }
-        />
       ) : (
-        state.taskSections.map((taskSection, sectionIndex) => (
-          <List.Section
-            key={taskSection.key}
-            title={
-              sectionIndex === 0 && state.mutationError
-                ? `Action failed: ${state.mutationError} — ${taskSection.title}`
-                : taskSection.title
+        <>
+          <List.EmptyView
+            icon={content.icon}
+            title={taskCount === 0 ? content.emptyTitle : "No matching tasks"}
+            description={taskCount === 0 ? content.emptyDescription : "Try a different search."}
+            actions={
+              createTarget || projectsTarget || taskHistoryState ? (
+                <ActionPanel>
+                  {createTarget ? <Action.Push title="Create Task" icon={Icon.Plus} target={createTarget} /> : null}
+                  {projectsTarget ? (
+                    <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
+                  ) : null}
+                  {taskHistoryState ? (
+                    <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} />
+                  ) : null}
+                </ActionPanel>
+              ) : undefined
             }
-          >
-            {taskSection.items.map((item) => {
-              const lifecycle = session ? lifecycleActionForTaskView(view, session.service, item.id) : null;
-              const row = taskListRowPresentation(item, acknowledgedTasks.get(item.id));
-              return (
-                <List.Item
-                  key={item.id}
-                  id={item.id}
-                  icon={row.isCompletionAcknowledged ? Icon.CheckCircle : content.taskIcon}
-                  title={row.title}
-                  subtitle={item.subtitle}
-                  keywords={item.keywords}
-                  accessories={
-                    isShowingDetail && !row.isCompletionAcknowledged
-                      ? undefined
-                      : row.accessories.map((text) => ({ text }))
-                  }
-                  detail={
-                    <List.Item.Detail
-                      markdown={item.detail.markdown}
-                      metadata={
-                        <List.Item.Detail.Metadata>
-                          {item.detail.metadata.map((field) => (
-                            <List.Item.Detail.Metadata.Label key={field.title} title={field.title} text={field.text} />
-                          ))}
+          />
+          {state.taskSections.map((taskSection, sectionIndex) => (
+            <List.Section
+              key={taskSection.key}
+              title={
+                sectionIndex === 0 && state.mutationError
+                  ? `Action failed: ${state.mutationError} — ${taskSection.title}`
+                  : taskSection.title
+              }
+            >
+              {taskSection.items.map((item) => {
+                const lifecycle = session ? lifecycleActionForTaskView(view, session.service, item.id) : null;
+                const row = taskListRowPresentation(item, acknowledgedTasks.get(item.id));
+                return (
+                  <List.Item
+                    key={item.id}
+                    id={item.id}
+                    icon={row.isCompletionAcknowledged ? Icon.CheckCircle : content.taskIcon}
+                    title={row.title}
+                    subtitle={item.subtitle}
+                    keywords={item.keywords}
+                    accessories={
+                      isShowingDetail && !row.isCompletionAcknowledged
+                        ? undefined
+                        : row.accessories.map((text) => ({ text }))
+                    }
+                    detail={
+                      <List.Item.Detail
+                        markdown={item.detail.markdown}
+                        metadata={
+                          <List.Item.Detail.Metadata>
+                            {item.detail.metadata.map((field) => (
+                              <List.Item.Detail.Metadata.Label
+                                key={field.title}
+                                title={field.title}
+                                text={field.text}
+                              />
+                            ))}
+                            {item.detail.links.map((url, index) => (
+                              <List.Item.Detail.Metadata.Link
+                                key={url}
+                                title={index === 0 ? "Link" : `Link ${index + 1}`}
+                                text={url}
+                                target={url}
+                              />
+                            ))}
+                          </List.Item.Detail.Metadata>
+                        }
+                      />
+                    }
+                    actions={
+                      session && lifecycle ? (
+                        <ActionPanel>
+                          <Action
+                            title={isShowingDetail ? "Hide Details" : "Show Details"}
+                            icon={isShowingDetail ? Icon.EyeDisabled : Icon.Eye}
+                            onAction={() => setIsShowingDetail((current) => !current)}
+                          />
+                          {/* Raycast reserves Command-Return for the second action and rejects it as an explicit shortcut. */}
+                          <Action
+                            title={lifecycle.title}
+                            icon={lifecycle.icon}
+                            onAction={() =>
+                              view.kind === "completed" || view.kind === "trash"
+                                ? runMutation(lifecycle.operation, lifecycle.successTitle)
+                                : completeTaskWithFeedback(item.id)
+                            }
+                          />
+                          {taskHistoryState ? (
+                            <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} />
+                          ) : null}
                           {item.detail.links.map((url, index) => (
-                            <List.Item.Detail.Metadata.Link
+                            <Action.OpenInBrowser
                               key={url}
-                              title={index === 0 ? "Link" : `Link ${index + 1}`}
-                              text={url}
-                              target={url}
+                              title={index === 0 ? "Open Link" : `Open Link ${index + 1}`}
+                              url={url}
                             />
                           ))}
-                        </List.Item.Detail.Metadata>
-                      }
-                    />
-                  }
-                  actions={
-                    session && lifecycle ? (
-                      <ActionPanel>
-                        <Action
-                          title={isShowingDetail ? "Hide Details" : "Show Details"}
-                          icon={isShowingDetail ? Icon.EyeDisabled : Icon.Eye}
-                          onAction={() => setIsShowingDetail((current) => !current)}
-                        />
-                        {/* Raycast reserves Command-Return for the second action and rejects it as an explicit shortcut. */}
-                        <Action
-                          title={lifecycle.title}
-                          icon={lifecycle.icon}
-                          onAction={() =>
-                            view.kind === "completed" || view.kind === "trash"
-                              ? runMutation(lifecycle.operation, lifecycle.successTitle)
-                              : completeTaskWithFeedback(item.id)
-                          }
-                        />
-                        {taskHistoryState ? (
-                          <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} />
-                        ) : null}
-                        {item.detail.links.map((url, index) => (
-                          <Action.OpenInBrowser
-                            key={url}
-                            title={index === 0 ? "Open Link" : `Open Link ${index + 1}`}
-                            url={url}
-                          />
-                        ))}
-                        {view.kind !== "trash" ? (
-                          <Action.Push
-                            title="Edit Task"
-                            icon={Icon.Pencil}
-                            shortcut={Keyboard.Shortcut.Common.Edit}
-                            target={
-                              <TaskForm
-                                service={session.service}
-                                task={item.task}
-                                projects={state.projects}
-                                sections={state.sections}
-                                initialPlacement={placementOf(item.task)}
-                                viewerTimeZone={viewerTimeZone}
-                                onSaved={refreshAfterUnrelatedMutation}
-                              />
-                            }
-                          />
-                        ) : null}
-                        {view.kind !== "trash" ? (
-                          <Action.Push
-                            title="Move Task"
-                            icon={Icon.ArrowRight}
-                            target={
-                              <MoveTaskForm
-                                service={session.service}
-                                task={item.task}
-                                projects={state.projects}
-                                sections={state.sections}
-                                onSaved={refreshAfterUnrelatedMutation}
-                              />
-                            }
-                          />
-                        ) : null}
-                        {createTarget ? (
-                          <Action.Push
-                            title="Create Task"
-                            icon={Icon.Plus}
-                            shortcut={Keyboard.Shortcut.Common.New}
-                            target={createTarget}
-                          />
-                        ) : null}
-                        {projectsTarget ? (
-                          <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
-                        ) : null}
-                        {view.kind !== "trash" ? (
+                          {view.kind !== "trash" ? (
+                            <Action.Push
+                              title="Edit Task"
+                              icon={Icon.Pencil}
+                              shortcut={Keyboard.Shortcut.Common.Edit}
+                              target={
+                                <TaskForm
+                                  service={session.service}
+                                  task={item.task}
+                                  projects={state.projects}
+                                  sections={state.sections}
+                                  initialPlacement={placementOf(item.task)}
+                                  viewerTimeZone={viewerTimeZone}
+                                  onSaved={refreshAfterUnrelatedMutation}
+                                />
+                              }
+                            />
+                          ) : null}
+                          {view.kind !== "trash" ? (
+                            <Action.Push
+                              title="Move Task"
+                              icon={Icon.ArrowRight}
+                              target={
+                                <MoveTaskForm
+                                  service={session.service}
+                                  task={item.task}
+                                  projects={state.projects}
+                                  sections={state.sections}
+                                  onSaved={refreshAfterUnrelatedMutation}
+                                />
+                              }
+                            />
+                          ) : null}
+                          {createTarget ? (
+                            <Action.Push
+                              title="Create Task"
+                              icon={Icon.Plus}
+                              shortcut={Keyboard.Shortcut.Common.New}
+                              target={createTarget}
+                            />
+                          ) : null}
+                          {projectsTarget ? (
+                            <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
+                          ) : null}
+                          {view.kind !== "trash" ? (
+                            <Action
+                              title="Move to Trash"
+                              icon={Icon.Trash}
+                              style={Action.Style.Destructive}
+                              shortcut={Keyboard.Shortcut.Common.Remove}
+                              onAction={() => trashTaskWithHistory(item.task)}
+                            />
+                          ) : null}
                           <Action
-                            title="Move to Trash"
-                            icon={Icon.Trash}
-                            style={Action.Style.Destructive}
-                            shortcut={Keyboard.Shortcut.Common.Remove}
-                            onAction={() => trashTaskWithHistory(item.task)}
+                            title="Refresh"
+                            icon={Icon.ArrowClockwise}
+                            shortcut={Keyboard.Shortcut.Common.Refresh}
+                            onAction={refresh}
                           />
-                        ) : null}
-                        <Action
-                          title="Refresh"
-                          icon={Icon.ArrowClockwise}
-                          shortcut={Keyboard.Shortcut.Common.Refresh}
-                          onAction={refresh}
-                        />
-                      </ActionPanel>
-                    ) : undefined
-                  }
-                />
-              );
-            })}
-          </List.Section>
-        ))
+                        </ActionPanel>
+                      ) : undefined
+                    }
+                  />
+                );
+              })}
+            </List.Section>
+          ))}
+        </>
       )}
     </List>
   );
