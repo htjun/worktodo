@@ -7,6 +7,7 @@ import {
   querySection,
   queryToday,
   queryTrash,
+  queryUpcoming,
   startOfCalendarDate,
   todayWindow,
 } from "../../src/shared/domain/queries";
@@ -113,6 +114,47 @@ describe("task queries", () => {
     const result = queryToday(tasks, Date.parse("2026-10-04T01:00:00.000Z"), "Australia/Melbourne");
     expect(result.tasks.map(({ task }) => task.id)).toEqual([id(6), id(4), id(3), id(2), id(1), id(5)]);
     expect(startOfCalendarDate("2026-10-04", "Australia/Melbourne")).toBe(Date.parse("2026-10-03T14:00:00.000Z"));
+  });
+
+  it("returns future active tasks grouped and ordered by viewer calendar date", () => {
+    const tasks = [
+      task(1, { kind: "none" }),
+      task(2, { kind: "allDay", date: "2026-10-04" }),
+      task(3, { kind: "allDay", date: "2026-10-05" }, { priority: "none" }),
+      task(4, { kind: "allDay", date: "2026-10-05" }, { priority: "high" }),
+      task(5, { kind: "timed", instantMs: Date.parse("2026-10-04T12:59:59.999Z"), timeZone: "UTC" }),
+      task(6, { kind: "timed", instantMs: Date.parse("2026-10-04T13:00:00.000Z"), timeZone: "UTC" }),
+      task(7, { kind: "timed", instantMs: Date.parse("2026-10-04T15:00:00.000Z"), timeZone: "UTC" }),
+      task(8, { kind: "allDay", date: "2026-10-06" }),
+      task(9, { kind: "allDay", date: "2026-10-05" }, { completedAtMs: 1_000 }),
+      task(10, { kind: "allDay", date: "2026-10-05" }, { trashedAtMs: 1_000 }),
+    ];
+    const result = queryUpcoming(tasks, Date.parse("2026-10-04T01:00:00.000Z"), "Australia/Melbourne");
+
+    expect(result.count).toBe(5);
+    expect(result.tasks.map(({ task: value, localDate }) => [value.id, localDate])).toEqual([
+      [id(4), "2026-10-05"],
+      [id(3), "2026-10-05"],
+      [id(6), "2026-10-05"],
+      [id(7), "2026-10-05"],
+      [id(8), "2026-10-06"],
+    ]);
+  });
+
+  it("reclassifies timed Upcoming tasks from the viewer timezone without changing all-day dates", () => {
+    const allDay = task(1, { kind: "allDay", date: "2026-10-05" });
+    const timed = task(2, {
+      kind: "timed",
+      instantMs: Date.parse("2026-10-05T10:00:00.000Z"),
+      timeZone: "Australia/Melbourne",
+    });
+    const evaluation = Date.parse("2026-10-04T16:00:00.000Z");
+
+    expect(queryUpcoming([allDay, timed], evaluation, "Australia/Melbourne").tasks).toEqual([]);
+    expect(queryUpcoming([allDay, timed], evaluation, "America/Los_Angeles").tasks.map(({ task }) => task.id)).toEqual([
+      id(1),
+      id(2),
+    ]);
   });
 
   it("returns active incomplete Inbox tasks in canonical ordinary order", () => {

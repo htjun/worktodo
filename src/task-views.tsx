@@ -1,11 +1,13 @@
 import { Icon, List } from "@raycast/api";
 import type { WorktodoSession } from "./shared/application/worktodo";
 import type { Placement, Project, Section } from "./shared/domain/model";
+import { addCalendarDays, startOfCalendarDate } from "./shared/domain/queries";
 import type { TaskService } from "./shared/domain/task-service";
 import { buildTaskListItems, type TaskListEntry, type TaskListItem } from "./shared/presentation/task-list";
 
 export type TaskView =
   | { kind: "today" }
+  | { kind: "upcoming" }
   | { kind: "inbox" }
   | { kind: "completed" }
   | { kind: "trash" }
@@ -20,6 +22,14 @@ const STATIC_VIEW_CONTENT = {
     searchPlaceholder: "Search Today",
     emptyTitle: "Nothing due today",
     emptyDescription: "Overdue and due-today tasks appear here.",
+  },
+  upcoming: {
+    title: "Upcoming",
+    icon: Icon.Calendar,
+    taskIcon: Icon.Circle,
+    searchPlaceholder: "Search Upcoming",
+    emptyTitle: "No upcoming tasks",
+    emptyDescription: "Tasks due after today appear here.",
   },
   inbox: {
     title: "Inbox",
@@ -59,7 +69,7 @@ export function taskViewKey(view: TaskView): string {
 }
 
 export function taskViewFromKey(value: string, projects: readonly Project[], sections: readonly Section[]): TaskView {
-  if (value === "today" || value === "inbox" || value === "completed" || value === "trash") {
+  if (value === "today" || value === "upcoming" || value === "inbox" || value === "completed" || value === "trash") {
     return { kind: value };
   }
   if (value.startsWith("project:")) {
@@ -131,7 +141,33 @@ export function initialPlacementForTaskView(view: TaskView): Placement {
   }
 }
 
-export function loadTaskViewItems(session: WorktodoSession, view: TaskView, viewerTimeZone: string): TaskListItem[] {
+export type TaskListSection = {
+  key: string;
+  title: string;
+  items: TaskListItem[];
+};
+
+function upcomingSectionTitle(date: string, localDate: string, viewerTimeZone: string): string {
+  if (date === addCalendarDays(localDate, 1)) {
+    return "Tomorrow";
+  }
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: viewerTimeZone,
+  };
+  if (date.slice(0, 4) !== localDate.slice(0, 4)) {
+    options.year = "numeric";
+  }
+  return new Intl.DateTimeFormat(undefined, options).format(new Date(startOfCalendarDate(date, viewerTimeZone)));
+}
+
+export function loadTaskViewSections(
+  session: WorktodoSession,
+  view: TaskView,
+  viewerTimeZone: string,
+): TaskListSection[] {
   const projects = session.service.listProjects();
   const sections = session.service.listSections();
   let entries: TaskListEntry[];
@@ -142,6 +178,20 @@ export function loadTaskViewItems(session: WorktodoSession, view: TaskView, view
         todayStatus: status,
       }));
       break;
+    case "upcoming": {
+      const result = session.service.listUpcoming(Date.now(), viewerTimeZone);
+      const groups = new Map<string, TaskListEntry[]>();
+      for (const { task, localDate } of result.tasks) {
+        const group = groups.get(localDate) ?? [];
+        group.push({ task });
+        groups.set(localDate, group);
+      }
+      return [...groups].map(([date, group]) => ({
+        key: `upcoming:${date}`,
+        title: upcomingSectionTitle(date, result.localDate, viewerTimeZone),
+        items: buildTaskListItems(group, projects, sections, viewerTimeZone),
+      }));
+    }
     case "inbox":
       entries = session.service.listInbox().map((task) => ({ task }));
       break;
@@ -158,7 +208,13 @@ export function loadTaskViewItems(session: WorktodoSession, view: TaskView, view
       entries = session.service.listTrash().map((task) => ({ task }));
       break;
   }
-  return buildTaskListItems(entries, projects, sections, viewerTimeZone);
+  return [
+    {
+      key: taskViewKey(view),
+      title: taskViewContent(view, projects, sections).title,
+      items: buildTaskListItems(entries, projects, sections, viewerTimeZone),
+    },
+  ];
 }
 
 export function lifecycleActionForTaskView(view: TaskView, service: TaskService, taskId: string) {
@@ -206,6 +262,7 @@ export function TaskViewDropdown({
     >
       <List.Dropdown.Section title="Views">
         <List.Dropdown.Item value="today" title="Today" icon={Icon.Calendar} />
+        <List.Dropdown.Item value="upcoming" title="Upcoming" icon={Icon.Calendar} />
         <List.Dropdown.Item value="inbox" title="Inbox" icon={Icon.Tray} />
         <List.Dropdown.Item value="completed" title="Completed" icon={Icon.CheckCircle} />
         <List.Dropdown.Item value="trash" title="Trash" icon={Icon.Trash} />

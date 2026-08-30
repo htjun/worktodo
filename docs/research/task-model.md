@@ -109,9 +109,9 @@ Priority is a closed vocabulary with the following descending rank:
 
 The canonical order for projects is `(position ASC, createdAtMs ASC, id ASC)`. Sections use the
 same tuple within one project. Ordinary task lists use
-`(priority rank DESC, position ASC, createdAtMs ASC, id ASC)`. Today has the additional due ordering
-defined below. Search relevance may precede the ordinary task tuple, but equal relevance must use
-the complete ordinary tuple.
+`(priority rank DESC, position ASC, createdAtMs ASC, id ASC)`. Today and Upcoming have the additional
+due ordering defined below. Search relevance may precede the ordinary task tuple, but equal relevance
+must use the complete ordinary tuple.
 
 Positions are non-negative signed 64-bit integers. Creation and movement append an item to its
 target placement. A future implementation may leave gaps for manual reordering; if a midpoint is
@@ -280,6 +280,24 @@ Today has one total order:
 For ordering only, an all-day date's effective due instant is the start of that calendar date in the
 viewer timezone. A timed value uses its stored instant. This puts an all-day due-today task at the
 start of its day while preserving exact timed order and makes mixed due types deterministic.
+
+## Upcoming
+
+Upcoming uses the same explicit evaluation instant, viewer timezone, and calendar boundaries as
+Today. A task is in Upcoming exactly when it is incomplete, not trashed, and either:
+
+- all-day with `date > viewerLocalDate`; or
+- timed with `instantMs >= startOfNextViewerDateMs`.
+
+Tasks without a due value, completed tasks, trashed tasks, overdue tasks, and due-today tasks are
+excluded. The query has no arbitrary future horizon. Each result carries the calendar date used to
+group it: the stored date for an all-day task, or the instant's date in the viewer timezone for a
+timed task. Changing the viewer timezone never changes an all-day task's stored calendar meaning,
+but it can change whether a date is upcoming and can reclassify a timed instant.
+
+Upcoming is ordered by calendar date ascending. Within one date, all-day tasks precede timed tasks;
+all-day tasks use the ordinary task order, timed tasks use due instant ascending and then the
+ordinary task order. Raycast renders each calendar date as a separate section.
 
 ## SQLite schema design
 

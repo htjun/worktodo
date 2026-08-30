@@ -231,6 +231,30 @@ describe("shared domain operations", () => {
     }
   });
 
+  it("exposes the shared Upcoming query through the task service", async () => {
+    const { service, db } = await createContext();
+    try {
+      const upcoming = service.createTask({
+        title: "Tomorrow",
+        placement: { kind: "inbox" },
+        due: { kind: "allDay", date: "2026-10-05" },
+      });
+      service.createTask({
+        title: "Today",
+        placement: { kind: "inbox" },
+        due: { kind: "allDay", date: "2026-10-04" },
+      });
+
+      expect(
+        service
+          .listUpcoming(Date.parse("2026-10-04T01:00:00.000Z"), "Australia/Melbourne")
+          .tasks.map(({ task, localDate }) => [task.id, localDate]),
+      ).toEqual([[upcoming.id, "2026-10-05"]]);
+    } finally {
+      db.close();
+    }
+  });
+
   it("renumbers a placement before an append would exceed the safe integer range", async () => {
     const context = await createContext();
     const { service, repository, db } = context;

@@ -25,6 +25,20 @@ export type TodayResult = {
   startOfNextDayMs: number;
 };
 
+export type UpcomingTask = {
+  task: Task;
+  localDate: string;
+  effectiveDueAtMs: number;
+};
+
+export type UpcomingResult = {
+  tasks: UpcomingTask[];
+  count: number;
+  localDate: string;
+  startOfDayMs: number;
+  startOfNextDayMs: number;
+};
+
 function compareId(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -203,6 +217,48 @@ export function queryToday(tasks: readonly Task[], evaluationInstantMs: number, 
     (left, right) =>
       Number(left.status === "dueToday") - Number(right.status === "dueToday") ||
       left.effectiveDueAtMs - right.effectiveDueAtMs ||
+      compareOrdinaryTasks(left.task, right.task),
+  );
+
+  return { tasks: included, count: included.length, ...window };
+}
+
+export function queryUpcoming(
+  tasks: readonly Task[],
+  evaluationInstantMs: number,
+  viewerTimeZone: string,
+): UpcomingResult {
+  const window = todayWindow(evaluationInstantMs, viewerTimeZone);
+  const canonicalTimeZone = canonicalizeTimeZone(viewerTimeZone);
+  const included: UpcomingTask[] = [];
+
+  for (const task of tasks) {
+    if (task.completedAtMs !== null || task.trashedAtMs !== null || task.due.kind === "none") {
+      continue;
+    }
+    if (task.due.kind === "allDay") {
+      if (task.due.date > window.localDate) {
+        included.push({
+          task,
+          localDate: task.due.date,
+          effectiveDueAtMs: startOfCalendarDate(task.due.date, canonicalTimeZone),
+        });
+      }
+      continue;
+    }
+    if (task.due.instantMs >= window.startOfNextDayMs) {
+      included.push({
+        task,
+        localDate: calendarDateAtUnchecked(task.due.instantMs, canonicalTimeZone),
+        effectiveDueAtMs: task.due.instantMs,
+      });
+    }
+  }
+
+  included.sort(
+    (left, right) =>
+      left.effectiveDueAtMs - right.effectiveDueAtMs ||
+      Number(left.task.due.kind === "timed") - Number(right.task.due.kind === "timed") ||
       compareOrdinaryTasks(left.task, right.task),
   );
 

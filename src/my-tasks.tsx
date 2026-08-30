@@ -3,16 +3,16 @@ import { useCallback, useEffect, useState } from "react";
 import { ProjectsView } from "./project-management";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import { placementOf, type Project, type Section } from "./shared/domain/model";
-import type { TaskListItem } from "./shared/presentation/task-list";
 import { MoveTaskForm, TaskForm } from "./task-form";
 import {
   initialPlacementForTaskView,
   lifecycleActionForTaskView,
-  loadTaskViewItems,
+  loadTaskViewSections,
   normalizeTaskView,
   TaskViewDropdown,
   taskViewContent,
   taskViewKey,
+  type TaskListSection,
   type TaskView,
 } from "./task-views";
 
@@ -20,7 +20,7 @@ type ListState = {
   isLoading: boolean;
   error: string | null;
   mutationError: string | null;
-  items: TaskListItem[];
+  taskSections: TaskListSection[];
   projects: Project[];
   sections: Section[];
 };
@@ -37,7 +37,7 @@ export default function Command() {
     isLoading: true,
     error: null,
     mutationError: null,
-    items: [],
+    taskSections: [],
     projects: [],
     sections: [],
   });
@@ -52,7 +52,7 @@ export default function Command() {
         isLoading: false,
         error: messageFrom(error),
         mutationError: null,
-        items: [],
+        taskSections: [],
         projects: [],
         sections: [],
       });
@@ -76,7 +76,7 @@ export default function Command() {
         isLoading: false,
         error: null,
         mutationError: null,
-        items: loadTaskViewItems(session, nextView, viewerTimeZone),
+        taskSections: loadTaskViewSections(session, nextView, viewerTimeZone),
         projects,
         sections,
       });
@@ -86,7 +86,7 @@ export default function Command() {
         isLoading: false,
         error: messageFrom(error),
         mutationError: null,
-        items: [],
+        taskSections: [],
       }));
     }
   }, [session, view, viewerTimeZone]);
@@ -109,6 +109,7 @@ export default function Command() {
   );
 
   const content = taskViewContent(view, state.projects, state.sections);
+  const taskCount = state.taskSections.reduce((count, section) => count + section.items.length, 0);
   const createTarget = session ? (
     <TaskForm
       service={session.service}
@@ -131,7 +132,7 @@ export default function Command() {
     >
       {state.error ? (
         <List.EmptyView icon={Icon.Warning} title="Unable to open Worktodo" description={state.error} />
-      ) : state.items.length === 0 ? (
+      ) : taskCount === 0 ? (
         <List.EmptyView
           icon={content.icon}
           title={content.emptyTitle}
@@ -148,92 +149,103 @@ export default function Command() {
           }
         />
       ) : (
-        <List.Section title={state.mutationError ? `Action failed: ${state.mutationError}` : content.title}>
-          {state.items.map((item) => {
-            const lifecycle = session ? lifecycleActionForTaskView(view, session.service, item.id) : null;
-            return (
-              <List.Item
-                key={item.id}
-                id={item.id}
-                icon={content.taskIcon}
-                title={item.title}
-                subtitle={item.subtitle}
-                keywords={item.keywords}
-                accessories={item.metadata.map((text) => ({ text }))}
-                actions={
-                  session && lifecycle ? (
-                    <ActionPanel>
-                      <Action
-                        title={lifecycle.title}
-                        icon={lifecycle.icon}
-                        onAction={() => runMutation(lifecycle.operation, lifecycle.successTitle)}
-                      />
-                      {view.kind !== "trash" ? (
-                        <Action.Push
-                          title="Edit Task"
-                          icon={Icon.Pencil}
-                          shortcut={Keyboard.Shortcut.Common.Edit}
-                          target={
-                            <TaskForm
-                              service={session.service}
-                              task={item.task}
-                              projects={state.projects}
-                              sections={state.sections}
-                              initialPlacement={placementOf(item.task)}
-                              viewerTimeZone={viewerTimeZone}
-                              onSaved={refresh}
-                            />
-                          }
-                        />
-                      ) : null}
-                      {view.kind !== "trash" ? (
-                        <Action.Push
-                          title="Move Task"
-                          icon={Icon.ArrowRight}
-                          target={
-                            <MoveTaskForm
-                              service={session.service}
-                              task={item.task}
-                              projects={state.projects}
-                              sections={state.sections}
-                              onSaved={refresh}
-                            />
-                          }
-                        />
-                      ) : null}
-                      {createTarget ? (
-                        <Action.Push
-                          title="Create Task"
-                          icon={Icon.Plus}
-                          shortcut={Keyboard.Shortcut.Common.New}
-                          target={createTarget}
-                        />
-                      ) : null}
-                      {projectsTarget ? (
-                        <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
-                      ) : null}
-                      {view.kind !== "trash" ? (
+        state.taskSections.map((taskSection, sectionIndex) => (
+          <List.Section
+            key={taskSection.key}
+            title={
+              sectionIndex === 0 && state.mutationError
+                ? `Action failed: ${state.mutationError} — ${taskSection.title}`
+                : taskSection.title
+            }
+          >
+            {taskSection.items.map((item) => {
+              const lifecycle = session ? lifecycleActionForTaskView(view, session.service, item.id) : null;
+              return (
+                <List.Item
+                  key={item.id}
+                  id={item.id}
+                  icon={content.taskIcon}
+                  title={item.title}
+                  subtitle={item.subtitle}
+                  keywords={item.keywords}
+                  accessories={item.metadata.map((text) => ({ text }))}
+                  actions={
+                    session && lifecycle ? (
+                      <ActionPanel>
                         <Action
-                          title="Move to Trash"
-                          icon={Icon.Trash}
-                          style={Action.Style.Destructive}
-                          shortcut={Keyboard.Shortcut.Common.Remove}
-                          onAction={() => runMutation(() => session.service.trashTask(item.id), "Task moved to Trash")}
+                          title={lifecycle.title}
+                          icon={lifecycle.icon}
+                          onAction={() => runMutation(lifecycle.operation, lifecycle.successTitle)}
                         />
-                      ) : null}
-                      <Action
-                        title="Refresh"
-                        icon={Icon.ArrowClockwise}
-                        shortcut={Keyboard.Shortcut.Common.Refresh}
-                        onAction={refresh}
-                      />
-                    </ActionPanel>
-                  ) : undefined
-                }
-              />
-            );
-          })}
-        </List.Section>
+                        {view.kind !== "trash" ? (
+                          <Action.Push
+                            title="Edit Task"
+                            icon={Icon.Pencil}
+                            shortcut={Keyboard.Shortcut.Common.Edit}
+                            target={
+                              <TaskForm
+                                service={session.service}
+                                task={item.task}
+                                projects={state.projects}
+                                sections={state.sections}
+                                initialPlacement={placementOf(item.task)}
+                                viewerTimeZone={viewerTimeZone}
+                                onSaved={refresh}
+                              />
+                            }
+                          />
+                        ) : null}
+                        {view.kind !== "trash" ? (
+                          <Action.Push
+                            title="Move Task"
+                            icon={Icon.ArrowRight}
+                            target={
+                              <MoveTaskForm
+                                service={session.service}
+                                task={item.task}
+                                projects={state.projects}
+                                sections={state.sections}
+                                onSaved={refresh}
+                              />
+                            }
+                          />
+                        ) : null}
+                        {createTarget ? (
+                          <Action.Push
+                            title="Create Task"
+                            icon={Icon.Plus}
+                            shortcut={Keyboard.Shortcut.Common.New}
+                            target={createTarget}
+                          />
+                        ) : null}
+                        {projectsTarget ? (
+                          <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
+                        ) : null}
+                        {view.kind !== "trash" ? (
+                          <Action
+                            title="Move to Trash"
+                            icon={Icon.Trash}
+                            style={Action.Style.Destructive}
+                            shortcut={Keyboard.Shortcut.Common.Remove}
+                            onAction={() =>
+                              runMutation(() => session.service.trashTask(item.id), "Task moved to Trash")
+                            }
+                          />
+                        ) : null}
+                        <Action
+                          title="Refresh"
+                          icon={Icon.ArrowClockwise}
+                          shortcut={Keyboard.Shortcut.Common.Refresh}
+                          onAction={refresh}
+                        />
+                      </ActionPanel>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </List.Section>
+        ))
       )}
     </List>
   );

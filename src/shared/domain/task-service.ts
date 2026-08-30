@@ -17,6 +17,8 @@ import {
   queryToday,
   queryTrash,
   type TodayResult,
+  queryUpcoming,
+  type UpcomingResult,
 } from "./queries";
 import type { TaskRepository } from "./repository";
 import {
@@ -538,5 +540,9 @@ export class TaskService {
 
   listToday(evaluationInstantMs: number, viewerTimeZone: string): TodayResult {
     return queryToday(this.repository.listTasks(), evaluationInstantMs, viewerTimeZone);
+  }
+
+  listUpcoming(evaluationInstantMs: number, viewerTimeZone: string): UpcomingResult {
+    return queryUpcoming(this.repository.listTasks(), evaluationInstantMs, viewerTimeZone);
   }
 }
