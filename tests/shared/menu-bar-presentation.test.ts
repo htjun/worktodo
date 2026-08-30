@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Priority, Task } from "../../src/shared/domain/model";
 import type { TodayResult } from "../../src/shared/domain/queries";
-import { buildMenuBarModel, resolveMenuBarVisibility } from "../../src/shared/presentation/menu-bar";
+import {
+  buildMenuBarModel,
+  buildMenuBarTaskHistoryItem,
+  resolveMenuBarVisibility,
+} from "../../src/shared/presentation/menu-bar";
 import { parseMyTasksLaunchContext } from "../../src/shared/presentation/task-launch";
 
 function task(id: string, title: string, priority: Priority): Task {
@@ -95,5 +99,24 @@ describe("menu-bar presentation", () => {
   it("restores a hidden item when the user launches the command", () => {
     expect(resolveMenuBarVisibility(true, true)).toEqual({ hidden: false, clearStoredHidden: true });
     expect(resolveMenuBarVisibility(false, true)).toEqual({ hidden: false, clearStoredHidden: false });
+  });
+
+  it("presents the current menu-bar Undo or Redo with its task title", () => {
+    expect(
+      buildMenuBarTaskHistoryItem({
+        direction: "undo",
+        kind: "complete",
+        taskId: "task-1",
+        taskTitle: "Submit report",
+      }),
+    ).toEqual({ direction: "undo", title: "Undo Complete Task", subtitle: "Submit report" });
+    expect(
+      buildMenuBarTaskHistoryItem({
+        direction: "redo",
+        kind: "complete",
+        taskId: "task-1",
+        taskTitle: "Submit report",
+      }),
+    ).toEqual({ direction: "redo", title: "Redo Complete Task", subtitle: "Submit report" });
   });
 });

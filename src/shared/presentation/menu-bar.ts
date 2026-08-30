@@ -1,5 +1,7 @@
 import type { Priority } from "../domain/model";
 import type { TodayResult } from "../domain/queries";
+import type { TimedTaskHistoryState } from "../application/timed-task-history";
+import { timedTaskHistoryPresentation } from "./task-history";
 
 export type MenuBarTask = {
   id: string;
@@ -23,6 +25,20 @@ export type MenuBarVisibility = {
   hidden: boolean;
   clearStoredHidden: boolean;
 };
+
+export type MenuBarTaskHistoryItem = {
+  direction: TimedTaskHistoryState["direction"];
+  title: string;
+  subtitle: string;
+};
+
+export function buildMenuBarTaskHistoryItem(state: TimedTaskHistoryState): MenuBarTaskHistoryItem {
+  return {
+    direction: state.direction,
+    title: timedTaskHistoryPresentation(state).title,
+    subtitle: state.taskTitle,
+  };
+}
 
 export function resolveMenuBarVisibility(storedHidden: boolean, userInitiated: boolean): MenuBarVisibility {
   return {

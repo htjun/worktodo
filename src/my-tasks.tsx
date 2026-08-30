@@ -224,6 +224,11 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
           });
         });
         if (result.status === "unavailable") {
+          await showToast(
+            Toast.Style.Failure,
+            expected.direction === "undo" ? "Undo no longer available" : "Redo no longer available",
+            expected.taskTitle,
+          );
           return;
         }
         setState((value) => ({ ...value, mutationError: null }));
