@@ -16,6 +16,12 @@ export type TaskListItem = {
   task: Task;
 };
 
+export type TaskListRowPresentation = {
+  title: string;
+  accessories: string[];
+  isCompletionAcknowledged: boolean;
+};
+
 export type TaskDetailField = {
   title: string;
   text: string;
@@ -118,6 +124,18 @@ export function taskNotesMarkdown(notes: string): string {
   }
   const literalNotes = notes.replace(/[!-/:-@[-`{-~]/g, "\\$&").replace(/\n/g, "  \n");
   return `## Notes\n\n${literalNotes}`;
+}
+
+export function taskListRowPresentation(
+  item: TaskListItem,
+  acknowledgedTask: Task | undefined,
+): TaskListRowPresentation {
+  const isCompletionAcknowledged = acknowledgedTask?.id === item.id && acknowledgedTask.completedAtMs !== null;
+  return {
+    title: item.title,
+    accessories: isCompletionAcknowledged ? ["Completed"] : item.metadata,
+    isCompletionAcknowledged,
+  };
 }
 
 function priorityDetailLabel(task: Task): string {

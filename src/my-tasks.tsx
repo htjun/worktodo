@@ -12,9 +12,11 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProjectsView } from "./project-management";
 import { requestMenuBarRefresh } from "./raycast-commands";
+import { CompletionFeedbackController } from "./shared/application/completion-feedback";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import { placementOf, type Project, type Section } from "./shared/domain/model";
+import { placementOf, type Project, type Section, type Task } from "./shared/domain/model";
 import { parseMyTasksLaunchContext, type MyTasksLaunchContext } from "./shared/presentation/task-launch";
+import { taskListRowPresentation } from "./shared/presentation/task-list";
 import { MoveTaskForm, TaskForm } from "./task-form";
 import {
   initialPlacementForTaskView,
@@ -48,6 +50,11 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   const [isShowingDetail, setIsShowingDetail] = useState(false);
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [session, setSession] = useState<WorktodoSession | null>(null);
+  const [acknowledgedTasks, setAcknowledgedTasks] = useState<ReadonlyMap<string, Task>>(() => new Map());
+  const completionFeedback = useRef<CompletionFeedbackController | null>(null);
+  if (completionFeedback.current === null) {
+    completionFeedback.current = new CompletionFeedbackController(setAcknowledgedTasks);
+  }
   const didOpenCreateTask = useRef(false);
   const { push } = useNavigation();
   const [state, setState] = useState<ListState>({
@@ -87,6 +94,8 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       const sections = session.service.listSections();
       const nextView = normalizeTaskView(view, projects, sections);
       if (taskViewKey(nextView) !== taskViewKey(view)) {
+        completionFeedback.current?.reset();
+        setIsShowingDetail(false);
         setView(nextView);
       }
       setState({
@@ -110,10 +119,18 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
 
   useEffect(() => refresh(), [refresh]);
 
+  useEffect(() => () => completionFeedback.current?.dispose(), []);
+
   const refreshAfterMutation = useCallback(() => {
     refresh();
     requestMenuBarRefresh();
   }, [refresh]);
+
+  const reportMutationFailure = useCallback(async (error: unknown) => {
+    const message = messageFrom(error);
+    setState((current) => ({ ...current, isLoading: false, mutationError: message }));
+    await showToast(Toast.Style.Failure, "Worktodo could not complete the action", message);
+  }, []);
 
   const runMutation = useCallback(
     async (operation: () => void, successTitle: string) => {
@@ -122,12 +139,34 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         refreshAfterMutation();
         await showToast(Toast.Style.Success, successTitle);
       } catch (error) {
-        const message = messageFrom(error);
-        setState((current) => ({ ...current, isLoading: false, mutationError: message }));
-        await showToast(Toast.Style.Failure, "Worktodo could not complete the action", message);
+        await reportMutationFailure(error);
       }
     },
-    [refreshAfterMutation],
+    [refreshAfterMutation, reportMutationFailure],
+  );
+
+  const completeTaskWithFeedback = useCallback(
+    async (taskId: string) => {
+      if (!session) {
+        return;
+      }
+      try {
+        const result = completionFeedback.current?.complete(
+          taskId,
+          () => session.service.completeTask(taskId),
+          requestMenuBarRefresh,
+          refresh,
+        );
+        if (!result || result.status === "duplicate") {
+          return;
+        }
+        setState((current) => ({ ...current, mutationError: null }));
+        await showToast(Toast.Style.Success, "Task completed");
+      } catch (error) {
+        await reportMutationFailure(error);
+      }
+    },
+    [refresh, reportMutationFailure, session],
   );
 
   useEffect(() => {
@@ -172,6 +211,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   const projectsTarget = session ? <ProjectsView service={session.service} onChanged={refreshAfterMutation} /> : null;
 
   const changeView = useCallback((nextView: TaskView) => {
+    completionFeedback.current?.reset();
     setSelectedTaskId(undefined);
     setIsShowingDetail(false);
     setView(nextView);
@@ -222,15 +262,20 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
           >
             {taskSection.items.map((item) => {
               const lifecycle = session ? lifecycleActionForTaskView(view, session.service, item.id) : null;
+              const row = taskListRowPresentation(item, acknowledgedTasks.get(item.id));
               return (
                 <List.Item
                   key={item.id}
                   id={item.id}
-                  icon={content.taskIcon}
-                  title={item.title}
+                  icon={row.isCompletionAcknowledged ? Icon.CheckCircle : content.taskIcon}
+                  title={row.title}
                   subtitle={item.subtitle}
                   keywords={item.keywords}
-                  accessories={isShowingDetail ? undefined : item.metadata.map((text) => ({ text }))}
+                  accessories={
+                    isShowingDetail && !row.isCompletionAcknowledged
+                      ? undefined
+                      : row.accessories.map((text) => ({ text }))
+                  }
                   detail={
                     <List.Item.Detail
                       markdown={item.detail.markdown}
@@ -263,7 +308,11 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                         <Action
                           title={lifecycle.title}
                           icon={lifecycle.icon}
-                          onAction={() => runMutation(lifecycle.operation, lifecycle.successTitle)}
+                          onAction={() =>
+                            view.kind === "completed" || view.kind === "trash"
+                              ? runMutation(lifecycle.operation, lifecycle.successTitle)
+                              : completeTaskWithFeedback(item.id)
+                          }
                         />
                         {item.detail.links.map((url, index) => (
                           <Action.OpenInBrowser
