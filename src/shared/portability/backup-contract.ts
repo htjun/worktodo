@@ -28,6 +28,7 @@ export type PortabilityErrorCode =
   | "INVALID_DOCUMENT"
   | "INVALID_IMPORT_FILE"
   | "INVALID_MODEL"
+  | "IMPORT_FAILED"
   | "UNSUPPORTED_VERSION";
 
 export class PortabilityError extends Error {

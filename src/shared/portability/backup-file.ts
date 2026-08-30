@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, fsyncSync, linkSync, openSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  fsyncSync,
+  linkSync,
+  mkdirSync,
+  openSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { PortabilityError } from "./backup-contract";
 
@@ -30,6 +40,21 @@ function closeCandidate(descriptor: number): void {
 export function assertBackupSize(contents: string, maximumBytes = WORKTODO_MAX_BACKUP_BYTES): void {
   if (Buffer.byteLength(contents, "utf8") > maximumBytes) {
     throw new PortabilityError("FILE_TOO_LARGE", "The Worktodo backup exceeds the 100 MiB limit.");
+  }
+}
+
+export function ensurePrivateDirectory(directory: string): void {
+  if (!isAbsolute(directory)) {
+    throw new PortabilityError("INVALID_DESTINATION", "The Worktodo recovery folder must be absolute.");
+  }
+  try {
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    chmodSync(directory, 0o700);
+    if (!statSync(directory).isDirectory()) {
+      throw new Error("Recovery destination is not a directory");
+    }
+  } catch (error) {
+    throw new PortabilityError("FILE_WRITE_FAILED", "Worktodo could not prepare the recovery folder.", error);
   }
 }
 

@@ -1,5 +1,10 @@
 import type { TaskRepository } from "../domain/repository";
-import { createBackupDocument, serializeBackupDocument, type WorktodoBackupDocument } from "./backup-contract";
+import {
+  createBackupDocument,
+  serializeBackupDocument,
+  type WorktodoBackupDocument,
+  type WorktodoSnapshot,
+} from "./backup-contract";
 import { publishBackupFile } from "./backup-file";
 
 export type ExportBackupResult = {
@@ -16,13 +21,15 @@ export function backupFilename(exportedAtMs: number): string {
 }
 
 export function captureBackupDocument(repository: TaskRepository, exportedAtMs: number): WorktodoBackupDocument {
-  return repository.transaction(() =>
-    createBackupDocument(exportedAtMs, {
-      projects: repository.listProjects(),
-      sections: repository.listSections(),
-      tasks: repository.listTasks(),
-    }),
-  );
+  return repository.transaction(() => createBackupDocument(exportedAtMs, readSnapshot(repository)));
+}
+
+export function readSnapshot(repository: TaskRepository): WorktodoSnapshot {
+  return {
+    projects: repository.listProjects(),
+    sections: repository.listSections(),
+    tasks: repository.listTasks(),
+  };
 }
 
 export function exportBackup(

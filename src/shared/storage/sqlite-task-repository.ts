@@ -236,4 +236,24 @@ export class SqliteTaskRepository implements TaskRepository {
         task.id,
       );
   }
+
+  deleteAllTasks(): void {
+    this.db.exec("DELETE FROM tasks");
+  }
+
+  deleteAllSections(): void {
+    this.db.exec("DELETE FROM sections");
+  }
+
+  deleteAllProjects(): void {
+    this.db.exec("DELETE FROM projects");
+  }
+
+  assertIntegrity(): void {
+    const foreignKeys = this.db.prepare("PRAGMA foreign_key_check").all();
+    const integrity = this.db.prepare("PRAGMA integrity_check").get();
+    if (foreignKeys.length > 0 || integrity?.integrity_check !== "ok") {
+      throw new Error("The replacement database failed its integrity check");
+    }
+  }
 }
