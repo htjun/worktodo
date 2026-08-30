@@ -18,7 +18,15 @@ export type WorktodoBackupDocument = WorktodoSnapshot & {
 };
 
 export type PortabilityErrorCode =
-  "INVALID_DOCUMENT" | "INVALID_MODEL" | "BROKEN_RELATIONSHIP" | "DUPLICATE_ID" | "UNSUPPORTED_VERSION";
+  | "BROKEN_RELATIONSHIP"
+  | "DESTINATION_EXISTS"
+  | "DUPLICATE_ID"
+  | "FILE_TOO_LARGE"
+  | "FILE_WRITE_FAILED"
+  | "INVALID_DESTINATION"
+  | "INVALID_DOCUMENT"
+  | "INVALID_MODEL"
+  | "UNSUPPORTED_VERSION";
 
 export class PortabilityError extends Error {
   readonly code: PortabilityErrorCode;
