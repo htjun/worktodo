@@ -45,6 +45,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   const [launchContext] = useState(() => parseMyTasksLaunchContext(props.launchContext));
   const [view, setView] = useState<TaskView>(() => ({ kind: launchContext.view }));
   const [selectedTaskId, setSelectedTaskId] = useState(launchContext.selectedTaskId);
+  const [isShowingDetail, setIsShowingDetail] = useState(false);
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [session, setSession] = useState<WorktodoSession | null>(null);
   const didOpenCreateTask = useRef(false);
@@ -172,12 +173,14 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
 
   const changeView = useCallback((nextView: TaskView) => {
     setSelectedTaskId(undefined);
+    setIsShowingDetail(false);
     setView(nextView);
   }, []);
 
   return (
     <List
       isLoading={state.isLoading}
+      isShowingDetail={isShowingDetail}
       selectedItemId={state.isLoading ? undefined : selectedTaskId}
       onSelectionChange={(id) => {
         if (id !== null) {
@@ -227,15 +230,48 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                   title={item.title}
                   subtitle={item.subtitle}
                   keywords={item.keywords}
-                  accessories={item.metadata.map((text) => ({ text }))}
+                  accessories={isShowingDetail ? undefined : item.metadata.map((text) => ({ text }))}
+                  detail={
+                    <List.Item.Detail
+                      markdown={item.detail.markdown}
+                      metadata={
+                        <List.Item.Detail.Metadata>
+                          {item.detail.metadata.map((field) => (
+                            <List.Item.Detail.Metadata.Label key={field.title} title={field.title} text={field.text} />
+                          ))}
+                          {item.detail.links.map((url, index) => (
+                            <List.Item.Detail.Metadata.Link
+                              key={url}
+                              title={index === 0 ? "Link" : `Link ${index + 1}`}
+                              text={url}
+                              target={url}
+                            />
+                          ))}
+                        </List.Item.Detail.Metadata>
+                      }
+                    />
+                  }
                   actions={
                     session && lifecycle ? (
                       <ActionPanel>
                         <Action
+                          title={isShowingDetail ? "Hide Details" : "Show Details"}
+                          icon={isShowingDetail ? Icon.EyeDisabled : Icon.Eye}
+                          onAction={() => setIsShowingDetail((current) => !current)}
+                        />
+                        <Action
                           title={lifecycle.title}
                           icon={lifecycle.icon}
+                          shortcut={lifecycle.shortcut}
                           onAction={() => runMutation(lifecycle.operation, lifecycle.successTitle)}
                         />
+                        {item.detail.links.map((url, index) => (
+                          <Action.OpenInBrowser
+                            key={url}
+                            title={index === 0 ? "Open Link" : `Open Link ${index + 1}`}
+                            url={url}
+                          />
+                        ))}
                         {view.kind !== "trash" ? (
                           <Action.Push
                             title="Edit Task"

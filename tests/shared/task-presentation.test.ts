@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Project, Section, Task } from "../../src/shared/domain/model";
+import { lifecycleActionIntentForViewKind, TASK_LIFECYCLE_SHORTCUT } from "../../src/shared/presentation/task-actions";
 import { formToCreateTask, formToUpdateTask, taskFormDefaults } from "../../src/shared/presentation/task-form";
-import { buildTaskListItems } from "../../src/shared/presentation/task-list";
+import { buildTaskListItems, extractTaskNoteLinks, taskNotesMarkdown } from "../../src/shared/presentation/task-list";
 import { placementFromKey, placementKey } from "../../src/shared/presentation/placement";
 
 const project: Project = {
@@ -137,6 +138,99 @@ describe("task presentation mapping", () => {
     expect(items[1]).toMatchObject({ subtitle: "Inbox", metadata: [] });
   });
 
+  it("builds deterministic detail metadata for every placement and due kind", () => {
+    const timedAtMs = Date.parse("2026-10-04T02:30:00.000Z");
+    const timedLabel = new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Australia/Melbourne",
+    }).format(new Date(timedAtMs));
+    const sourceTasks = [
+      task({
+        id: "00000000-0000-4000-8000-000000000010",
+        projectId: null,
+        sectionId: null,
+        priority: "none",
+        due: { kind: "none" },
+      }),
+      task({
+        id: "00000000-0000-4000-8000-000000000011",
+        projectId: project.id,
+        sectionId: null,
+        priority: "low",
+        due: { kind: "allDay", date: "2026-10-04" },
+      }),
+      task({
+        id: "00000000-0000-4000-8000-000000000012",
+        priority: "medium",
+        due: { kind: "timed", instantMs: timedAtMs, timeZone: "Australia/Melbourne" },
+      }),
+    ];
+    const before = structuredClone(sourceTasks);
+    const entries = [
+      { task: sourceTasks[0] },
+      { task: sourceTasks[1], todayStatus: "overdue" as const },
+      { task: sourceTasks[2], todayStatus: "dueToday" as const },
+    ];
+
+    const first = buildTaskListItems(entries, [project], [section], "Australia/Melbourne");
+    const second = buildTaskListItems(entries, [project], [section], "Australia/Melbourne");
+
+    expect(first.map((item) => item.detail.metadata.slice(0, 3))).toEqual([
+      [
+        { title: "Placement", text: "Inbox" },
+        { title: "Priority", text: "None" },
+        { title: "Due", text: "None" },
+      ],
+      [
+        { title: "Placement", text: "Personal" },
+        { title: "Priority", text: "Low" },
+        { title: "Overdue", text: "2026-10-04" },
+      ],
+      [
+        { title: "Placement", text: "Personal / Next" },
+        { title: "Priority", text: "Medium" },
+        { title: "Today", text: timedLabel },
+      ],
+    ]);
+    expect(second.map((item) => item.detail)).toEqual(first.map((item) => item.detail));
+    expect(sourceTasks).toEqual(before);
+  });
+
+  it("renders notes literally and extracts distinct valid web links", () => {
+    const notes = "# Heading\n- [ ] Use *literal* text\n[Docs](https://example.com/path).";
+    expect(taskNotesMarkdown(notes)).toBe(
+      "## Notes\n\n\\# Heading  \n\\- \\[ \\] Use \\*literal\\* text  \n\\[Docs\\]\\(https\\:\\/\\/example\\.com\\/path\\)\\.",
+    );
+    expect(taskNotesMarkdown("")).toBe("## Notes\n\n_No notes_");
+    expect(
+      extractTaskNoteLinks(
+        "https://example.com/path, HTTPS://EXAMPLE.COM/path. https://example.org/a_(b). https://? http://localhost:8080/test ftp://example.net",
+      ),
+    ).toEqual(["https://example.com/path", "https://example.org/a_(b)", "http://localhost:8080/test"]);
+  });
+
+  it("maps lifecycle actions to a deliberate Command-Return shortcut", () => {
+    for (const viewKind of ["today", "upcoming", "inbox", "project", "section"]) {
+      expect(lifecycleActionIntentForViewKind(viewKind)).toEqual({
+        kind: "complete",
+        title: "Complete Task",
+        successTitle: "Task completed",
+      });
+    }
+    expect(lifecycleActionIntentForViewKind("completed")).toEqual({
+      kind: "reopen",
+      title: "Reopen Task",
+      successTitle: "Task reopened",
+    });
+    expect(lifecycleActionIntentForViewKind("trash")).toEqual({
+      kind: "restore",
+      title: "Restore Task",
+      successTitle: "Task restored",
+    });
+    expect(TASK_LIFECYCLE_SHORTCUT).toEqual({ modifiers: ["cmd"], key: "enter" });
+  });
+
   it("shows independent completion and trash timestamps", () => {
     const completedAtMs = Date.parse("2026-10-04T01:00:00.000Z");
     const trashedAtMs = Date.parse("2026-10-04T02:00:00.000Z");
@@ -164,6 +258,15 @@ describe("task presentation mapping", () => {
     expect(item.metadata).toEqual([
       `Completed ${format.format(new Date(completedAtMs))}`,
       `Trashed ${format.format(new Date(trashedAtMs))}`,
+    ]);
+    expect(item.detail.metadata).toEqual([
+      { title: "Placement", text: "Personal / Next" },
+      { title: "Priority", text: "None" },
+      { title: "Due", text: "None" },
+      { title: "Created", text: format.format(new Date(1_000)) },
+      { title: "Updated", text: format.format(new Date(1_000)) },
+      { title: "Completed", text: format.format(new Date(completedAtMs)) },
+      { title: "Trashed", text: format.format(new Date(trashedAtMs)) },
     ]);
   });
 });

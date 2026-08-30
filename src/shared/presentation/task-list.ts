@@ -12,7 +12,24 @@ export type TaskListItem = {
   subtitle: string;
   keywords: string[];
   metadata: string[];
+  detail: TaskDetailPresentation;
   task: Task;
+};
+
+export type TaskDetailField = {
+  title: string;
+  text: string;
+};
+
+export type TaskDetailPresentation = {
+  markdown: string;
+  links: string[];
+  metadata: TaskDetailField[];
+};
+
+type DuePresentation = {
+  title: "Due" | "Overdue" | "Today";
+  text: string;
 };
 
 function placementLabel(task: Task, projects: Map<string, Project>, sections: Map<string, Section>): string {
@@ -27,20 +44,23 @@ function placementLabel(task: Task, projects: Map<string, Project>, sections: Ma
   return `${project} / ${section}`;
 }
 
-function dueLabel(entry: TaskListEntry, viewerTimeZone: string): string | null {
-  const prefix = entry.todayStatus === "overdue" ? "Overdue" : entry.todayStatus === "dueToday" ? "Today" : "Due";
-  if (entry.task.due.kind === "none") {
-    return null;
-  }
-  if (entry.task.due.kind === "allDay") {
-    return `${prefix} ${entry.task.due.date}`;
-  }
-  const value = new Intl.DateTimeFormat(undefined, {
+function instantLabel(instantMs: number, viewerTimeZone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: viewerTimeZone,
-  }).format(new Date(entry.task.due.instantMs));
-  return `${prefix} ${value}`;
+  }).format(new Date(instantMs));
+}
+
+function duePresentation(entry: TaskListEntry, viewerTimeZone: string): DuePresentation {
+  const title = entry.todayStatus === "overdue" ? "Overdue" : entry.todayStatus === "dueToday" ? "Today" : "Due";
+  if (entry.task.due.kind === "none") {
+    return { title: "Due", text: "None" };
+  }
+  if (entry.task.due.kind === "allDay") {
+    return { title, text: entry.task.due.date };
+  }
+  return { title, text: instantLabel(entry.task.due.instantMs, viewerTimeZone) };
 }
 
 function lifecycleLabel(
@@ -51,12 +71,82 @@ function lifecycleLabel(
   if (instantMs === null) {
     return null;
   }
-  const value = new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: viewerTimeZone,
-  }).format(new Date(instantMs));
-  return `${prefix} ${value}`;
+  return `${prefix} ${instantLabel(instantMs, viewerTimeZone)}`;
+}
+
+function trimUrlCandidate(value: string): string {
+  let candidate = value;
+  let previous = "";
+  while (candidate !== previous) {
+    previous = candidate;
+    candidate = candidate.replace(/[.,;:!?]+$/u, "");
+    const closing = candidate.at(-1);
+    const opening = closing === ")" ? "(" : closing === "]" ? "[" : closing === "}" ? "{" : null;
+    if (
+      opening &&
+      [...candidate].filter((character) => character === closing).length >
+        [...candidate].filter((character) => character === opening).length
+    ) {
+      candidate = candidate.slice(0, -1);
+    }
+  }
+  return candidate;
+}
+
+export function extractTaskNoteLinks(notes: string): string[] {
+  const links: string[] = [];
+  const seen = new Set<string>();
+  for (const match of notes.matchAll(/\bhttps?:\/\/[^\s<>"']+/giu)) {
+    const candidate = trimUrlCandidate(match[0]);
+    try {
+      const url = new URL(candidate);
+      if ((url.protocol !== "http:" && url.protocol !== "https:") || url.hostname.length === 0 || seen.has(url.href)) {
+        continue;
+      }
+      seen.add(url.href);
+      links.push(candidate);
+    } catch {
+      continue;
+    }
+  }
+  return links;
+}
+
+export function taskNotesMarkdown(notes: string): string {
+  if (notes.length === 0) {
+    return "## Notes\n\n_No notes_";
+  }
+  const literalNotes = notes.replace(/[!-/:-@[-`{-~]/g, "\\$&").replace(/\n/g, "  \n");
+  return `## Notes\n\n${literalNotes}`;
+}
+
+function priorityDetailLabel(task: Task): string {
+  if (task.priority === "none") {
+    return "None";
+  }
+  return `${task.priority[0].toUpperCase()}${task.priority.slice(1)}`;
+}
+
+function detailPresentation(entry: TaskListEntry, placement: string, viewerTimeZone: string): TaskDetailPresentation {
+  const due = duePresentation(entry, viewerTimeZone);
+  const metadata: TaskDetailField[] = [
+    { title: "Placement", text: placement },
+    { title: "Priority", text: priorityDetailLabel(entry.task) },
+    due,
+    { title: "Created", text: instantLabel(entry.task.createdAtMs, viewerTimeZone) },
+    { title: "Updated", text: instantLabel(entry.task.updatedAtMs, viewerTimeZone) },
+  ];
+  if (entry.task.completedAtMs !== null) {
+    metadata.push({ title: "Completed", text: instantLabel(entry.task.completedAtMs, viewerTimeZone) });
+  }
+  if (entry.task.trashedAtMs !== null) {
+    metadata.push({ title: "Trashed", text: instantLabel(entry.task.trashedAtMs, viewerTimeZone) });
+  }
+  return {
+    markdown: taskNotesMarkdown(entry.task.notes),
+    links: extractTaskNoteLinks(entry.task.notes),
+    metadata,
+  };
 }
 
 export function buildTaskListItems(
@@ -70,7 +160,7 @@ export function buildTaskListItems(
 
   return entries.map((entry) => {
     const placement = placementLabel(entry.task, projectMap, sectionMap);
-    const due = dueLabel(entry, viewerTimeZone);
+    const due = entry.task.due.kind === "none" ? null : duePresentation(entry, viewerTimeZone);
     const priority = entry.task.priority === "none" ? null : `${entry.task.priority} priority`;
     const completed = lifecycleLabel("Completed", entry.task.completedAtMs, viewerTimeZone);
     const trashed = lifecycleLabel("Trashed", entry.task.trashedAtMs, viewerTimeZone);
@@ -79,7 +169,10 @@ export function buildTaskListItems(
       title: entry.task.title,
       subtitle: placement,
       keywords: [placement, entry.task.notes],
-      metadata: [priority, due, completed, trashed].filter((value): value is string => value !== null),
+      metadata: [priority, due ? `${due.title} ${due.text}` : null, completed, trashed].filter(
+        (value): value is string => value !== null,
+      ),
+      detail: detailPresentation(entry, placement, viewerTimeZone),
       task: entry.task,
     };
   });

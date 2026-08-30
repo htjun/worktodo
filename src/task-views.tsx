@@ -3,6 +3,7 @@ import type { WorktodoSession } from "./shared/application/worktodo";
 import type { Placement, Project, Section } from "./shared/domain/model";
 import { addCalendarDays, startOfCalendarDate } from "./shared/domain/queries";
 import type { TaskService } from "./shared/domain/task-service";
+import { lifecycleActionIntentForViewKind, TASK_LIFECYCLE_SHORTCUT } from "./shared/presentation/task-actions";
 import { buildTaskListItems, type TaskListEntry, type TaskListItem } from "./shared/presentation/task-list";
 
 export type TaskView =
@@ -218,26 +219,30 @@ export function loadTaskViewSections(
 }
 
 export function lifecycleActionForTaskView(view: TaskView, service: TaskService, taskId: string) {
-  switch (view.kind) {
-    case "trash":
+  const intent = lifecycleActionIntentForViewKind(view.kind);
+  switch (intent.kind) {
+    case "restore":
       return {
-        title: "Restore Task",
+        title: intent.title,
         icon: Icon.ArrowCounterClockwise,
-        successTitle: "Task restored",
+        shortcut: TASK_LIFECYCLE_SHORTCUT,
+        successTitle: intent.successTitle,
         operation: () => service.restoreTask(taskId),
       };
-    case "completed":
+    case "reopen":
       return {
-        title: "Reopen Task",
+        title: intent.title,
         icon: Icon.Circle,
-        successTitle: "Task reopened",
+        shortcut: TASK_LIFECYCLE_SHORTCUT,
+        successTitle: intent.successTitle,
         operation: () => service.reopenTask(taskId),
       };
     default:
       return {
-        title: "Complete Task",
+        title: intent.title,
         icon: Icon.CheckCircle,
-        successTitle: "Task completed",
+        shortcut: TASK_LIFECYCLE_SHORTCUT,
+        successTitle: intent.successTitle,
         operation: () => service.completeTask(taskId),
       };
   }
