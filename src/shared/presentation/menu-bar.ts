@@ -19,6 +19,19 @@ export type MenuBarModel = {
   sections: MenuBarTaskSection[];
 };
 
+export type MenuBarVisibility = {
+  hidden: boolean;
+  clearStoredHidden: boolean;
+};
+
+export function resolveMenuBarVisibility(storedHidden: unknown, userInitiated: boolean): MenuBarVisibility {
+  const hidden = storedHidden === true;
+  return {
+    hidden: hidden && !userInitiated,
+    clearStoredHidden: hidden && userInitiated,
+  };
+}
+
 export function buildMenuBarModel(result: TodayResult): MenuBarModel {
   const overdue: MenuBarTask[] = [];
   const today: MenuBarTask[] = [];

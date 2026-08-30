@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Priority, Task } from "../../src/shared/domain/model";
 import type { TodayResult } from "../../src/shared/domain/queries";
-import { buildMenuBarModel } from "../../src/shared/presentation/menu-bar";
+import { buildMenuBarModel, resolveMenuBarVisibility } from "../../src/shared/presentation/menu-bar";
 import { parseMyTasksLaunchContext } from "../../src/shared/presentation/task-launch";
 
 function task(id: string, title: string, priority: Priority): Task {
@@ -86,5 +86,14 @@ describe("menu-bar presentation", () => {
       selectedTaskId: undefined,
       createTask: false,
     });
+  });
+
+  it("keeps a stored hidden state during background refresh", () => {
+    expect(resolveMenuBarVisibility(true, false)).toEqual({ hidden: true, clearStoredHidden: false });
+  });
+
+  it("restores a hidden item when the user launches the command", () => {
+    expect(resolveMenuBarVisibility(true, true)).toEqual({ hidden: false, clearStoredHidden: true });
+    expect(resolveMenuBarVisibility(false, true)).toEqual({ hidden: false, clearStoredHidden: false });
   });
 });

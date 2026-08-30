@@ -1,12 +1,18 @@
-import { Color, Icon, MenuBarExtra, showToast, Toast } from "@raycast/api";
+import { Color, environment, Icon, LaunchType, LocalStorage, MenuBarExtra, showToast, Toast } from "@raycast/api";
 import { useCallback, useEffect, useState } from "react";
 import { launchMyTasks } from "./raycast-commands";
 import { openProductionWorktodo } from "./shared/application/worktodo";
 import type { Priority } from "./shared/domain/model";
-import { buildMenuBarModel, type MenuBarModel, type MenuBarTask } from "./shared/presentation/menu-bar";
+import {
+  buildMenuBarModel,
+  type MenuBarModel,
+  type MenuBarTask,
+  resolveMenuBarVisibility,
+} from "./shared/presentation/menu-bar";
 import type { MyTasksLaunchContext } from "./shared/presentation/task-launch";
 
 const EMPTY_MODEL: MenuBarModel = { count: 0, title: undefined, sections: [] };
+const MENU_BAR_HIDDEN_KEY = "worktodo.menu-bar.hidden";
 const PRIORITY_TINT: Record<Priority, Color> = {
   none: Color.SecondaryText,
   low: Color.Blue,
@@ -38,11 +44,12 @@ function priorityIcon(priority: Priority) {
 }
 
 function menuIcon(source: Icon) {
-  return { source, tintColor: Color.PrimaryText };
+  return { source, tintColor: Color.SecondaryText };
 }
 
 export default function Command() {
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [visibility, setVisibility] = useState<"loading" | "visible" | "hidden">("loading");
   const [state, setState] = useState<MenuState>({ isLoading: true, error: null, model: EMPTY_MODEL });
 
   const refresh = useCallback(() => {
@@ -54,7 +61,38 @@ export default function Command() {
     }
   }, [viewerTimeZone]);
 
-  useEffect(() => refresh(), [refresh]);
+  useEffect(() => {
+    let active = true;
+
+    async function loadVisibility() {
+      try {
+        const storedHidden = await LocalStorage.getItem<boolean>(MENU_BAR_HIDDEN_KEY);
+        const decision = resolveMenuBarVisibility(storedHidden, environment.launchType === LaunchType.UserInitiated);
+        if (decision.clearStoredHidden) {
+          await LocalStorage.removeItem(MENU_BAR_HIDDEN_KEY);
+        }
+        if (active) {
+          setVisibility(decision.hidden ? "hidden" : "visible");
+        }
+      } catch (error) {
+        if (active) {
+          setVisibility("visible");
+          void showToast(Toast.Style.Failure, "Unable to restore menu bar visibility", messageFrom(error));
+        }
+      }
+    }
+
+    void loadVisibility();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (visibility === "visible") {
+      refresh();
+    }
+  }, [refresh, visibility]);
 
   async function completeTask(task: MenuBarTask) {
     try {
@@ -77,6 +115,24 @@ export default function Command() {
     } catch (error) {
       await showToast(Toast.Style.Failure, "Unable to open My Tasks", messageFrom(error));
     }
+  }
+
+  async function hideMenuBar() {
+    try {
+      await LocalStorage.setItem(MENU_BAR_HIDDEN_KEY, true);
+      setVisibility("hidden");
+      await showToast(Toast.Style.Success, "Worktodo hidden from menu bar", "Run Worktodo Menu Bar to restore it.");
+    } catch (error) {
+      await showToast(Toast.Style.Failure, "Unable to hide Worktodo", messageFrom(error));
+    }
+  }
+
+  if (visibility === "hidden") {
+    return null;
+  }
+
+  if (visibility === "loading") {
+    return <MenuBarExtra icon="extension-icon.png" isLoading tooltip="Worktodo" />;
   }
 
   const tooltip =
@@ -141,6 +197,10 @@ export default function Command() {
           icon={menuIcon(Icon.Plus)}
           onAction={() => openMyTasks({ view: "inbox", createTask: true })}
         />
+      </MenuBarExtra.Section>
+
+      <MenuBarExtra.Section>
+        <MenuBarExtra.Item title="Hide from Menu Bar" icon={menuIcon(Icon.EyeDisabled)} onAction={hideMenuBar} />
       </MenuBarExtra.Section>
     </MenuBarExtra>
   );
