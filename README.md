@@ -10,16 +10,16 @@ JSON backup/export/import and task-domain MCP tools remain deferred.
 
 - Raycast v2 on macOS
 - Node 24.18.0
-- npm 11.16.0
+- pnpm 11.24.0 via Corepack
 
 ## Development
 
 ```sh
-npm install
-npm run dev
+corepack pnpm install
+corepack pnpm run dev
 ```
 
-Use `npm run verify` for the complete automated check. Build and run the MCP server, which currently exposes its diagnostic `ping` tool, with `npm run dev:mcp`.
+Use `corepack pnpm run verify` for the complete automated check. Build and run the MCP server, which currently exposes its diagnostic `ping` tool, with `corepack pnpm run dev:mcp`.
 
 Worktodo stores personal task data at `~/Library/Application Support/Worktodo/worktodo.sqlite`.
 

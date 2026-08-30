@@ -6,6 +6,8 @@
 
 This note records local evidence used to choose the initial repository shape. It does not validate product behavior.
 
+**Package-manager update (2026-08-30):** The initial validation below used npm. The repository now uses pnpm 11.24.0 via Corepack, commits `pnpm-lock.yaml`, and remains a single root package without workspace packages.
+
 ## Confirmed locally
 
 - Installed Raycast host: `2.0.5.0`, bundle ID `com.raycast.macos`.
@@ -23,14 +25,14 @@ This note records local evidence used to choose the initial repository shape. It
 - Raycast's managed extension runtime reported Node `22.22.2` and SQLite `3.51.2`.
 - The My Tasks diagnostic view rendered its native empty state.
 - Raycast accepted the menu-bar command and reported that the Worktodo item was added to the macOS menu bar.
-- A clean npm install has no unreviewed lifecycle scripts, and npm audit reports no known vulnerabilities.
+- The initial clean npm install had no unreviewed lifecycle scripts, and npm audit reported no known vulnerabilities.
 
 ## Implications
 
-- Use one npm package at the repository root so the project remains shaped like a Raycast Store extension.
+- Use one package at the repository root so the project remains shaped like a Raycast Store extension.
 - Keep Raycast command entry points flat under `src/`; move reusable UI, domain, and storage code into nested folders.
 - Keep the MCP executable outside the Raycast entry-point namespace while sharing domain and storage modules.
-- Use npm and commit `package-lock.json`; do not introduce a workspace or another package manager without a demonstrated need.
+- Use pnpm 11.24.0 via Corepack and commit `pnpm-lock.yaml`; do not introduce workspace packages or another package manager without a demonstrated need.
 - API 2.0.5 is build-compatible with the installed template, despite the template's stale API 1.x declaration.
 - Local MCP development can use the pinned Node 24.18.0 toolchain, but shared storage must remain compatible with Raycast's managed Node 22.22.2 runtime.
 - SQLite 3.51.2 predates the 3.51.3 WAL race fix identified in the foundation research. Do not enable WAL unless a later Raycast runtime reports a fixed SQLite version and the two-process stress test passes.

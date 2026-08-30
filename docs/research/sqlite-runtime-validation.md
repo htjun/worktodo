@@ -58,4 +58,4 @@ This temporary path may be cleared by macOS; the measured summary above is the d
 
 The temporary Raycast command, coordinator, and synthetic spike tests were removed after production persistence and the shared task domain shipped. The measured results above remain the durable native evidence; the temporary session path may no longer exist.
 
-Run `npm run verify` for current production database, migration, domain, query, presentation, and MCP regression coverage. The retained connection and migration tests enforce the approved policies against the shipped implementation. The project, section, task, note, lifecycle, priority, due-value, Today, and relational contracts remain defined in the [shared task model](task-model.md).
+Run `corepack pnpm run verify` for current production database, migration, domain, query, presentation, and MCP regression coverage. The retained connection and migration tests enforce the approved policies against the shipped implementation. The project, section, task, note, lifecycle, priority, due-value, Today, and relational contracts remain defined in the [shared task model](task-model.md).
