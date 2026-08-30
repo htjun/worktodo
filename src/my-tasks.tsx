@@ -13,8 +13,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ProjectsView } from "./project-management";
 import { requestMenuBarRefresh } from "./raycast-commands";
 import { CompletionFeedbackController } from "./shared/application/completion-feedback";
+import {
+  performTimedTaskHistoryOperation,
+  TimedTaskHistoryController,
+  type TimedTaskHistoryDirection,
+  type TimedTaskHistoryState,
+} from "./shared/application/timed-task-history";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import { placementOf, type Project, type Section, type Task } from "./shared/domain/model";
+import { timedTaskHistoryPresentation } from "./shared/presentation/task-history";
 import { parseMyTasksLaunchContext, type MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { taskListRowPresentation } from "./shared/presentation/task-list";
 import { MoveTaskForm, TaskForm } from "./task-form";
@@ -43,6 +50,29 @@ function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "An unexpected error occurred";
 }
 
+const TASK_HISTORY_SHORTCUTS: Record<TimedTaskHistoryDirection, Keyboard.Shortcut> = {
+  undo: { modifiers: ["cmd"], key: "z" },
+  redo: { modifiers: ["cmd", "shift"], key: "z" },
+};
+
+function TaskHistoryAction({
+  state,
+  onAction,
+}: {
+  state: TimedTaskHistoryState;
+  onAction: (state: TimedTaskHistoryState) => Promise<void>;
+}) {
+  const presentation = timedTaskHistoryPresentation(state);
+  return (
+    <Action
+      title={presentation.title}
+      icon={state.direction === "undo" ? Icon.Undo : Icon.Redo}
+      shortcut={TASK_HISTORY_SHORTCUTS[state.direction]}
+      onAction={() => onAction(state)}
+    />
+  );
+}
+
 export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaunchContext }>) {
   const [launchContext] = useState(() => parseMyTasksLaunchContext(props.launchContext));
   const [view, setView] = useState<TaskView>(() => ({ kind: launchContext.view }));
@@ -51,10 +81,16 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [session, setSession] = useState<WorktodoSession | null>(null);
   const [acknowledgedTasks, setAcknowledgedTasks] = useState<ReadonlyMap<string, Task>>(() => new Map());
+  const [taskHistoryState, setTaskHistoryState] = useState<TimedTaskHistoryState | null>(null);
   const completionFeedback = useRef<CompletionFeedbackController | null>(null);
   if (completionFeedback.current === null) {
     completionFeedback.current = new CompletionFeedbackController(setAcknowledgedTasks);
   }
+  const taskHistory = useRef<TimedTaskHistoryController | null>(null);
+  if (taskHistory.current === null) {
+    taskHistory.current = new TimedTaskHistoryController(setTaskHistoryState);
+  }
+  const performTaskHistoryRef = useRef<(state: TimedTaskHistoryState) => Promise<void>>(async () => undefined);
   const didOpenCreateTask = useRef(false);
   const { push } = useNavigation();
   const [state, setState] = useState<ListState>({
@@ -119,12 +155,24 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
 
   useEffect(() => refresh(), [refresh]);
 
-  useEffect(() => () => completionFeedback.current?.dispose(), []);
+  useEffect(
+    () => () => {
+      completionFeedback.current?.dispose();
+      taskHistory.current?.dispose();
+    },
+    [],
+  );
 
   const refreshAfterMutation = useCallback(() => {
     refresh();
     requestMenuBarRefresh();
   }, [refresh]);
+
+  const refreshAfterUnrelatedMutation = useCallback(() => {
+    taskHistory.current?.clear();
+    completionFeedback.current?.reset();
+    refreshAfterMutation();
+  }, [refreshAfterMutation]);
 
   const reportMutationFailure = useCallback(async (error: unknown) => {
     const message = messageFrom(error);
@@ -132,17 +180,80 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     await showToast(Toast.Style.Failure, "Worktodo could not complete the action", message);
   }, []);
 
+  const showHistoryToast = useCallback(async (title: string, message: string, nextState: TimedTaskHistoryState) => {
+    const nextPresentation = timedTaskHistoryPresentation(nextState);
+    await showToast({
+      style: Toast.Style.Success,
+      title,
+      message,
+      primaryAction: {
+        title: nextPresentation.title,
+        shortcut: TASK_HISTORY_SHORTCUTS[nextState.direction],
+        onAction: () => void performTaskHistoryRef.current(nextState),
+      },
+    });
+  }, []);
+
+  const performTaskHistory = useCallback(
+    async (expected: TimedTaskHistoryState) => {
+      if (!session || !taskHistory.current) {
+        return;
+      }
+      try {
+        let completionFeedbackOwnsRefresh = false;
+        const result = taskHistory.current.perform(expected, () => {
+          performTimedTaskHistoryOperation(expected, {
+            reopen: () => {
+              session.service.reopenTask(expected.taskId);
+              completionFeedback.current?.reset();
+            },
+            complete: () => {
+              const attempt = completionFeedback.current?.complete(
+                expected.taskId,
+                () => session.service.completeTask(expected.taskId),
+                requestMenuBarRefresh,
+                refresh,
+              );
+              if (!attempt || attempt.status === "duplicate") {
+                throw new Error("Task completion is already pending");
+              }
+              completionFeedbackOwnsRefresh = true;
+            },
+            restore: () => session.service.restoreTask(expected.taskId),
+            trash: () => session.service.trashTask(expected.taskId),
+          });
+        });
+        if (result.status === "unavailable") {
+          return;
+        }
+        setState((value) => ({ ...value, mutationError: null }));
+        if (!completionFeedbackOwnsRefresh) {
+          refreshAfterMutation();
+        }
+        if (expected.direction === "undo") {
+          setSelectedTaskId(expected.taskId);
+        }
+        const completedPresentation = timedTaskHistoryPresentation(result.previous);
+        await showHistoryToast(completedPresentation.successTitle, expected.taskTitle, result.state);
+      } catch (error) {
+        await reportMutationFailure(error);
+      }
+    },
+    [refresh, refreshAfterMutation, reportMutationFailure, session, showHistoryToast],
+  );
+  performTaskHistoryRef.current = performTaskHistory;
+
   const runMutation = useCallback(
     async (operation: () => void, successTitle: string) => {
       try {
         operation();
-        refreshAfterMutation();
+        refreshAfterUnrelatedMutation();
         await showToast(Toast.Style.Success, successTitle);
       } catch (error) {
         await reportMutationFailure(error);
       }
     },
-    [refreshAfterMutation, reportMutationFailure],
+    [refreshAfterUnrelatedMutation, reportMutationFailure],
   );
 
   const completeTaskWithFeedback = useCallback(
@@ -160,13 +271,47 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         if (!result || result.status === "duplicate") {
           return;
         }
+        const historyState = taskHistory.current?.record({
+          kind: "complete",
+          taskId,
+          taskTitle: result.task.title,
+        });
+        if (!historyState) {
+          return;
+        }
         setState((current) => ({ ...current, mutationError: null }));
-        await showToast(Toast.Style.Success, "Task completed");
+        await showHistoryToast("Task completed", result.task.title, historyState);
       } catch (error) {
         await reportMutationFailure(error);
       }
     },
-    [refresh, reportMutationFailure, session],
+    [refresh, reportMutationFailure, session, showHistoryToast],
+  );
+
+  const trashTaskWithHistory = useCallback(
+    async (task: Task) => {
+      if (!session) {
+        return;
+      }
+      try {
+        const trashed = session.service.trashTask(task.id);
+        completionFeedback.current?.reset();
+        const historyState = taskHistory.current?.record({
+          kind: "trash",
+          taskId: task.id,
+          taskTitle: trashed.title,
+        });
+        if (!historyState) {
+          return;
+        }
+        setState((current) => ({ ...current, mutationError: null }));
+        refreshAfterMutation();
+        await showHistoryToast("Task moved to Trash", trashed.title, historyState);
+      } catch (error) {
+        await reportMutationFailure(error);
+      }
+    },
+    [refreshAfterMutation, reportMutationFailure, session, showHistoryToast],
   );
 
   useEffect(() => {
@@ -181,13 +326,13 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         sections={state.sections}
         initialPlacement={{ kind: "inbox" }}
         viewerTimeZone={viewerTimeZone}
-        onSaved={refreshAfterMutation}
+        onSaved={refreshAfterUnrelatedMutation}
       />,
     );
   }, [
     launchContext.createTask,
     push,
-    refreshAfterMutation,
+    refreshAfterUnrelatedMutation,
     session,
     state.error,
     state.isLoading,
@@ -205,10 +350,12 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       sections={state.sections}
       initialPlacement={initialPlacementForTaskView(view)}
       viewerTimeZone={viewerTimeZone}
-      onSaved={refreshAfterMutation}
+      onSaved={refreshAfterUnrelatedMutation}
     />
   ) : null;
-  const projectsTarget = session ? <ProjectsView service={session.service} onChanged={refreshAfterMutation} /> : null;
+  const projectsTarget = session ? (
+    <ProjectsView service={session.service} onChanged={refreshAfterUnrelatedMutation} />
+  ) : null;
 
   const changeView = useCallback((nextView: TaskView) => {
     completionFeedback.current?.reset();
@@ -240,12 +387,13 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
           title={content.emptyTitle}
           description={content.emptyDescription}
           actions={
-            createTarget || projectsTarget ? (
+            createTarget || projectsTarget || taskHistoryState ? (
               <ActionPanel>
                 {createTarget ? <Action.Push title="Create Task" icon={Icon.Plus} target={createTarget} /> : null}
                 {projectsTarget ? (
                   <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
                 ) : null}
+                {taskHistoryState ? <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} /> : null}
               </ActionPanel>
             ) : undefined
           }
@@ -314,6 +462,9 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                               : completeTaskWithFeedback(item.id)
                           }
                         />
+                        {taskHistoryState ? (
+                          <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} />
+                        ) : null}
                         {item.detail.links.map((url, index) => (
                           <Action.OpenInBrowser
                             key={url}
@@ -334,7 +485,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                                 sections={state.sections}
                                 initialPlacement={placementOf(item.task)}
                                 viewerTimeZone={viewerTimeZone}
-                                onSaved={refreshAfterMutation}
+                                onSaved={refreshAfterUnrelatedMutation}
                               />
                             }
                           />
@@ -349,7 +500,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                                 task={item.task}
                                 projects={state.projects}
                                 sections={state.sections}
-                                onSaved={refreshAfterMutation}
+                                onSaved={refreshAfterUnrelatedMutation}
                               />
                             }
                           />
@@ -371,9 +522,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                             icon={Icon.Trash}
                             style={Action.Style.Destructive}
                             shortcut={Keyboard.Shortcut.Common.Remove}
-                            onAction={() =>
-                              runMutation(() => session.service.trashTask(item.id), "Task moved to Trash")
-                            }
+                            onAction={() => trashTaskWithHistory(item.task)}
                           />
                         ) : null}
                         <Action
