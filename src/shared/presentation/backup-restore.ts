@@ -30,12 +30,17 @@ export function importPreviewMarkdown(preview: ImportPreview): string {
     preview.warning,
     "",
     `Backup version: ${preview.formatVersion}`,
-    `Exported: ${new Date(preview.exportedAtMs).toISOString()}`,
+    `Exported: ${formatExportedAt(preview.exportedAtMs)}`,
     "",
     "| Data | Current | Incoming |",
     "| --- | ---: | ---: |",
     ...rows,
   ].join("\n");
+}
+
+function formatExportedAt(exportedAtMs: number): string {
+  const date = new Date(exportedAtMs);
+  return Number.isNaN(date.getTime()) ? `${exportedAtMs} ms since Unix epoch` : date.toISOString();
 }
 
 export function exportSuccessMarkdown(path: string): string {
@@ -55,7 +60,7 @@ export function failurePresentation(error: unknown, operation: "export" | "impor
     error instanceof Error && "recoveryPath" in error ? (error as ImportReplacementError).recoveryPath : undefined;
   return {
     title: operation === "export" ? "Backup export failed" : "Backup import failed",
-    message: operation === "export" ? message : unchanged,
+    message: unchanged,
     ...(recoveryPath ? { recoveryPath } : {}),
   };
 }

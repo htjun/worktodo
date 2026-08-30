@@ -38,6 +38,12 @@ describe("backup and restore presentation", () => {
     expect(markdown).toContain("| Trashed completed | 1 | 1 |");
   });
 
+  it("renders an allowed timestamp outside the JavaScript Date range without crashing", () => {
+    expect(importPreviewMarkdown({ ...preview, exportedAtMs: Number.MAX_SAFE_INTEGER })).toContain(
+      `${Number.MAX_SAFE_INTEGER} ms since Unix epoch`,
+    );
+  });
+
   it("shows the exact export and recovery paths after success", () => {
     expect(exportSuccessMarkdown("/tmp/worktodo-backup.json")).toContain("/tmp/worktodo-backup.json");
     expect(importSuccessMarkdown("/tmp/recovery.json")).toContain("/tmp/recovery.json");
@@ -55,10 +61,10 @@ describe("backup and restore presentation", () => {
     );
   });
 
-  it("does not claim export failures changed task data", () => {
+  it("states that export failures did not change task data", () => {
     expect(failurePresentation(new Error("Destination exists"), "export")).toEqual({
       title: "Backup export failed",
-      message: "Destination exists",
+      message: "Destination exists Worktodo data was not changed.",
     });
   });
 });

@@ -131,7 +131,11 @@ function record(value: unknown): Record<string, unknown> | null {
 
 function rejectUnsupportedVersion(value: unknown): void {
   const candidate = record(value);
-  if (candidate?.format === WORKTODO_BACKUP_FORMAT && candidate.version !== WORKTODO_BACKUP_VERSION) {
+  if (
+    candidate?.format === WORKTODO_BACKUP_FORMAT &&
+    Number.isInteger(candidate.version) &&
+    candidate.version !== WORKTODO_BACKUP_VERSION
+  ) {
     throw new PortabilityError(
       "UNSUPPORTED_VERSION",
       `This Worktodo backup uses version ${String(candidate.version)}. This version of Worktodo supports version 1.`,

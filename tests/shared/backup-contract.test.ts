@@ -123,6 +123,9 @@ describe("Worktodo backup contract", () => {
   it("rejects malformed JSON and unsupported versions with bounded codes", () => {
     expectCode(() => parseBackupJson("{"), "INVALID_DOCUMENT");
     expectCode(() => parseBackupDocument({ ...completeDocument(), version: 2 }), "UNSUPPORTED_VERSION");
+    const missingVersion: Record<string, unknown> = { ...completeDocument() };
+    delete missingVersion.version;
+    expectCode(() => parseBackupDocument(missingVersion), "INVALID_MODEL");
   });
 
   it.each([
