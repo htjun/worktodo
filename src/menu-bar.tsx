@@ -45,7 +45,7 @@ function priorityIcon(priority: Priority) {
 }
 
 function menuIcon(source: Icon) {
-  return { source, tintColor: Color.PrimaryText };
+  return { source, tintColor: Color.SecondaryText };
 }
 
 function initialMenuBarHidden(): boolean {
