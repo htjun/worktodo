@@ -1,4 +1,5 @@
 import { showHUD, type LaunchProps } from "@raycast/api";
+import { requestMenuBarRefresh } from "./raycast-commands";
 import { openProductionWorktodo } from "./shared/application/worktodo";
 
 type QuickAddArguments = {
@@ -25,5 +26,6 @@ export default async function QuickAdd(props: LaunchProps<{ arguments: QuickAddA
     session?.close();
   }
 
+  requestMenuBarRefresh();
   await showHUD("Task added to Inbox", { clearRootSearch: true });
 }

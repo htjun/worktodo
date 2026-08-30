@@ -1,8 +1,20 @@
-import { Action, ActionPanel, Icon, Keyboard, List, showToast, Toast } from "@raycast/api";
-import { useCallback, useEffect, useState } from "react";
+import {
+  Action,
+  ActionPanel,
+  Icon,
+  Keyboard,
+  List,
+  showToast,
+  Toast,
+  type LaunchProps,
+  useNavigation,
+} from "@raycast/api";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ProjectsView } from "./project-management";
+import { requestMenuBarRefresh } from "./raycast-commands";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import { placementOf, type Project, type Section } from "./shared/domain/model";
+import { parseMyTasksLaunchContext, type MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { MoveTaskForm, TaskForm } from "./task-form";
 import {
   initialPlacementForTaskView,
@@ -29,10 +41,14 @@ function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "An unexpected error occurred";
 }
 
-export default function Command() {
-  const [view, setView] = useState<TaskView>({ kind: "today" });
+export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaunchContext }>) {
+  const [launchContext] = useState(() => parseMyTasksLaunchContext(props.launchContext));
+  const [view, setView] = useState<TaskView>(() => ({ kind: launchContext.view }));
+  const [selectedTaskId, setSelectedTaskId] = useState(launchContext.selectedTaskId);
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [session, setSession] = useState<WorktodoSession | null>(null);
+  const didOpenCreateTask = useRef(false);
+  const { push } = useNavigation();
   const [state, setState] = useState<ListState>({
     isLoading: true,
     error: null,
@@ -93,11 +109,16 @@ export default function Command() {
 
   useEffect(() => refresh(), [refresh]);
 
+  const refreshAfterMutation = useCallback(() => {
+    refresh();
+    requestMenuBarRefresh();
+  }, [refresh]);
+
   const runMutation = useCallback(
     async (operation: () => void, successTitle: string) => {
       try {
         operation();
-        refresh();
+        refreshAfterMutation();
         await showToast(Toast.Style.Success, successTitle);
       } catch (error) {
         const message = messageFrom(error);
@@ -105,8 +126,35 @@ export default function Command() {
         await showToast(Toast.Style.Failure, "Worktodo could not complete the action", message);
       }
     },
-    [refresh],
+    [refreshAfterMutation],
   );
+
+  useEffect(() => {
+    if (!launchContext.createTask || didOpenCreateTask.current || !session || state.isLoading || state.error) {
+      return;
+    }
+    didOpenCreateTask.current = true;
+    push(
+      <TaskForm
+        service={session.service}
+        projects={state.projects}
+        sections={state.sections}
+        initialPlacement={{ kind: "inbox" }}
+        viewerTimeZone={viewerTimeZone}
+        onSaved={refreshAfterMutation}
+      />,
+    );
+  }, [
+    launchContext.createTask,
+    push,
+    refreshAfterMutation,
+    session,
+    state.error,
+    state.isLoading,
+    state.projects,
+    state.sections,
+    viewerTimeZone,
+  ]);
 
   const content = taskViewContent(view, state.projects, state.sections);
   const taskCount = state.taskSections.reduce((count, section) => count + section.items.length, 0);
@@ -117,17 +165,28 @@ export default function Command() {
       sections={state.sections}
       initialPlacement={initialPlacementForTaskView(view)}
       viewerTimeZone={viewerTimeZone}
-      onSaved={refresh}
+      onSaved={refreshAfterMutation}
     />
   ) : null;
-  const projectsTarget = session ? <ProjectsView service={session.service} onChanged={refresh} /> : null;
+  const projectsTarget = session ? <ProjectsView service={session.service} onChanged={refreshAfterMutation} /> : null;
+
+  const changeView = useCallback((nextView: TaskView) => {
+    setSelectedTaskId(undefined);
+    setView(nextView);
+  }, []);
 
   return (
     <List
       isLoading={state.isLoading}
+      selectedItemId={state.isLoading ? undefined : selectedTaskId}
+      onSelectionChange={(id) => {
+        if (id !== null) {
+          setSelectedTaskId(id);
+        }
+      }}
       searchBarPlaceholder={content.searchPlaceholder}
       searchBarAccessory={
-        <TaskViewDropdown view={view} projects={state.projects} sections={state.sections} onChange={setView} />
+        <TaskViewDropdown view={view} projects={state.projects} sections={state.sections} onChange={changeView} />
       }
     >
       {state.error ? (
@@ -190,7 +249,7 @@ export default function Command() {
                                 sections={state.sections}
                                 initialPlacement={placementOf(item.task)}
                                 viewerTimeZone={viewerTimeZone}
-                                onSaved={refresh}
+                                onSaved={refreshAfterMutation}
                               />
                             }
                           />
@@ -205,7 +264,7 @@ export default function Command() {
                                 task={item.task}
                                 projects={state.projects}
                                 sections={state.sections}
-                                onSaved={refresh}
+                                onSaved={refreshAfterMutation}
                               />
                             }
                           />
