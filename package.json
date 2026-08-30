@@ -55,6 +55,12 @@
       ]
     },
     {
+      "name": "backup-restore",
+      "title": "Backup & Restore",
+      "description": "Export or replace Worktodo data from JSON backups",
+      "mode": "view"
+    },
+    {
       "name": "menu-bar",
       "title": "Worktodo Menu Bar",
       "description": "View and complete tasks due today from the menu bar",

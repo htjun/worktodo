@@ -1,0 +1,61 @@
+import type { ImportReplacementError } from "../portability/replace-backup";
+import type { BackupCounts, ImportPreview } from "../portability/import-preview";
+
+export type FailurePresentation = {
+  title: string;
+  message: string;
+  recoveryPath?: string;
+};
+
+function countRows(counts: BackupCounts): Array<[string, number]> {
+  return [
+    ["Projects", counts.projects],
+    ["Sections", counts.sections],
+    ["Tasks", counts.tasks],
+    ["Active incomplete", counts.lifecycle.activeIncomplete],
+    ["Active completed", counts.lifecycle.activeCompleted],
+    ["Trashed incomplete", counts.lifecycle.trashedIncomplete],
+    ["Trashed completed", counts.lifecycle.trashedCompleted],
+  ];
+}
+
+export function importPreviewMarkdown(preview: ImportPreview): string {
+  const rows = countRows(preview.current).map(([label, current], index) => {
+    const incoming = countRows(preview.incoming)[index][1];
+    return `| ${label} | ${current} | ${incoming} |`;
+  });
+  return [
+    "# Replace Worktodo Data",
+    "",
+    preview.warning,
+    "",
+    `Backup version: ${preview.formatVersion}`,
+    `Exported: ${new Date(preview.exportedAtMs).toISOString()}`,
+    "",
+    "| Data | Current | Incoming |",
+    "| --- | ---: | ---: |",
+    ...rows,
+  ].join("\n");
+}
+
+export function exportSuccessMarkdown(path: string): string {
+  return `# Backup exported\n\nWorktodo created a complete JSON backup at:\n\n${path}`;
+}
+
+export function importSuccessMarkdown(recoveryPath: string): string {
+  return `# Worktodo data replaced\n\nThe selected backup is now active. The previous data remains available at:\n\n${recoveryPath}`;
+}
+
+export function failurePresentation(error: unknown, operation: "export" | "import"): FailurePresentation {
+  const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+  const unchanged = message.includes("Worktodo data was not changed")
+    ? message
+    : `${message} Worktodo data was not changed.`;
+  const recoveryPath =
+    error instanceof Error && "recoveryPath" in error ? (error as ImportReplacementError).recoveryPath : undefined;
+  return {
+    title: operation === "export" ? "Backup export failed" : "Backup import failed",
+    message: operation === "export" ? message : unchanged,
+    ...(recoveryPath ? { recoveryPath } : {}),
+  };
+}
