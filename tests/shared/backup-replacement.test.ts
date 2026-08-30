@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -56,6 +56,48 @@ function snapshot(offset: number): WorktodoSnapshot {
         completedAtMs: 200,
         trashedAtMs: 300,
       },
+      {
+        id: id(offset + 4),
+        title: `Direct task ${offset}`,
+        notes: "",
+        priority: "medium",
+        position: 1_024,
+        projectId,
+        sectionId: null,
+        due: { kind: "allDay", date: "2028-02-29" },
+        createdAtMs: 100,
+        updatedAtMs: 300,
+        completedAtMs: null,
+        trashedAtMs: 300,
+      },
+      {
+        id: id(offset + 5),
+        title: `Completed inbox ${offset}`,
+        notes: "",
+        priority: "low",
+        position: 1_024,
+        projectId: null,
+        sectionId: null,
+        due: { kind: "none" },
+        createdAtMs: 100,
+        updatedAtMs: 200,
+        completedAtMs: 200,
+        trashedAtMs: null,
+      },
+      {
+        id: id(offset + 6),
+        title: `Active inbox ${offset}`,
+        notes: "",
+        priority: "none",
+        position: 1_024,
+        projectId: null,
+        sectionId: null,
+        due: { kind: "none" },
+        createdAtMs: 100,
+        updatedAtMs: 100,
+        completedAtMs: null,
+        trashedAtMs: null,
+      },
     ],
   };
 }
@@ -112,10 +154,22 @@ describe("Worktodo backup replacement", () => {
       const result = replaceFromBackup(repository, incoming, recoveryDirectory, 9_000);
 
       expect(storedDocument(repository, incoming.exportedAtMs)).toEqual(incoming);
-      expect(result.replaced).toMatchObject({ projects: 1, sections: 1, tasks: 1 });
+      expect(result.replaced).toEqual({
+        projects: 1,
+        sections: 1,
+        tasks: 4,
+        lifecycle: {
+          activeIncomplete: 1,
+          activeCompleted: 1,
+          trashedIncomplete: 1,
+          trashedCompleted: 1,
+        },
+      });
       expect(parseBackupJson(await readFile(result.recoveryPath, "utf8"))).toEqual(
         createBackupDocument(9_000, initial),
       );
+      expect((await stat(recoveryDirectory)).mode & 0o777).toBe(0o700);
+      expect((await stat(result.recoveryPath)).mode & 0o777).toBe(0o600);
     } finally {
       db.close();
     }

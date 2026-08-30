@@ -57,14 +57,14 @@ describe("backup and restore presentation", () => {
       recoveryPath: "/tmp/recovery.json",
     });
     expect(failurePresentation(new Error("Invalid file"), "import").message).toBe(
-      "Invalid file Worktodo data was not changed.",
+      "Invalid file. Worktodo data was not changed.",
     );
   });
 
   it("states that export failures did not change task data", () => {
     expect(failurePresentation(new Error("Destination exists"), "export")).toEqual({
       title: "Backup export failed",
-      message: "Destination exists Worktodo data was not changed.",
+      message: "Destination exists. Worktodo data was not changed.",
     });
   });
 });

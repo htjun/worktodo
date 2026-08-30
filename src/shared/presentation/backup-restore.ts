@@ -55,7 +55,7 @@ export function failurePresentation(error: unknown, operation: "export" | "impor
   const message = error instanceof Error ? error.message : "An unexpected error occurred.";
   const unchanged = message.includes("Worktodo data was not changed")
     ? message
-    : `${message} Worktodo data was not changed.`;
+    : `${message}${/[.!?]$/.test(message) ? " " : ". "}Worktodo data was not changed.`;
   const recoveryPath =
     error instanceof Error && "recoveryPath" in error ? (error as ImportReplacementError).recoveryPath : undefined;
   return {
