@@ -1,4 +1,4 @@
-export type StaticTaskViewKind = "all" | "today" | "upcoming" | "inbox" | "completed" | "trash";
+import { isStaticTaskViewKind, type StaticTaskViewKind } from "../application/task-views";
 
 export type MyTasksLaunchContext = {
   view?: StaticTaskViewKind;
@@ -22,17 +22,11 @@ export function parseMyTasksLaunchContext(value: unknown): ParsedMyTasksLaunchCo
       : undefined;
 
   return {
-    view:
-      view === "all" ||
-      view === "today" ||
-      view === "upcoming" ||
-      view === "inbox" ||
-      view === "completed" ||
-      view === "trash"
-        ? view
-        : "all",
+    view: isStaticTaskViewKind(view) ? view : "all",
     selectedTaskId,
     createTask: context.createTask === true,
     isShowingDetail: selectedTaskId !== undefined,
   };
 }
+
+export type { StaticTaskViewKind } from "../application/task-views";

@@ -3,6 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CompletionFeedbackController } from "../../src/shared/application/completion-feedback";
+import {
+  loadTaskView,
+  normalizeTaskView,
+  resolveTaskView,
+  tasksInTaskView,
+  type TaskView,
+} from "../../src/shared/application/task-views";
 import { createQuickTask, moveTaskFromForm, saveTaskFromForm } from "../../src/shared/application/task-workflows";
 import {
   performTimedTaskHistoryOperation,
@@ -10,14 +17,12 @@ import {
 } from "../../src/shared/application/timed-task-history";
 import { openWorktodoAtPath } from "../../src/shared/application/worktodo";
 import {
+  buildTaskViewSections,
   initialPlacementForTaskView,
   lifecycleActionForTaskView,
-  loadTaskViewSections,
-  normalizeTaskView,
   taskViewContent,
   taskViewFromKey,
   taskViewKey,
-  type TaskView,
 } from "../../src/shared/presentation/task-views";
 
 const temporaryDirectories: string[] = [];
@@ -51,6 +56,12 @@ describe("main task workflows", () => {
     try {
       const project = session.service.createProject("Work");
       const section = session.service.createSection(project.id, "Next");
+      const buildSections = (view: TaskView) =>
+        buildTaskViewSections(
+          loadTaskView(session.service, view, { evaluationInstantMs, viewerTimeZone }),
+          session.service.listProjects(),
+          session.service.listSections(),
+        );
       const events: string[] = [];
       let quickSessionCloseCount = 0;
       const quickTask = createQuickTask(
@@ -85,9 +96,7 @@ describe("main task workflows", () => {
         projectId: null,
         due: { kind: "allDay", date: "2026-08-31" },
       });
-      expect(loadTaskViewSections(session, { kind: "today" }, viewerTimeZone, evaluationInstantMs)[0].items).toEqual([
-        expect.objectContaining({ id: quickTask.id }),
-      ]);
+      expect(buildSections({ kind: "today" })[0].items).toEqual([expect.objectContaining({ id: quickTask.id })]);
 
       now = 2_000;
       const saved = saveTaskFromForm(
@@ -120,18 +129,13 @@ describe("main task workflows", () => {
         sectionId: section.id,
         due: { kind: "allDay", date: "2026-09-01" },
       });
-      expect(loadTaskViewSections(session, { kind: "inbox" }, viewerTimeZone, evaluationInstantMs)[0].items).toEqual(
-        [],
-      );
+      expect(buildSections({ kind: "inbox" })[0].items).toEqual([]);
       expect(
-        loadTaskViewSections(
-          session,
-          { kind: "section", projectId: project.id, sectionId: section.id },
-          viewerTimeZone,
-          evaluationInstantMs,
-        )[0].items.map((item) => item.id),
+        buildSections({ kind: "section", projectId: project.id, sectionId: section.id })[0].items.map(
+          (item) => item.id,
+        ),
       ).toEqual([quickTask.id]);
-      expect(loadTaskViewSections(session, { kind: "upcoming" }, viewerTimeZone, evaluationInstantMs)).toMatchObject([
+      expect(buildSections({ kind: "upcoming" })).toMatchObject([
         { key: "upcoming:2026-09-01", title: "Tomorrow", items: [{ id: quickTask.id }] },
       ]);
 
@@ -195,9 +199,7 @@ describe("main task workflows", () => {
       now = 7_000;
       const trashed = session.service.trashTask(quickTask.id);
       const trashHistory = history.record({ kind: "trash", taskId: trashed.id, taskTitle: trashed.title });
-      expect(loadTaskViewSections(session, { kind: "trash" }, viewerTimeZone, evaluationInstantMs)[0].items).toEqual([
-        expect.objectContaining({ id: quickTask.id }),
-      ]);
+      expect(buildSections({ kind: "trash" })[0].items).toEqual([expect.objectContaining({ id: quickTask.id })]);
       now = 8_000;
       expect(
         history.perform(trashHistory, () =>
@@ -219,7 +221,7 @@ describe("main task workflows", () => {
     }
   });
 
-  it("loads every view and normalizes deleted containers without Raycast values", async () => {
+  it("loads every canonical view and normalizes deleted containers without adapter values", async () => {
     const directory = await mkdtemp(join(tmpdir(), "worktodo-task-view-test-"));
     temporaryDirectories.push(directory);
     let nextId = 1;
@@ -256,8 +258,8 @@ describe("main task workflows", () => {
         { kind: "section", projectId: project.id, sectionId: section.id },
       ];
       const idsFor = (view: TaskView) =>
-        loadTaskViewSections(session, view, viewerTimeZone, evaluationInstantMs).flatMap((group) =>
-          group.items.map((item) => item.id),
+        tasksInTaskView(loadTaskView(session.service, view, { evaluationInstantMs, viewerTimeZone })).map(
+          (task) => task.id,
         );
 
       expect(views.map((view) => [taskViewKey(view), idsFor(view)])).toEqual([
@@ -279,6 +281,9 @@ describe("main task workflows", () => {
         normalizeTaskView({ kind: "section", projectId: project.id, sectionId: section.id }, [project], []),
       ).toEqual({ kind: "project", projectId: project.id });
       expect(normalizeTaskView({ kind: "project", projectId: project.id }, [], [])).toEqual({ kind: "all" });
+      expect(
+        normalizeTaskView({ kind: "section", projectId: id(999), sectionId: section.id }, [project], [section]),
+      ).toEqual({ kind: "section", projectId: project.id, sectionId: section.id });
       expect(initialPlacementForTaskView({ kind: "section", projectId: project.id, sectionId: section.id })).toEqual({
         kind: "section",
         projectId: project.id,
@@ -295,6 +300,97 @@ describe("main task workflows", () => {
         kind: "restore",
         title: "Restore Task",
       });
+    } finally {
+      session.close();
+    }
+  });
+
+  it("preserves Today status, Upcoming local date, and canonical input validation", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "worktodo-task-view-context-test-"));
+    temporaryDirectories.push(directory);
+    let nextId = 1;
+    const session = openWorktodoAtPath(join(directory, "worktodo.sqlite"), {
+      createId: () => id(nextId++),
+      now: () => 1_000,
+      recoveryDirectory: join(directory, "recovery"),
+    });
+    try {
+      const project = session.service.createProject("Work");
+      const section = session.service.createSection(project.id, "Next");
+      const overdue = session.service.createTask({
+        title: "Overdue",
+        placement: { kind: "inbox" },
+        due: { kind: "allDay", date: "2026-08-30" },
+      });
+      const today = session.service.createTask({
+        title: "Today",
+        placement: { kind: "project", projectId: project.id },
+        due: { kind: "allDay", date: "2026-08-31" },
+      });
+      const upcoming = session.service.createTask({
+        title: "Tomorrow",
+        placement: { kind: "section", projectId: project.id, sectionId: section.id },
+        due: { kind: "allDay", date: "2026-09-01" },
+      });
+      const context = { evaluationInstantMs, viewerTimeZone: "Australia/Victoria" };
+
+      const todayView = loadTaskView(session.service, { kind: "today" }, context);
+      expect(todayView).toMatchObject({
+        evaluatedAtMs: evaluationInstantMs,
+        viewerTimeZone,
+        result: {
+          tasks: [
+            { task: { id: overdue.id }, status: "overdue" },
+            { task: { id: today.id }, status: "dueToday" },
+          ],
+        },
+      });
+      const upcomingView = loadTaskView(session.service, { kind: "upcoming" }, context);
+      expect(upcomingView).toMatchObject({
+        viewerTimeZone,
+        result: { tasks: [{ task: { id: upcoming.id }, localDate: "2026-09-01" }] },
+      });
+
+      const boundaryInstantMs = Date.parse("2026-08-31T14:30:00.000Z");
+      const utcToday = loadTaskView(
+        session.service,
+        { kind: "today" },
+        {
+          evaluationInstantMs: boundaryInstantMs,
+          viewerTimeZone: "UTC",
+        },
+      );
+      const melbourneToday = loadTaskView(
+        session.service,
+        { kind: "today" },
+        {
+          evaluationInstantMs: boundaryInstantMs,
+          viewerTimeZone,
+        },
+      );
+      expect(utcToday.result.tasks.find((entry) => entry.task.id === today.id)?.status).toBe("dueToday");
+      expect(melbourneToday.result.tasks.find((entry) => entry.task.id === today.id)?.status).toBe("overdue");
+      expect(melbourneToday.result.tasks.find((entry) => entry.task.id === upcoming.id)?.status).toBe("dueToday");
+
+      expect(resolveTaskView(session.service, "project", project.id, undefined)).toEqual({
+        kind: "project",
+        projectId: project.id,
+      });
+      expect(resolveTaskView(session.service, "section", undefined, section.id)).toEqual({
+        kind: "section",
+        projectId: project.id,
+        sectionId: section.id,
+      });
+      expect(() => resolveTaskView(session.service, "project", undefined, undefined)).toThrow(
+        "The project view requires only projectId",
+      );
+      expect(() => resolveTaskView(session.service, "section", undefined, id(999))).toThrow("Section not found");
+      expect(() => resolveTaskView(session.service, "inbox", project.id, undefined)).toThrow(
+        "projectId and sectionId are valid only for their matching views",
+      );
+      expect(() => loadTaskView(session.service, { kind: "inbox" }, { ...context, evaluationInstantMs: -1 })).toThrow(
+        "Evaluation instant must be a non-negative safe integer",
+      );
     } finally {
       session.close();
     }

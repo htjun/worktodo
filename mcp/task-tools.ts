@@ -2,11 +2,16 @@ import { type CallToolResult, McpServer, type ToolAnnotations } from "@modelcont
 import { z } from "zod";
 import { DomainError, placementOf, type Task } from "../src/shared/domain/model";
 import type { TaskService } from "../src/shared/domain/task-service";
-import { canonicalizeTimeZone } from "../src/shared/domain/validation";
+import {
+  loadTaskView,
+  resolveTaskView,
+  TASK_VIEW_KINDS,
+  tasksInTaskView,
+  type TaskViewKind,
+} from "../src/shared/application/task-views";
 
 const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 50;
-const TASK_VIEWS = ["all", "today", "upcoming", "inbox", "completed", "trash", "project", "section"] as const;
 
 const nonNegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const prioritySchema = z.enum(["none", "low", "medium", "high"]);
@@ -61,7 +66,7 @@ const projectSchema = z
     sections: z.array(sectionSchema),
   })
   .strict();
-const taskViewSchema = z.enum(TASK_VIEWS);
+const taskViewSchema = z.enum(TASK_VIEW_KINDS);
 const pageInputSchema = {
   query: z.string().optional().describe("Case-insensitive title, notes, project, or section substring"),
   offset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
@@ -94,7 +99,6 @@ export type TaskToolDependencies = {
 };
 
 type TaskDocument = z.infer<typeof taskSchema>;
-type ListTaskView = z.infer<typeof taskViewSchema>;
 
 function taskDocument(task: Task): TaskDocument {
   return {
@@ -166,46 +170,6 @@ function normalizedSearch(value: string): string {
   return value.normalize("NFKC").toLocaleLowerCase();
 }
 
-function tasksForView(
-  service: TaskService,
-  view: ListTaskView,
-  projectId: string | undefined,
-  sectionId: string | undefined,
-  evaluatedAtMs: number,
-  timeZone: string,
-): Task[] {
-  if (view === "project") {
-    if (!projectId || sectionId) {
-      throw new DomainError("INVALID_ARGUMENT", "The project view requires only projectId");
-    }
-    return service.listProjectTasks(projectId);
-  }
-  if (view === "section") {
-    if (!sectionId || projectId) {
-      throw new DomainError("INVALID_ARGUMENT", "The section view requires only sectionId");
-    }
-    return service.listSectionTasks(sectionId);
-  }
-  if (projectId || sectionId) {
-    throw new DomainError("INVALID_ARGUMENT", "projectId and sectionId are valid only for their matching views");
-  }
-
-  switch (view) {
-    case "all":
-      return service.listAllTasks(timeZone);
-    case "today":
-      return service.listToday(evaluatedAtMs, timeZone).tasks.map((entry) => entry.task);
-    case "upcoming":
-      return service.listUpcoming(evaluatedAtMs, timeZone).tasks.map((entry) => entry.task);
-    case "inbox":
-      return service.listInbox();
-    case "completed":
-      return service.listCompleted();
-    case "trash":
-      return service.listTrash();
-  }
-}
-
 function filterTasks(service: TaskService, tasks: Task[], query: string | undefined): Task[] {
   const trimmed = query?.trim();
   if (!trimmed) {
@@ -226,7 +190,7 @@ function filterTasks(service: TaskService, tasks: Task[], query: string | undefi
   });
 }
 
-function taskListText(view: ListTaskView, tasks: Task[], total: number, offset: number): string {
+function taskListText(view: TaskViewKind, tasks: Task[], total: number, offset: number): string {
   if (total === 0) {
     return `No tasks matched the ${view} view.`;
   }
@@ -329,20 +293,18 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     },
     async ({ view = "all", projectId, sectionId, timeZone, query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
       withSession("list_tasks", dependencies, (service) => {
-        const evaluatedAtMs = dependencies.now();
-        const effectiveTimeZone = canonicalizeTimeZone(timeZone ?? dependencies.viewerTimeZone());
+        const taskView = loadTaskView(service, resolveTaskView(service, view, projectId, sectionId), {
+          evaluationInstantMs: dependencies.now(),
+          viewerTimeZone: timeZone ?? dependencies.viewerTimeZone(),
+        });
         const search = query?.trim();
-        const matched = filterTasks(
-          service,
-          tasksForView(service, view, projectId, sectionId, evaluatedAtMs, effectiveTimeZone),
-          search,
-        );
+        const matched = filterTasks(service, tasksInTaskView(taskView), search);
         const page = matched.slice(offset, offset + limit);
         const output = {
           view,
           query: search || null,
-          evaluatedAtMs,
-          timeZone: effectiveTimeZone,
+          evaluatedAtMs: taskView.evaluatedAtMs,
+          timeZone: taskView.viewerTimeZone,
           offset,
           limit,
           total: matched.length,

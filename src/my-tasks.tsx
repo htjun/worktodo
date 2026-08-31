@@ -19,6 +19,7 @@ import {
   type TimedTaskHistoryDirection,
   type TimedTaskHistoryState,
 } from "./shared/application/timed-task-history";
+import { loadTaskView, normalizeTaskView, type TaskView } from "./shared/application/task-views";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import { placementOf, type Project, type Section, type Task } from "./shared/domain/model";
 import { timedTaskHistoryPresentation } from "./shared/presentation/task-history";
@@ -26,15 +27,13 @@ import { parseMyTasksLaunchContext, type MyTasksLaunchContext } from "./shared/p
 import { taskListRowPresentation } from "./shared/presentation/task-list";
 import { MoveTaskForm, TaskForm } from "./task-form";
 import {
+  buildTaskViewSections,
   initialPlacementForTaskView,
   lifecycleActionForTaskView,
-  loadTaskViewSections,
-  normalizeTaskView,
   TaskViewDropdown,
   taskViewContent,
   taskViewKey,
   type TaskListSection,
-  type TaskView,
 } from "./task-views";
 
 type ListState = {
@@ -138,7 +137,11 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         isLoading: false,
         error: null,
         mutationError: null,
-        taskSections: loadTaskViewSections(session, nextView, viewerTimeZone),
+        taskSections: buildTaskViewSections(
+          loadTaskView(session.service, nextView, { evaluationInstantMs: Date.now(), viewerTimeZone }),
+          projects,
+          sections,
+        ),
         projects,
         sections,
       });

@@ -239,6 +239,54 @@ describe("Worktodo MCP task tools", () => {
     }
   });
 
+  it("exposes every canonical task view through the adapter", async () => {
+    const context = await createContext();
+    try {
+      const project = context.service.createProject("Work");
+      const section = context.service.createSection(project.id, "Next");
+      const inbox = context.service.createTask({ title: "Inbox", placement: { kind: "inbox" } });
+      const today = context.service.createTask({
+        title: "Today",
+        placement: { kind: "project", projectId: project.id },
+        due: { kind: "allDay", date: "2026-08-31" },
+      });
+      const upcoming = context.service.createTask({
+        title: "Tomorrow",
+        placement: { kind: "section", projectId: project.id, sectionId: section.id },
+        due: { kind: "allDay", date: "2026-09-01" },
+      });
+      context.service.completeTask(today.id);
+      context.service.trashTask(inbox.id);
+
+      const views: Array<[Record<string, unknown>, string[]]> = [
+        [{ view: "all" }, [upcoming.id]],
+        [{ view: "today" }, []],
+        [{ view: "upcoming" }, [upcoming.id]],
+        [{ view: "inbox" }, []],
+        [{ view: "completed" }, [today.id]],
+        [{ view: "trash" }, [inbox.id]],
+        [{ view: "project", projectId: project.id }, [upcoming.id]],
+        [{ view: "section", sectionId: section.id }, [upcoming.id]],
+      ];
+
+      for (const [args, expectedIds] of views) {
+        const result = await callTool(context.client, "list_tasks", args);
+        expect(result.isError).not.toBe(true);
+        expect(result.structuredContent).toMatchObject({
+          view: args.view,
+          evaluatedAtMs: Date.parse("2026-08-31T02:00:00.000Z"),
+          timeZone: "Australia/Melbourne",
+        });
+        const tasks = result.structuredContent?.tasks as Array<{ id: string }>;
+        expect(tasks.map((task) => task.id)).toEqual(expectedIds);
+      }
+
+      expect(context.getCloseCount()).toBe(8);
+    } finally {
+      await context.close();
+    }
+  });
+
   it("returns bounded domain errors and suppresses unexpected infrastructure details", async () => {
     const context = await createContext();
     try {
@@ -247,6 +295,20 @@ describe("Worktodo MCP task tools", () => {
       expect(invalidView.content).toEqual([
         { type: "text", text: "INVALID_ARGUMENT: The project view requires only projectId" },
       ]);
+
+      const invalidSection = await callTool(context.client, "list_tasks", {
+        view: "section",
+        projectId: id(1),
+        sectionId: id(2),
+      });
+      expect(invalidSection).toMatchObject({ isError: true });
+      expect(invalidSection.content).toEqual([
+        { type: "text", text: "INVALID_ARGUMENT: The section view requires only sectionId" },
+      ]);
+
+      const missingSection = await callTool(context.client, "list_tasks", { view: "section", sectionId: id(999) });
+      expect(missingSection).toMatchObject({ isError: true });
+      expect(missingSection.content).toEqual([{ type: "text", text: "NOT_FOUND: Section not found" }]);
 
       const invalidTimeZone = await callTool(context.client, "list_tasks", {
         view: "inbox",
@@ -266,7 +328,7 @@ describe("Worktodo MCP task tools", () => {
       expect(emptyUpdate.content).toEqual([
         { type: "text", text: "INVALID_ARGUMENT: Provide at least one task field to update" },
       ]);
-      expect(context.getCloseCount()).toBe(4);
+      expect(context.getCloseCount()).toBe(6);
     } finally {
       await context.close();
     }

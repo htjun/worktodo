@@ -82,7 +82,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
       setState({
         isLoading: false,
         error: null,
-        model: loadMenuBarModel(openProductionWorktodo, viewerTimeZone),
+        model: loadMenuBarModel(openProductionWorktodo, viewerTimeZone, Date.now()),
       });
     } catch (error) {
       setState({ isLoading: false, error: messageFrom(error), model: EMPTY_MODEL });

@@ -2,6 +2,7 @@ import type { Task } from "../domain/model";
 import type { TaskService } from "../domain/task-service";
 import { performTimedTaskHistoryOperation, type TimedTaskHistoryState } from "./timed-task-history";
 import { buildMenuBarModel, resolveMenuBarVisibility, type MenuBarModel } from "../presentation/menu-bar";
+import { loadTaskView } from "./task-views";
 
 type MenuBarSession = { service: TaskService; close: () => void };
 
@@ -16,15 +17,14 @@ const MENU_BAR_HIDDEN_KEY = "hidden";
 export function loadMenuBarModel(
   openSession: () => MenuBarSession,
   viewerTimeZone: string,
-  evaluationInstantMs = Date.now(),
+  evaluationInstantMs: number,
 ): MenuBarModel {
   const session = openSession();
   try {
-    return buildMenuBarModel(
-      session.service.listToday(evaluationInstantMs, viewerTimeZone),
-      session.service.listUpcoming(evaluationInstantMs, viewerTimeZone),
-      session.service.listProjects(),
-    );
+    const context = { evaluationInstantMs, viewerTimeZone };
+    const today = loadTaskView(session.service, { kind: "today" }, context);
+    const upcoming = loadTaskView(session.service, { kind: "upcoming" }, context);
+    return buildMenuBarModel(today.result, upcoming.result, session.service.listProjects());
   } finally {
     session.close();
   }

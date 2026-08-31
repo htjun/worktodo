@@ -1,18 +1,9 @@
+import { isStaticTaskViewKind, type TaskView, type TaskViewResult } from "../application/task-views";
 import type { Placement, Project, Section } from "../domain/model";
 import { addCalendarDays, startOfCalendarDate } from "../domain/queries";
 import type { TaskService } from "../domain/task-service";
 import { lifecycleActionIntentForViewKind } from "./task-actions";
 import { buildAllTaskListSections, buildTaskListItems, type TaskListEntry, type TaskListSection } from "./task-list";
-
-export type TaskView =
-  | { kind: "all" }
-  | { kind: "today" }
-  | { kind: "upcoming" }
-  | { kind: "inbox" }
-  | { kind: "completed" }
-  | { kind: "trash" }
-  | { kind: "project"; projectId: string }
-  | { kind: "section"; projectId: string; sectionId: string };
 
 export type TaskViewContent = {
   title: string;
@@ -72,14 +63,7 @@ export function taskViewKey(view: TaskView): string {
 }
 
 export function taskViewFromKey(value: string, projects: readonly Project[], sections: readonly Section[]): TaskView {
-  if (
-    value === "all" ||
-    value === "today" ||
-    value === "upcoming" ||
-    value === "inbox" ||
-    value === "completed" ||
-    value === "trash"
-  ) {
+  if (isStaticTaskViewKind(value)) {
     return { kind: value };
   }
   if (value.startsWith("project:")) {
@@ -96,21 +80,6 @@ export function taskViewFromKey(value: string, projects: readonly Project[], sec
     }
   }
   return { kind: "all" };
-}
-
-export function normalizeTaskView(
-  view: TaskView,
-  projects: readonly Project[],
-  sections: readonly Section[],
-): TaskView {
-  if (
-    view.kind === "section" &&
-    !sections.some((section) => section.id === view.sectionId) &&
-    projects.some((project) => project.id === view.projectId)
-  ) {
-    return { kind: "project", projectId: view.projectId };
-  }
-  return taskViewFromKey(taskViewKey(view), projects, sections);
 }
 
 export function taskViewContent(
@@ -167,59 +136,54 @@ function upcomingSectionTitle(date: string, localDate: string, viewerTimeZone: s
   return new Intl.DateTimeFormat(undefined, options).format(new Date(startOfCalendarDate(date, viewerTimeZone)));
 }
 
-export function loadTaskViewSections(
-  source: { service: TaskService },
-  view: TaskView,
-  viewerTimeZone: string,
-  evaluationInstantMs = Date.now(),
+export function buildTaskViewSections(
+  taskView: TaskViewResult,
+  projects: readonly Project[],
+  sections: readonly Section[],
 ): TaskListSection[] {
-  const projects = source.service.listProjects();
-  const sections = source.service.listSections();
-  let entries: TaskListEntry[];
-  switch (view.kind) {
-    case "all":
-      return buildAllTaskListSections(source.service.listAllTasks(viewerTimeZone), projects, sections, viewerTimeZone);
-    case "today":
-      entries = source.service.listToday(evaluationInstantMs, viewerTimeZone).tasks.map(({ task, status }) => ({
-        task,
-        todayStatus: status,
-      }));
-      break;
-    case "upcoming": {
-      const result = source.service.listUpcoming(evaluationInstantMs, viewerTimeZone);
-      const groups = new Map<string, TaskListEntry[]>();
-      for (const { task, localDate } of result.tasks) {
-        const group = groups.get(localDate) ?? [];
-        group.push({ task });
-        groups.set(localDate, group);
-      }
-      return [...groups].map(([date, group]) => ({
-        key: `upcoming:${date}`,
-        title: upcomingSectionTitle(date, result.localDate, viewerTimeZone),
-        items: buildTaskListItems(group, projects, sections, viewerTimeZone),
-      }));
-    }
-    case "inbox":
-      entries = source.service.listInbox().map((task) => ({ task }));
-      break;
-    case "project":
-      entries = source.service.listProjectTasks(view.projectId).map((task) => ({ task }));
-      break;
-    case "section":
-      entries = source.service.listSectionTasks(view.sectionId).map((task) => ({ task }));
-      break;
-    case "completed":
-      entries = source.service.listCompleted().map((task) => ({ task }));
-      break;
-    case "trash":
-      entries = source.service.listTrash().map((task) => ({ task }));
-      break;
+  if (taskView.kind === "today") {
+    return [
+      {
+        key: "today",
+        title: taskViewContent(taskView.view, projects, sections).title,
+        items: buildTaskListItems(
+          taskView.result.tasks.map(({ task, status }) => ({ task, todayStatus: status })),
+          projects,
+          sections,
+          taskView.viewerTimeZone,
+        ),
+      },
+    ];
   }
+
+  if (taskView.kind === "upcoming") {
+    const groups = new Map<string, TaskListEntry[]>();
+    for (const { task, localDate } of taskView.result.tasks) {
+      const group = groups.get(localDate) ?? [];
+      group.push({ task });
+      groups.set(localDate, group);
+    }
+    return [...groups].map(([date, group]) => ({
+      key: `upcoming:${date}`,
+      title: upcomingSectionTitle(date, taskView.result.localDate, taskView.viewerTimeZone),
+      items: buildTaskListItems(group, projects, sections, taskView.viewerTimeZone),
+    }));
+  }
+
+  if (taskView.view.kind === "all") {
+    return buildAllTaskListSections(taskView.result, projects, sections, taskView.viewerTimeZone);
+  }
+
   return [
     {
-      key: taskViewKey(view),
-      title: taskViewContent(view, projects, sections).title,
-      items: buildTaskListItems(entries, projects, sections, viewerTimeZone),
+      key: taskViewKey(taskView.view),
+      title: taskViewContent(taskView.view, projects, sections).title,
+      items: buildTaskListItems(
+        taskView.result.map((task) => ({ task })),
+        projects,
+        sections,
+        taskView.viewerTimeZone,
+      ),
     },
   ];
 }

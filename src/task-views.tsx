@@ -1,4 +1,5 @@
 import { Icon, List } from "@raycast/api";
+import type { TaskView } from "./shared/application/task-views";
 import type { Project, Section } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
 import {
@@ -6,16 +7,10 @@ import {
   taskViewContent as sharedTaskViewContent,
   taskViewFromKey,
   taskViewKey,
-  type TaskView,
 } from "./shared/presentation/task-views";
 
-export {
-  initialPlacementForTaskView,
-  loadTaskViewSections,
-  normalizeTaskView,
-  taskViewKey,
-} from "./shared/presentation/task-views";
-export type { TaskListSection, TaskView } from "./shared/presentation/task-views";
+export { buildTaskViewSections, initialPlacementForTaskView, taskViewKey } from "./shared/presentation/task-views";
+export type { TaskListSection } from "./shared/presentation/task-views";
 
 const VIEW_ICONS = {
   all: Icon.Folder,
