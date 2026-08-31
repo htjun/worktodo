@@ -1,4 +1,4 @@
-import { Action, ActionPanel, closeMainWindow, Form, Icon, showToast, Toast } from "@raycast/api";
+import { Action, ActionPanel, closeMainWindow, Form, Icon, PopToRootType, showToast, Toast } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { requestMenuBarRefresh } from "./raycast-commands";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
@@ -94,7 +94,7 @@ export default function QuickAdd() {
 
     requestMenuBarRefresh();
     await showToast(Toast.Style.Success, "Task added");
-    await closeMainWindow({ clearRootSearch: true });
+    await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     return true;
   }
 
