@@ -43,16 +43,8 @@
     {
       "name": "quick-add",
       "title": "Quick Add",
-      "description": "Add a task to the Worktodo Inbox",
-      "mode": "no-view",
-      "arguments": [
-        {
-          "name": "title",
-          "placeholder": "Task title",
-          "type": "text",
-          "required": true
-        }
-      ]
+      "description": "Add a task with optional details",
+      "mode": "view"
     },
     {
       "name": "backup-restore",
