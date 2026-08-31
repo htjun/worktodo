@@ -5,6 +5,7 @@ import {
   buildMenuBarModel,
   buildMenuBarTaskHistoryItem,
   menuBarTaskTitle,
+  resolveMenuBarLaunchAction,
   resolveMenuBarVisibility,
 } from "../../src/shared/presentation/menu-bar";
 import { parseMyTasksLaunchContext } from "../../src/shared/presentation/task-launch";
@@ -224,6 +225,25 @@ describe("menu-bar presentation", () => {
   it("restores a hidden item when the user launches the command", () => {
     expect(resolveMenuBarVisibility(true, true)).toEqual({ hidden: false, clearStoredHidden: true });
     expect(resolveMenuBarVisibility(false, true)).toEqual({ hidden: false, clearStoredHidden: false });
+  });
+
+  it("accepts menu actions only once in a user-initiated launch", () => {
+    expect(resolveMenuBarLaunchAction({ action: "complete-task", taskId: "task-1" }, true, false)).toEqual({
+      action: "complete-task",
+      taskId: "task-1",
+    });
+    expect(resolveMenuBarLaunchAction({ action: "hide-menu-bar" }, true, false)).toEqual({
+      action: "hide-menu-bar",
+    });
+    expect(resolveMenuBarLaunchAction({ action: "complete-task", taskId: "task-1" }, false, false)).toBeNull();
+    expect(resolveMenuBarLaunchAction({ action: "complete-task", taskId: "task-1" }, true, true)).toBeNull();
+  });
+
+  it("rejects malformed menu action launch contexts", () => {
+    expect(resolveMenuBarLaunchAction(null, true, false)).toBeNull();
+    expect(resolveMenuBarLaunchAction({ action: "complete-task", taskId: "  " }, true, false)).toBeNull();
+    expect(resolveMenuBarLaunchAction({ action: "complete-task" }, true, false)).toBeNull();
+    expect(resolveMenuBarLaunchAction({ action: "archive-task", taskId: "task-1" }, true, false)).toBeNull();
   });
 
   it("presents the current menu-bar Undo or Redo with its task title", () => {

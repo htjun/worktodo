@@ -8,6 +8,8 @@ This note records local evidence used to choose the initial repository shape. It
 
 **Package-manager update (2026-08-30):** The initial validation below used npm. The repository now uses pnpm 11.24.0 via Corepack, commits `pnpm-lock.yaml`, and remains a single root package without workspace packages.
 
+**Menu-bar feedback update (2026-08-31):** Raycast 2.1.2 retains the background launch type on action callbacks registered by a background-rendered menu. Its installed backend rejects `showToast` for those callbacks with `Toast API is not available when command is launched in background`. In a local reproduction, the task mutation committed before the success Toast was rejected, and a second Toast from the catch block escaped as a menu callback error. Worktodo now relays Toast-bearing Complete and Hide actions into a user-initiated menu command, uses HUD feedback for any remaining background path, and keeps feedback failures outside mutation error handling.
+
 ## Confirmed locally
 
 - Installed Raycast host: `2.0.5.0`, bundle ID `com.raycast.macos`.
