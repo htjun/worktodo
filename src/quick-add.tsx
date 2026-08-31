@@ -1,5 +1,5 @@
 import { Action, ActionPanel, closeMainWindow, Form, Icon, PopToRootType, showToast, Toast } from "@raycast/api";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { requestMenuBarRefresh } from "./raycast-commands";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import { DomainError, type Project, type Section } from "./shared/domain/model";
@@ -14,7 +14,6 @@ type QuickAddFormValues = {
 };
 
 type QuickAddState = {
-  session: WorktodoSession | null;
   projects: Project[];
   sections: Section[];
   error: string | null;
@@ -28,18 +27,18 @@ export default function QuickAdd() {
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [referenceInstantMs] = useState(Date.now);
   const [state] = useState<QuickAddState>(() => {
-    let session: WorktodoSession | null = null;
+    let session: WorktodoSession | undefined;
     try {
       session = openProductionWorktodo();
       return {
-        session,
         projects: session.service.listProjects(),
         sections: session.service.listSections(),
         error: null,
       };
     } catch (error) {
+      return { projects: [], sections: [], error: messageFrom(error) };
+    } finally {
       session?.close();
-      return { session: null, projects: [], sections: [], error: messageFrom(error) };
     }
   });
   const [selectedPlacement, setSelectedPlacement] = useState("inbox");
@@ -49,8 +48,6 @@ export default function QuickAdd() {
   const [dueError, setDueError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => () => state.session?.close(), [state.session]);
-
   async function submit(values: QuickAddFormValues): Promise<boolean> {
     setTitleError(undefined);
     setDueError(undefined);
@@ -58,11 +55,12 @@ export default function QuickAdd() {
       setTitleError("Title cannot be empty");
       return false;
     }
-    if (!state.session) {
+    if (state.error) {
       return false;
     }
 
     setIsSubmitting(true);
+    let session: WorktodoSession | undefined;
     try {
       const placement = placementFromKey(selectedPlacement, state.projects, state.sections);
       const due = dueDateFormValueForPreset(
@@ -71,7 +69,8 @@ export default function QuickAdd() {
         referenceInstantMs,
         viewerTimeZone,
       );
-      state.session.service.createTask(
+      session = openProductionWorktodo();
+      session.service.createTask(
         formToCreateTask(
           {
             title: values.title,
@@ -90,6 +89,8 @@ export default function QuickAdd() {
       }
       await showToast(Toast.Style.Failure, "Unable to add task", messageFrom(error));
       return false;
+    } finally {
+      session?.close();
     }
 
     requestMenuBarRefresh();
@@ -103,7 +104,7 @@ export default function QuickAdd() {
       navigationTitle="Quick Add"
       isLoading={isSubmitting}
       actions={
-        state.session ? (
+        state.error === null ? (
           <ActionPanel>
             <Action.SubmitForm title="Add Task" icon={Icon.Plus} onSubmit={submit} />
           </ActionPanel>
