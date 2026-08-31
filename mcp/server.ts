@@ -1,4 +1,7 @@
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createServer } from "./create-server";
+import { createServerOptionsFromEnvironment } from "./runtime-options";
 
-serveStdio(() => createServer());
+const options = createServerOptionsFromEnvironment();
+
+serveStdio(() => createServer(options));
