@@ -33,5 +33,5 @@ export function placementFromKey(key: string, projects: readonly Project[], sect
       return { kind: "section", projectId: section.projectId, sectionId };
     }
   }
-  throw new DomainError("INVALID_PLACEMENT", "Choose an existing task location");
+  throw new DomainError("INVALID_PLACEMENT", "Choose an existing project or section");
 }

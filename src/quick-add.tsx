@@ -2,19 +2,21 @@ import { Action, ActionPanel, closeMainWindow, Form, Icon, showToast, Toast } fr
 import { useEffect, useState } from "react";
 import { requestMenuBarRefresh } from "./raycast-commands";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import type { Project } from "./shared/domain/model";
+import { DomainError, type Project, type Section } from "./shared/domain/model";
+import { dueDateFormValueForPreset, type DueDatePreset } from "./shared/presentation/due-date";
+import { placementFromKey } from "./shared/presentation/placement";
 import { formToCreateTask } from "./shared/presentation/task-form";
+import { DueDateFields, ProjectDropdown } from "./task-form-controls";
 
 type QuickAddFormValues = {
   title: string;
-  projectId: string;
-  dueDate: Date | null;
   notes: string;
 };
 
 type QuickAddState = {
   session: WorktodoSession | null;
   projects: Project[];
+  sections: Section[];
   error: string | null;
 };
 
@@ -24,21 +26,34 @@ function messageFrom(error: unknown): string {
 
 export default function QuickAdd() {
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [referenceInstantMs] = useState(Date.now);
   const [state] = useState<QuickAddState>(() => {
+    let session: WorktodoSession | null = null;
     try {
-      const session = openProductionWorktodo();
-      return { session, projects: session.service.listProjects(), error: null };
+      session = openProductionWorktodo();
+      return {
+        session,
+        projects: session.service.listProjects(),
+        sections: session.service.listSections(),
+        error: null,
+      };
     } catch (error) {
-      return { session: null, projects: [], error: messageFrom(error) };
+      session?.close();
+      return { session: null, projects: [], sections: [], error: messageFrom(error) };
     }
   });
+  const [selectedPlacement, setSelectedPlacement] = useState("inbox");
+  const [dueDatePreset, setDueDatePreset] = useState<DueDatePreset>("none");
+  const [customDueDate, setCustomDueDate] = useState<Date | null>(null);
   const [titleError, setTitleError] = useState<string>();
+  const [dueError, setDueError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => () => state.session?.close(), [state.session]);
 
   async function submit(values: QuickAddFormValues): Promise<boolean> {
     setTitleError(undefined);
+    setDueError(undefined);
     if (values.title.trim().length === 0) {
       setTitleError("Title cannot be empty");
       return false;
@@ -47,20 +62,22 @@ export default function QuickAdd() {
       return false;
     }
 
-    const placement =
-      values.projectId === "inbox"
-        ? { kind: "inbox" as const }
-        : { kind: "project" as const, projectId: values.projectId };
     setIsSubmitting(true);
     try {
+      const placement = placementFromKey(selectedPlacement, state.projects, state.sections);
+      const due = dueDateFormValueForPreset(
+        dueDatePreset,
+        customDueDate?.getTime() ?? null,
+        referenceInstantMs,
+        viewerTimeZone,
+      );
       state.session.service.createTask(
         formToCreateTask(
           {
             title: values.title,
             notes: values.notes,
             priority: "none",
-            dueKind: values.dueDate ? "allDay" : "none",
-            dueAtMs: values.dueDate?.getTime() ?? null,
+            ...due,
           },
           viewerTimeZone,
           placement,
@@ -68,6 +85,9 @@ export default function QuickAdd() {
       );
     } catch (error) {
       setIsSubmitting(false);
+      if (error instanceof DomainError && error.code === "INVALID_DUE_VALUE") {
+        setDueError(error.message);
+      }
       await showToast(Toast.Style.Failure, "Unable to add task", messageFrom(error));
       return false;
     }
@@ -91,13 +111,25 @@ export default function QuickAdd() {
       }
     >
       <Form.TextField id="title" title="Title" autoFocus error={titleError} onChange={() => setTitleError(undefined)} />
-      <Form.Dropdown id="projectId" title="Project" defaultValue="inbox">
-        <Form.Dropdown.Item value="inbox" title="Inbox" icon={Icon.Tray} />
-        {state.projects.map((project) => (
-          <Form.Dropdown.Item key={project.id} value={project.id} title={project.name} />
-        ))}
-      </Form.Dropdown>
-      <Form.DatePicker id="dueDate" title="Due Date" type={Form.DatePicker.Type.Date} defaultValue={null} />
+      <ProjectDropdown
+        projects={state.projects}
+        sections={state.sections}
+        value={selectedPlacement}
+        onChange={setSelectedPlacement}
+      />
+      <DueDateFields
+        preset={dueDatePreset}
+        customDate={customDueDate}
+        error={dueError}
+        onPresetChange={(preset) => {
+          setDueDatePreset(preset);
+          setDueError(undefined);
+        }}
+        onCustomDateChange={(date) => {
+          setCustomDueDate(date);
+          setDueError(undefined);
+        }}
+      />
       <Form.TextArea id="notes" title="Notes" />
       {state.error ? <Form.Description title="Unable to open Worktodo" text={state.error} /> : null}
     </Form>

@@ -34,7 +34,7 @@ export type TaskDetailPresentation = {
 };
 
 type DuePresentation = {
-  title: "Due" | "Overdue" | "Today";
+  title: "Due Date" | "Overdue" | "Today";
   text: string;
 };
 
@@ -59,9 +59,9 @@ function instantLabel(instantMs: number, viewerTimeZone: string): string {
 }
 
 function duePresentation(entry: TaskListEntry, viewerTimeZone: string): DuePresentation {
-  const title = entry.todayStatus === "overdue" ? "Overdue" : entry.todayStatus === "dueToday" ? "Today" : "Due";
+  const title = entry.todayStatus === "overdue" ? "Overdue" : entry.todayStatus === "dueToday" ? "Today" : "Due Date";
   if (entry.task.due.kind === "none") {
-    return { title: "Due", text: "None" };
+    return { title: "Due Date", text: "None" };
   }
   if (entry.task.due.kind === "allDay") {
     return { title, text: entry.task.due.date };
@@ -148,7 +148,7 @@ function priorityDetailLabel(task: Task): string {
 function detailPresentation(entry: TaskListEntry, placement: string, viewerTimeZone: string): TaskDetailPresentation {
   const due = duePresentation(entry, viewerTimeZone);
   const metadata: TaskDetailField[] = [
-    { title: "Placement", text: placement },
+    { title: "Project", text: placement },
     { title: "Priority", text: priorityDetailLabel(entry.task) },
     due,
     { title: "Created", text: instantLabel(entry.task.createdAtMs, viewerTimeZone) },

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Project, Section, Task } from "../../src/shared/domain/model";
+import { dueDateFormValueForPreset, dueDatePresetForDue } from "../../src/shared/presentation/due-date";
 import { lifecycleActionIntentForViewKind } from "../../src/shared/presentation/task-actions";
 import { formToCreateTask, formToUpdateTask, taskFormDefaults } from "../../src/shared/presentation/task-form";
 import { buildTaskListItems, extractTaskNoteLinks, taskNotesMarkdown } from "../../src/shared/presentation/task-list";
@@ -40,6 +41,46 @@ function task(overrides: Partial<Task> = {}): Task {
 }
 
 describe("task presentation mapping", () => {
+  it("maps the shared due-date presets to local calendar dates", () => {
+    const referenceInstantMs = Date.parse("2026-08-30T14:30:00.000Z");
+    const baseValues = {
+      title: "Review plan",
+      notes: "",
+      priority: "none" as const,
+    };
+    const mappedDate = (preset: "today" | "tomorrow" | "endOfWeek") =>
+      formToCreateTask(
+        {
+          ...baseValues,
+          ...dueDateFormValueForPreset(preset, null, referenceInstantMs, "Australia/Melbourne"),
+        },
+        "Australia/Melbourne",
+      ).due;
+
+    expect(mappedDate("today")).toEqual({ kind: "allDay", date: "2026-08-31" });
+    expect(mappedDate("tomorrow")).toEqual({ kind: "allDay", date: "2026-09-01" });
+    expect(mappedDate("endOfWeek")).toEqual({ kind: "allDay", date: "2026-09-06" });
+    expect(dueDateFormValueForPreset("none", null, referenceInstantMs, "Australia/Melbourne")).toEqual({
+      dueKind: "none",
+      dueAtMs: null,
+    });
+    expect(() => dueDateFormValueForPreset("custom", null, referenceInstantMs, "Australia/Melbourne")).toThrow(
+      "Choose a custom due date",
+    );
+  });
+
+  it("recognizes preset all-day dates and keeps timed values custom", () => {
+    const referenceInstantMs = Date.parse("2026-08-30T14:30:00.000Z");
+    const presetFor = (due: Task["due"]) => dueDatePresetForDue(due, referenceInstantMs, "Australia/Melbourne");
+
+    expect(presetFor({ kind: "none" })).toBe("none");
+    expect(presetFor({ kind: "allDay", date: "2026-08-31" })).toBe("today");
+    expect(presetFor({ kind: "allDay", date: "2026-09-01" })).toBe("tomorrow");
+    expect(presetFor({ kind: "allDay", date: "2026-09-06" })).toBe("endOfWeek");
+    expect(presetFor({ kind: "allDay", date: "2026-09-10" })).toBe("custom");
+    expect(presetFor({ kind: "timed", instantMs: referenceInstantMs, timeZone: "Australia/Melbourne" })).toBe("custom");
+  });
+
   it("maps new and edited forms without Raycast-specific values", () => {
     const allDayMs = Date.parse("2026-10-03T14:00:00.000Z");
     const values = {
@@ -86,8 +127,10 @@ describe("task presentation mapping", () => {
     expect(placementFromKey(placementKey({ kind: "inbox" }), [project], [section])).toEqual({ kind: "inbox" });
     expect(placementFromKey(placementKey(projectPlacement), [project], [section])).toEqual(projectPlacement);
     expect(placementFromKey(placementKey(sectionPlacement), [project], [section])).toEqual(sectionPlacement);
-    expect(() => placementFromKey(`project:${project.id}`, [], [])).toThrow("Choose an existing task location");
-    expect(() => placementFromKey(`section:${section.id}`, [project], [])).toThrow("Choose an existing task location");
+    expect(() => placementFromKey(`project:${project.id}`, [], [])).toThrow("Choose an existing project or section");
+    expect(() => placementFromKey(`section:${section.id}`, [project], [])).toThrow(
+      "Choose an existing project or section",
+    );
   });
 
   it("round-trips task defaults for all due kinds", () => {
@@ -178,17 +221,17 @@ describe("task presentation mapping", () => {
 
     expect(first.map((item) => item.detail.metadata.slice(0, 3))).toEqual([
       [
-        { title: "Placement", text: "Inbox" },
+        { title: "Project", text: "Inbox" },
         { title: "Priority", text: "None" },
-        { title: "Due", text: "None" },
+        { title: "Due Date", text: "None" },
       ],
       [
-        { title: "Placement", text: "Personal" },
+        { title: "Project", text: "Personal" },
         { title: "Priority", text: "Low" },
         { title: "Overdue", text: "2026-10-04" },
       ],
       [
-        { title: "Placement", text: "Personal / Next" },
+        { title: "Project", text: "Personal / Next" },
         { title: "Priority", text: "Medium" },
         { title: "Today", text: timedLabel },
       ],
@@ -259,9 +302,9 @@ describe("task presentation mapping", () => {
       `Trashed ${format.format(new Date(trashedAtMs))}`,
     ]);
     expect(item.detail.metadata).toEqual([
-      { title: "Placement", text: "Personal / Next" },
+      { title: "Project", text: "Personal / Next" },
       { title: "Priority", text: "None" },
-      { title: "Due", text: "None" },
+      { title: "Due Date", text: "None" },
       { title: "Created", text: format.format(new Date(1_000)) },
       { title: "Updated", text: format.format(new Date(1_000)) },
       { title: "Completed", text: format.format(new Date(completedAtMs)) },
