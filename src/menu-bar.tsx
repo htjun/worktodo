@@ -12,6 +12,7 @@ import type { Priority, Task } from "./shared/domain/model";
 import {
   buildMenuBarModel,
   buildMenuBarTaskHistoryItem,
+  menuBarTaskTitle,
   type MenuBarModel,
   type MenuBarTask,
   resolveMenuBarVisibility,
@@ -46,7 +47,12 @@ function messageFrom(error: unknown): string {
 function loadMenuBarModel(viewerTimeZone: string): MenuBarModel {
   const session = openProductionWorktodo();
   try {
-    return buildMenuBarModel(session.service.listToday(Date.now(), viewerTimeZone));
+    const evaluationInstantMs = Date.now();
+    return buildMenuBarModel(
+      session.service.listToday(evaluationInstantMs, viewerTimeZone),
+      session.service.listUpcoming(evaluationInstantMs, viewerTimeZone),
+      session.service.listProjects(),
+    );
   } finally {
     session.close();
   }
@@ -214,14 +220,14 @@ export default function Command() {
           <MenuBarExtra.Item title="Unable to load tasks" subtitle={state.error} icon={menuIcon(Icon.Warning)} />
         </MenuBarExtra.Section>
       ) : state.model.sections.length === 0 ? (
-        <MenuBarExtra.Section title="Today">
-          <MenuBarExtra.Item title="Nothing due today" icon={menuIcon(Icon.CheckCircle)} />
+        <MenuBarExtra.Section title="This Week">
+          <MenuBarExtra.Item title="Nothing due this week" icon={menuIcon(Icon.CheckCircle)} />
         </MenuBarExtra.Section>
       ) : (
         state.model.sections.map((section) => (
           <MenuBarExtra.Section key={section.key} title={section.title}>
             {section.tasks.map((task) => (
-              <MenuBarExtra.Submenu key={task.id} title={task.title} icon={priorityIcon(task.priority)}>
+              <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={priorityIcon(task.priority)}>
                 <MenuBarExtra.Item
                   title="Complete Task"
                   icon={menuIcon(Icon.CheckCircle)}
@@ -230,7 +236,7 @@ export default function Command() {
                 <MenuBarExtra.Item
                   title="Open in My Tasks"
                   icon={menuIcon(Icon.AppWindowList)}
-                  onAction={() => openMyTasks({ view: "today", selectedTaskId: task.id })}
+                  onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id })}
                 />
               </MenuBarExtra.Submenu>
             ))}
@@ -249,26 +255,6 @@ export default function Command() {
           />
         </MenuBarExtra.Section>
       ) : null}
-
-      <MenuBarExtra.Section>
-        <MenuBarExtra.Item
-          title="Today"
-          icon={menuIcon(Icon.Calendar)}
-          onAction={() => openMyTasks({ view: "today" })}
-        />
-        <MenuBarExtra.Item title="Inbox" icon={menuIcon(Icon.Tray)} onAction={() => openMyTasks({ view: "inbox" })} />
-        <MenuBarExtra.Item
-          title="Upcoming"
-          icon={menuIcon(Icon.Calendar)}
-          onAction={() => openMyTasks({ view: "upcoming" })}
-        />
-        <MenuBarExtra.Item
-          title="Completed"
-          icon={menuIcon(Icon.CheckCircle)}
-          onAction={() => openMyTasks({ view: "completed" })}
-        />
-        <MenuBarExtra.Item title="Trash" icon={menuIcon(Icon.Trash)} onAction={() => openMyTasks({ view: "trash" })} />
-      </MenuBarExtra.Section>
 
       <MenuBarExtra.Section>
         <MenuBarExtra.Item

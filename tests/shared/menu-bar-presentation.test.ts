@@ -1,21 +1,22 @@
 import { describe, expect, it } from "vitest";
-import type { Priority, Task } from "../../src/shared/domain/model";
-import type { TodayResult } from "../../src/shared/domain/queries";
+import type { Priority, Project, Task } from "../../src/shared/domain/model";
+import type { TodayResult, UpcomingResult } from "../../src/shared/domain/queries";
 import {
   buildMenuBarModel,
   buildMenuBarTaskHistoryItem,
+  menuBarTaskTitle,
   resolveMenuBarVisibility,
 } from "../../src/shared/presentation/menu-bar";
 import { parseMyTasksLaunchContext } from "../../src/shared/presentation/task-launch";
 
-function task(id: string, title: string, priority: Priority): Task {
+function task(id: string, title: string, priority: Priority, projectId: string | null = null): Task {
   return {
     id,
     title,
     notes: "",
     priority,
     position: 1_024,
-    projectId: null,
+    projectId,
     sectionId: null,
     due: { kind: "allDay", date: "2026-08-30" },
     createdAtMs: 1_000,
@@ -25,21 +26,39 @@ function task(id: string, title: string, priority: Priority): Task {
   };
 }
 
-function todayResult(tasks: TodayResult["tasks"]): TodayResult {
+function todayResult(tasks: TodayResult["tasks"], localDate = "2026-08-31"): TodayResult {
   return {
     tasks,
     count: tasks.length,
-    localDate: "2026-08-30",
+    localDate,
     startOfDayMs: 1_000,
     startOfNextDayMs: 2_000,
   };
 }
 
+function upcomingResult(tasks: UpcomingResult["tasks"], localDate = "2026-08-31"): UpcomingResult {
+  return {
+    tasks,
+    count: tasks.length,
+    localDate,
+    startOfDayMs: 1_000,
+    startOfNextDayMs: 2_000,
+  };
+}
+
+function project(id: string, name: string): Project {
+  return { id, name, position: 1_024, createdAtMs: 1_000, updatedAtMs: 1_000 };
+}
+
 describe("menu-bar presentation", () => {
-  it("groups overdue before today while preserving query order and priorities", () => {
-    const overdueHigh = task("1", "Submit report", "high");
+  it("groups tasks through Sunday and preserves query order, priorities, and project names", () => {
+    const work = project("project-1", "Work");
+    const overdueHigh = task("1", "Submit report", "high", work.id);
     const overdueLow = task("2", "Book appointment", "low");
     const dueToday = task("3", "Buy groceries", "none");
+    const dueTomorrow = task("4", "Review proposal", "medium", work.id);
+    const dueFriday = task("5", "Plan launch", "high", work.id);
+    const dueNextWeek = task("6", "Write follow-up", "none");
 
     expect(
       buildMenuBarModel(
@@ -48,6 +67,12 @@ describe("menu-bar presentation", () => {
           { task: overdueLow, status: "overdue", effectiveDueAtMs: 1_100 },
           { task: dueToday, status: "dueToday", effectiveDueAtMs: 1_200 },
         ]),
+        upcomingResult([
+          { task: dueTomorrow, localDate: "2026-09-01", effectiveDueAtMs: 2_000 },
+          { task: dueFriday, localDate: "2026-09-04", effectiveDueAtMs: 3_000 },
+          { task: dueNextWeek, localDate: "2026-09-07", effectiveDueAtMs: 4_000 },
+        ]),
+        [work],
       ),
     ).toEqual({
       count: 3,
@@ -57,21 +82,112 @@ describe("menu-bar presentation", () => {
           key: "overdue",
           title: "Overdue",
           tasks: [
-            { id: "1", title: "Submit report", priority: "high" },
-            { id: "2", title: "Book appointment", priority: "low" },
+            {
+              id: "1",
+              title: "Submit report",
+              priority: "high",
+              projectName: "Work",
+              view: "today",
+            },
+            {
+              id: "2",
+              title: "Book appointment",
+              priority: "low",
+              projectName: null,
+              view: "today",
+            },
           ],
         },
         {
           key: "today",
           title: "Today",
-          tasks: [{ id: "3", title: "Buy groceries", priority: "none" }],
+          tasks: [
+            {
+              id: "3",
+              title: "Buy groceries",
+              priority: "none",
+              projectName: null,
+              view: "today",
+            },
+          ],
+        },
+        {
+          key: "tomorrow",
+          title: "Tomorrow",
+          tasks: [
+            {
+              id: "4",
+              title: "Review proposal",
+              priority: "medium",
+              projectName: "Work",
+              view: "upcoming",
+            },
+          ],
+        },
+        {
+          key: "laterThisWeek",
+          title: "Later This Week",
+          tasks: [
+            {
+              id: "5",
+              title: "Plan launch",
+              priority: "high",
+              projectName: "Work",
+              view: "upcoming",
+            },
+          ],
         },
       ],
     });
   });
 
   it("hides the menu title and task sections when nothing is due", () => {
-    expect(buildMenuBarModel(todayResult([]))).toEqual({ count: 0, title: undefined, sections: [] });
+    expect(buildMenuBarModel(todayResult([]), upcomingResult([]), [])).toEqual({
+      count: 0,
+      title: undefined,
+      sections: [],
+    });
+  });
+
+  it("does not include upcoming tasks in the menu title count", () => {
+    const tomorrow = task("1", "Review proposal", "medium");
+
+    expect(
+      buildMenuBarModel(
+        todayResult([]),
+        upcomingResult([{ task: tomorrow, localDate: "2026-09-01", effectiveDueAtMs: 2_000 }]),
+        [],
+      ),
+    ).toEqual({
+      count: 0,
+      title: undefined,
+      sections: [
+        {
+          key: "tomorrow",
+          title: "Tomorrow",
+          tasks: [
+            {
+              id: "1",
+              title: "Review proposal",
+              priority: "medium",
+              projectName: null,
+              view: "upcoming",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("shows the project as a compact suffix while leaving Inbox task titles unchanged", () => {
+    const baseTask = {
+      id: "task-1",
+      title: "Submit report",
+      priority: "high" as const,
+      view: "today" as const,
+    };
+    expect(menuBarTaskTitle({ ...baseTask, projectName: "Work" })).toBe("Submit report · Work");
+    expect(menuBarTaskTitle({ ...baseTask, projectName: null })).toBe("Submit report");
   });
 
   it("accepts only supported My Tasks launch context values", () => {
@@ -79,16 +195,19 @@ describe("menu-bar presentation", () => {
       view: "upcoming",
       selectedTaskId: "task-1",
       createTask: true,
+      isShowingDetail: true,
     });
     expect(parseMyTasksLaunchContext({ view: "project", selectedTaskId: "", createTask: "yes" })).toEqual({
       view: "today",
       selectedTaskId: undefined,
       createTask: false,
+      isShowingDetail: false,
     });
     expect(parseMyTasksLaunchContext(null)).toEqual({
       view: "today",
       selectedTaskId: undefined,
       createTask: false,
+      isShowingDetail: false,
     });
   });
 

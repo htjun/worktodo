@@ -77,7 +77,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   const [launchContext] = useState(() => parseMyTasksLaunchContext(props.launchContext));
   const [view, setView] = useState<TaskView>(() => ({ kind: launchContext.view }));
   const [selectedTaskId, setSelectedTaskId] = useState(launchContext.selectedTaskId);
-  const [isShowingDetail, setIsShowingDetail] = useState(false);
+  const [isShowingDetail, setIsShowingDetail] = useState(launchContext.isShowingDetail);
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [session, setSession] = useState<WorktodoSession | null>(null);
   const [acknowledgedTasks, setAcknowledgedTasks] = useState<ReadonlyMap<string, Task>>(() => new Map());

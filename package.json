@@ -55,7 +55,7 @@
     {
       "name": "menu-bar",
       "title": "Worktodo Menu Bar",
-      "description": "View and complete tasks due today from the menu bar",
+      "description": "View and complete tasks due this week from the menu bar",
       "mode": "menu-bar",
       "interval": "1m"
     }
