@@ -10,6 +10,7 @@ import {
   type Task,
 } from "./model";
 import {
+  queryAllTasks,
   queryCompleted,
   queryInbox,
   queryProject,
@@ -512,6 +513,10 @@ export class TaskService {
       this.repository.updateTask(updated);
       return updated;
     });
+  }
+
+  listAllTasks(viewerTimeZone: string): Task[] {
+    return queryAllTasks(this.repository.listTasks(), viewerTimeZone);
   }
 
   listInbox(): Task[] {

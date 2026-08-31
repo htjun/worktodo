@@ -52,6 +52,29 @@ export function compareOrdinaryTasks(left: Task, right: Task): number {
   );
 }
 
+export function queryAllTasks(tasks: readonly Task[], viewerTimeZone: string): Task[] {
+  const canonicalTimeZone = canonicalizeTimeZone(viewerTimeZone);
+  return tasks
+    .filter((task) => task.completedAtMs === null && task.trashedAtMs === null)
+    .sort((left, right) => {
+      if (left.due.kind === "none") {
+        return right.due.kind === "none" ? compareOrdinaryTasks(left, right) : 1;
+      }
+      if (right.due.kind === "none") {
+        return -1;
+      }
+      const leftDueAtMs =
+        left.due.kind === "allDay" ? startOfCalendarDate(left.due.date, canonicalTimeZone) : left.due.instantMs;
+      const rightDueAtMs =
+        right.due.kind === "allDay" ? startOfCalendarDate(right.due.date, canonicalTimeZone) : right.due.instantMs;
+      return (
+        leftDueAtMs - rightDueAtMs ||
+        Number(left.due.kind === "timed") - Number(right.due.kind === "timed") ||
+        compareOrdinaryTasks(left, right)
+      );
+    });
+}
+
 export function queryInbox(tasks: readonly Task[]): Task[] {
   return tasks
     .filter(

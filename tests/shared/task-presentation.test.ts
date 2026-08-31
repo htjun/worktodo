@@ -3,7 +3,12 @@ import type { Project, Section, Task } from "../../src/shared/domain/model";
 import { dueDateFormValueForPreset, dueDatePresetForDue } from "../../src/shared/presentation/due-date";
 import { lifecycleActionIntentForViewKind } from "../../src/shared/presentation/task-actions";
 import { formToCreateTask, formToUpdateTask, taskFormDefaults } from "../../src/shared/presentation/task-form";
-import { buildTaskListItems, extractTaskNoteLinks, taskNotesMarkdown } from "../../src/shared/presentation/task-list";
+import {
+  buildAllTaskListSections,
+  buildTaskListItems,
+  extractTaskNoteLinks,
+  taskNotesMarkdown,
+} from "../../src/shared/presentation/task-list";
 import { placementFromKey, placementKey } from "../../src/shared/presentation/placement";
 
 const project: Project = {
@@ -41,6 +46,36 @@ function task(overrides: Partial<Task> = {}): Task {
 }
 
 describe("task presentation mapping", () => {
+  it("groups All Tasks under Inbox and non-empty projects in project order", () => {
+    const work: Project = { ...project, id: "work", name: "Work", position: 2_048 };
+    const empty: Project = { ...project, id: "empty", name: "Empty", position: 3_072 };
+    const inboxTask = task({ id: "inbox", projectId: null, sectionId: null });
+    const workTask = task({ id: "work-task", projectId: work.id, sectionId: null });
+    const directPersonalTask = task({ id: "personal-direct", sectionId: null });
+    const sectionPersonalTask = task({ id: "personal-section" });
+
+    const groups = buildAllTaskListSections(
+      [inboxTask, workTask, directPersonalTask, sectionPersonalTask],
+      [work, empty, project],
+      [section],
+      "Australia/Melbourne",
+    );
+
+    expect(groups.map(({ key, title }) => ({ key, title }))).toEqual([
+      { key: "all:inbox", title: "Inbox" },
+      { key: "all:project:work", title: "Work" },
+      { key: `all:project:${project.id}`, title: "Personal" },
+    ]);
+    expect(groups.map((group) => group.items.map((item) => [item.id, item.subtitle]))).toEqual([
+      [["inbox", "Inbox"]],
+      [["work-task", "Work"]],
+      [
+        ["personal-direct", "Personal"],
+        ["personal-section", "Personal / Next"],
+      ],
+    ]);
+  });
+
   it("maps the shared due-date presets to local calendar dates", () => {
     const referenceInstantMs = Date.parse("2026-08-30T14:30:00.000Z");
     const baseValues = {
@@ -254,7 +289,7 @@ describe("task presentation mapping", () => {
   });
 
   it("maps lifecycle actions for safe secondary placement", () => {
-    for (const viewKind of ["today", "upcoming", "inbox", "project", "section"]) {
+    for (const viewKind of ["all", "today", "upcoming", "inbox", "project", "section"]) {
       expect(lifecycleActionIntentForViewKind(viewKind)).toEqual({
         kind: "complete",
         title: "Complete Task",

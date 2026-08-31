@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DueValue, Priority, Task } from "../../src/shared/domain/model";
 import {
+  queryAllTasks,
   queryCompleted,
   queryInbox,
   queryProject,
@@ -40,6 +41,39 @@ function task(
 }
 
 describe("task queries", () => {
+  it("returns every active task in due-date order with undated tasks last", () => {
+    const projectId = id(100);
+    const tasks = [
+      task(1, { kind: "none" }, { priority: "low" }),
+      task(2, { kind: "allDay", date: "2026-10-04" }, { projectId, priority: "low" }),
+      task(3, { kind: "allDay", date: "2026-10-04" }, { projectId, priority: "high" }),
+      task(4, { kind: "timed", instantMs: Date.parse("2026-10-04T01:00:00.000Z"), timeZone: "UTC" }),
+      task(5, { kind: "none" }, { projectId, priority: "high" }),
+      task(6, { kind: "allDay", date: "2026-10-03" }, { completedAtMs: 2_000 }),
+      task(7, { kind: "allDay", date: "2026-10-03" }, { trashedAtMs: 2_000 }),
+    ];
+
+    expect(queryAllTasks(tasks, "Australia/Melbourne").map((value) => value.id)).toEqual([
+      id(3),
+      id(2),
+      id(4),
+      id(5),
+      id(1),
+    ]);
+  });
+
+  it("sorts all-day dates against timed instants in the viewer timezone", () => {
+    const allDay = task(1, { kind: "allDay", date: "2026-10-04" });
+    const timed = task(2, {
+      kind: "timed",
+      instantMs: Date.parse("2026-10-03T20:00:00.000Z"),
+      timeZone: "UTC",
+    });
+
+    expect(queryAllTasks([timed, allDay], "Australia/Melbourne").map((value) => value.id)).toEqual([id(1), id(2)]);
+    expect(queryAllTasks([timed, allDay], "America/Los_Angeles").map((value) => value.id)).toEqual([id(2), id(1)]);
+  });
+
   it("uses exact 23-hour and 25-hour Melbourne calendar boundaries", () => {
     expect(todayWindow(Date.parse("2026-10-04T01:00:00.000Z"), "Australia/Melbourne")).toEqual({
       localDate: "2026-10-04",

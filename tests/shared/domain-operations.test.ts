@@ -231,7 +231,7 @@ describe("shared domain operations", () => {
     }
   });
 
-  it("exposes the shared Upcoming query through the task service", async () => {
+  it("exposes shared due-date queries through the task service", async () => {
     const { service, db } = await createContext();
     try {
       const upcoming = service.createTask({
@@ -239,11 +239,13 @@ describe("shared domain operations", () => {
         placement: { kind: "inbox" },
         due: { kind: "allDay", date: "2026-10-05" },
       });
-      service.createTask({
+      const today = service.createTask({
         title: "Today",
         placement: { kind: "inbox" },
         due: { kind: "allDay", date: "2026-10-04" },
       });
+
+      expect(service.listAllTasks("Australia/Melbourne").map((task) => task.id)).toEqual([today.id, upcoming.id]);
 
       expect(
         service

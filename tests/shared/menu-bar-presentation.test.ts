@@ -191,6 +191,12 @@ describe("menu-bar presentation", () => {
   });
 
   it("accepts only supported My Tasks launch context values", () => {
+    expect(parseMyTasksLaunchContext({ view: "all" })).toEqual({
+      view: "all",
+      selectedTaskId: undefined,
+      createTask: false,
+      isShowingDetail: false,
+    });
     expect(parseMyTasksLaunchContext({ view: "upcoming", selectedTaskId: "task-1", createTask: true })).toEqual({
       view: "upcoming",
       selectedTaskId: "task-1",
@@ -198,13 +204,13 @@ describe("menu-bar presentation", () => {
       isShowingDetail: true,
     });
     expect(parseMyTasksLaunchContext({ view: "project", selectedTaskId: "", createTask: "yes" })).toEqual({
-      view: "today",
+      view: "all",
       selectedTaskId: undefined,
       createTask: false,
       isShowingDetail: false,
     });
     expect(parseMyTasksLaunchContext(null)).toEqual({
-      view: "today",
+      view: "all",
       selectedTaskId: undefined,
       createTask: false,
       isShowingDetail: false,

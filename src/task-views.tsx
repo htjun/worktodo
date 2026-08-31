@@ -4,9 +4,17 @@ import type { Placement, Project, Section } from "./shared/domain/model";
 import { addCalendarDays, startOfCalendarDate } from "./shared/domain/queries";
 import type { TaskService } from "./shared/domain/task-service";
 import { lifecycleActionIntentForViewKind } from "./shared/presentation/task-actions";
-import { buildTaskListItems, type TaskListEntry, type TaskListItem } from "./shared/presentation/task-list";
+import {
+  buildAllTaskListSections,
+  buildTaskListItems,
+  type TaskListEntry,
+  type TaskListSection,
+} from "./shared/presentation/task-list";
+
+export type { TaskListSection } from "./shared/presentation/task-list";
 
 export type TaskView =
+  | { kind: "all" }
   | { kind: "today" }
   | { kind: "upcoming" }
   | { kind: "inbox" }
@@ -16,6 +24,14 @@ export type TaskView =
   | { kind: "section"; projectId: string; sectionId: string };
 
 const STATIC_VIEW_CONTENT = {
+  all: {
+    title: "All Tasks",
+    icon: Icon.Folder,
+    taskIcon: Icon.Circle,
+    searchPlaceholder: "Search All Tasks",
+    emptyTitle: "No tasks",
+    emptyDescription: "Create a task to get started.",
+  },
   today: {
     title: "Today",
     icon: Icon.Calendar,
@@ -70,7 +86,14 @@ export function taskViewKey(view: TaskView): string {
 }
 
 export function taskViewFromKey(value: string, projects: readonly Project[], sections: readonly Section[]): TaskView {
-  if (value === "today" || value === "upcoming" || value === "inbox" || value === "completed" || value === "trash") {
+  if (
+    value === "all" ||
+    value === "today" ||
+    value === "upcoming" ||
+    value === "inbox" ||
+    value === "completed" ||
+    value === "trash"
+  ) {
     return { kind: value };
   }
   if (value.startsWith("project:")) {
@@ -86,7 +109,7 @@ export function taskViewFromKey(value: string, projects: readonly Project[], sec
       return { kind: "section", projectId: section.projectId, sectionId };
     }
   }
-  return { kind: "inbox" };
+  return { kind: "all" };
 }
 
 export function normalizeTaskView(
@@ -142,12 +165,6 @@ export function initialPlacementForTaskView(view: TaskView): Placement {
   }
 }
 
-export type TaskListSection = {
-  key: string;
-  title: string;
-  items: TaskListItem[];
-};
-
 function upcomingSectionTitle(date: string, localDate: string, viewerTimeZone: string): string {
   if (date === addCalendarDays(localDate, 1)) {
     return "Tomorrow";
@@ -173,6 +190,8 @@ export function loadTaskViewSections(
   const sections = session.service.listSections();
   let entries: TaskListEntry[];
   switch (view.kind) {
+    case "all":
+      return buildAllTaskListSections(session.service.listAllTasks(viewerTimeZone), projects, sections, viewerTimeZone);
     case "today":
       entries = session.service.listToday(Date.now(), viewerTimeZone).tasks.map(({ task, status }) => ({
         task,
@@ -263,6 +282,7 @@ export function TaskViewDropdown({
       onChange={(value) => onChange(taskViewFromKey(value, projects, sections))}
     >
       <List.Dropdown.Section title="Views">
+        <List.Dropdown.Item value="all" title="All Tasks" icon={Icon.Folder} />
         <List.Dropdown.Item value="today" title="Today" icon={Icon.Calendar} />
         <List.Dropdown.Item value="upcoming" title="Upcoming" icon={Icon.Calendar} />
         <List.Dropdown.Item value="inbox" title="Inbox" icon={Icon.Tray} />

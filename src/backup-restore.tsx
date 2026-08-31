@@ -93,7 +93,7 @@ function ImportResult({ recoveryPath }: { recoveryPath: string }) {
       markdown={importSuccessMarkdown(recoveryPath)}
       actions={
         <ActionPanel>
-          <Action title="Open My Tasks" icon={Icon.CheckCircle} onAction={() => launchMyTasks({ view: "today" })} />
+          <Action title="Open My Tasks" icon={Icon.CheckCircle} onAction={() => launchMyTasks({ view: "all" })} />
           <Action.ShowInFinder path={recoveryPath} title="Show Recovery Backup in Finder" />
         </ActionPanel>
       }

@@ -16,6 +16,12 @@ export type TaskListItem = {
   task: Task;
 };
 
+export type TaskListSection = {
+  key: string;
+  title: string;
+  items: TaskListItem[];
+};
+
 export type TaskListRowPresentation = {
   title: string;
   accessories: string[];
@@ -194,4 +200,37 @@ export function buildTaskListItems(
       task: entry.task,
     };
   });
+}
+
+export function buildAllTaskListSections(
+  tasks: readonly Task[],
+  projects: readonly Project[],
+  sections: readonly Section[],
+  viewerTimeZone: string,
+): TaskListSection[] {
+  const groups = [
+    {
+      key: "all:inbox",
+      title: "Inbox",
+      tasks: tasks.filter((task) => task.projectId === null),
+    },
+    ...projects.map((project) => ({
+      key: `all:project:${project.id}`,
+      title: project.name,
+      tasks: tasks.filter((task) => task.projectId === project.id),
+    })),
+  ];
+
+  return groups
+    .filter((group) => group.tasks.length > 0)
+    .map((group) => ({
+      key: group.key,
+      title: group.title,
+      items: buildTaskListItems(
+        group.tasks.map((task) => ({ task })),
+        projects,
+        sections,
+        viewerTimeZone,
+      ),
+    }));
 }

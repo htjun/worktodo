@@ -1,4 +1,4 @@
-export type StaticTaskViewKind = "today" | "upcoming" | "inbox" | "completed" | "trash";
+export type StaticTaskViewKind = "all" | "today" | "upcoming" | "inbox" | "completed" | "trash";
 
 export type MyTasksLaunchContext = {
   view?: StaticTaskViewKind;
@@ -23,9 +23,14 @@ export function parseMyTasksLaunchContext(value: unknown): ParsedMyTasksLaunchCo
 
   return {
     view:
-      view === "today" || view === "upcoming" || view === "inbox" || view === "completed" || view === "trash"
+      view === "all" ||
+      view === "today" ||
+      view === "upcoming" ||
+      view === "inbox" ||
+      view === "completed" ||
+      view === "trash"
         ? view
-        : "today",
+        : "all",
     selectedTaskId,
     createTask: context.createTask === true,
     isShowingDetail: selectedTaskId !== undefined,
