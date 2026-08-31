@@ -17,8 +17,10 @@ describe("Worktodo MCP stdio server", () => {
       await client.connect(transport);
 
       const { tools } = await client.listTools();
-      expect(tools).toHaveLength(1);
-      expect(tools[0]).toMatchObject({
+      expect(tools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining(["ping", "list_projects", "list_tasks", "create_task", "trash_task"]),
+      );
+      expect(tools.find((tool) => tool.name === "ping")).toMatchObject({
         name: "ping",
         annotations: {
           readOnlyHint: true,

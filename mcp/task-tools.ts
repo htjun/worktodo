@@ -1,0 +1,501 @@
+import { type CallToolResult, McpServer, type ToolAnnotations } from "@modelcontextprotocol/server";
+import { z } from "zod";
+import { DomainError, placementOf, type Task } from "../src/shared/domain/model";
+import type { TaskService } from "../src/shared/domain/task-service";
+import { canonicalizeTimeZone } from "../src/shared/domain/validation";
+
+const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 50;
+const TASK_VIEWS = ["all", "today", "upcoming", "inbox", "completed", "trash", "project", "section"] as const;
+
+const nonNegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const prioritySchema = z.enum(["none", "low", "medium", "high"]);
+const dueSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }).strict(),
+  z.object({ kind: z.literal("allDay"), date: z.string().describe("Gregorian date in YYYY-MM-DD format") }).strict(),
+  z
+    .object({
+      kind: z.literal("timed"),
+      instantMs: nonNegativeSafeIntegerSchema.describe("Unix epoch milliseconds"),
+      timeZone: z.string().describe("IANA timezone identifier"),
+    })
+    .strict(),
+]);
+const placementSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("inbox") }).strict(),
+  z.object({ kind: z.literal("project"), projectId: z.string() }).strict(),
+  z.object({ kind: z.literal("section"), projectId: z.string(), sectionId: z.string() }).strict(),
+]);
+const taskSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    notes: z.string(),
+    priority: prioritySchema,
+    position: nonNegativeSafeIntegerSchema,
+    placement: placementSchema,
+    due: dueSchema,
+    createdAtMs: nonNegativeSafeIntegerSchema,
+    updatedAtMs: nonNegativeSafeIntegerSchema,
+    completedAtMs: nonNegativeSafeIntegerSchema.nullable(),
+    trashedAtMs: nonNegativeSafeIntegerSchema.nullable(),
+  })
+  .strict();
+const sectionSchema = z
+  .object({
+    id: z.string(),
+    projectId: z.string(),
+    name: z.string(),
+    position: nonNegativeSafeIntegerSchema,
+    createdAtMs: nonNegativeSafeIntegerSchema,
+    updatedAtMs: nonNegativeSafeIntegerSchema,
+  })
+  .strict();
+const projectSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    position: nonNegativeSafeIntegerSchema,
+    createdAtMs: nonNegativeSafeIntegerSchema,
+    updatedAtMs: nonNegativeSafeIntegerSchema,
+    sections: z.array(sectionSchema),
+  })
+  .strict();
+const taskViewSchema = z.enum(TASK_VIEWS);
+const pageInputSchema = {
+  query: z.string().optional().describe("Case-insensitive title, notes, project, or section substring"),
+  offset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
+};
+const pageSchema = {
+  offset: nonNegativeSafeIntegerSchema,
+  limit: z.number().int().min(1).max(MAX_PAGE_SIZE),
+  total: nonNegativeSafeIntegerSchema,
+  hasMore: z.boolean(),
+};
+const taskOutputSchema = z.object({ task: taskSchema }).strict();
+
+const READ_ANNOTATIONS: ToolAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
+
+type ToolSession = {
+  service: TaskService;
+  close: () => void;
+};
+
+export type TaskToolDependencies = {
+  openSession: () => ToolSession;
+  now: () => number;
+  viewerTimeZone: () => string;
+};
+
+type TaskDocument = z.infer<typeof taskSchema>;
+type ListTaskView = z.infer<typeof taskViewSchema>;
+
+function taskDocument(task: Task): TaskDocument {
+  return {
+    id: task.id,
+    title: task.title,
+    notes: task.notes,
+    priority: task.priority,
+    position: task.position,
+    placement: placementOf(task),
+    due: task.due,
+    createdAtMs: task.createdAtMs,
+    updatedAtMs: task.updatedAtMs,
+    completedAtMs: task.completedAtMs,
+    trashedAtMs: task.trashedAtMs,
+  };
+}
+
+function singleLine(value: string): string {
+  return value.replace(/\s+/gu, " ").trim();
+}
+
+function taskText(action: string, task: Task): string {
+  return `${action} “${singleLine(task.title)}” (${task.id}).`;
+}
+
+function successTaskResult(action: string, task: Task): CallToolResult {
+  return {
+    content: [{ type: "text", text: taskText(action, task) }],
+    structuredContent: { task: taskDocument(task) },
+  };
+}
+
+function failureResult(toolName: string, error: unknown): CallToolResult {
+  if (error instanceof DomainError) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: `${error.code}: ${error.message}` }],
+    };
+  }
+
+  console.error(`Worktodo MCP ${toolName} failed`, error);
+  return {
+    isError: true,
+    content: [{ type: "text", text: "INTERNAL_ERROR: Worktodo could not complete the operation" }],
+  };
+}
+
+function withSession(
+  toolName: string,
+  dependencies: TaskToolDependencies,
+  operation: (service: TaskService) => CallToolResult,
+): CallToolResult {
+  let session: ToolSession | undefined;
+  try {
+    session = dependencies.openSession();
+    return operation(session.service);
+  } catch (error) {
+    return failureResult(toolName, error);
+  } finally {
+    try {
+      session?.close();
+    } catch (error) {
+      console.error(`Worktodo MCP ${toolName} session close failed`, error);
+    }
+  }
+}
+
+function normalizedSearch(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase();
+}
+
+function tasksForView(
+  service: TaskService,
+  view: ListTaskView,
+  projectId: string | undefined,
+  sectionId: string | undefined,
+  evaluatedAtMs: number,
+  timeZone: string,
+): Task[] {
+  if (view === "project") {
+    if (!projectId || sectionId) {
+      throw new DomainError("INVALID_ARGUMENT", "The project view requires only projectId");
+    }
+    return service.listProjectTasks(projectId);
+  }
+  if (view === "section") {
+    if (!sectionId || projectId) {
+      throw new DomainError("INVALID_ARGUMENT", "The section view requires only sectionId");
+    }
+    return service.listSectionTasks(sectionId);
+  }
+  if (projectId || sectionId) {
+    throw new DomainError("INVALID_ARGUMENT", "projectId and sectionId are valid only for their matching views");
+  }
+
+  switch (view) {
+    case "all":
+      return service.listAllTasks(timeZone);
+    case "today":
+      return service.listToday(evaluatedAtMs, timeZone).tasks.map((entry) => entry.task);
+    case "upcoming":
+      return service.listUpcoming(evaluatedAtMs, timeZone).tasks.map((entry) => entry.task);
+    case "inbox":
+      return service.listInbox();
+    case "completed":
+      return service.listCompleted();
+    case "trash":
+      return service.listTrash();
+  }
+}
+
+function filterTasks(service: TaskService, tasks: Task[], query: string | undefined): Task[] {
+  const trimmed = query?.trim();
+  if (!trimmed) {
+    return tasks;
+  }
+
+  const search = normalizedSearch(trimmed);
+  const projectNames = new Map(service.listProjects().map((project) => [project.id, project.name]));
+  const sectionNames = new Map(service.listSections().map((section) => [section.id, section.name]));
+  return tasks.filter((task) => {
+    const values = [
+      task.title,
+      task.notes,
+      task.projectId === null ? "Inbox" : (projectNames.get(task.projectId) ?? ""),
+      task.sectionId === null ? "" : (sectionNames.get(task.sectionId) ?? ""),
+    ];
+    return values.some((value) => normalizedSearch(value).includes(search));
+  });
+}
+
+function taskListText(view: ListTaskView, tasks: Task[], total: number, offset: number): string {
+  if (total === 0) {
+    return `No tasks matched the ${view} view.`;
+  }
+  const header = `Returned ${tasks.length} of ${total} matching ${view} tasks from offset ${offset}.`;
+  return [header, ...tasks.map((task) => `- ${singleLine(task.title)} (${task.id})`)].join("\n");
+}
+
+function projectListText(
+  projects: Array<{ id: string; name: string; sections: Array<{ id: string; name: string }> }>,
+  total: number,
+  offset: number,
+): string {
+  if (total === 0) {
+    return "No projects matched.";
+  }
+  const lines = projects.flatMap((project) => [
+    `- ${singleLine(project.name)} (${project.id})`,
+    ...project.sections.map((section) => `  - ${singleLine(section.name)} (${section.id})`),
+  ]);
+  return [`Returned ${projects.length} of ${total} matching projects from offset ${offset}.`, ...lines].join("\n");
+}
+
+export function registerTaskTools(server: McpServer, dependencies: TaskToolDependencies): void {
+  server.registerTool(
+    "list_projects",
+    {
+      title: "List Worktodo Projects",
+      description: "List a bounded page of local Worktodo projects and their sections, including stable placement IDs.",
+      inputSchema: z.object(pageInputSchema).strict(),
+      outputSchema: z
+        .object({
+          query: z.string().nullable(),
+          ...pageSchema,
+          projects: z.array(projectSchema),
+        })
+        .strict(),
+      annotations: READ_ANNOTATIONS,
+    },
+    async ({ query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
+      withSession("list_projects", dependencies, (service) => {
+        const search = query?.trim();
+        const sections = service.listSections();
+        const projects = service.listProjects().filter((project) => {
+          if (!search) {
+            return true;
+          }
+          const normalized = normalizedSearch(search);
+          return (
+            normalizedSearch(project.name).includes(normalized) ||
+            sections.some(
+              (section) => section.projectId === project.id && normalizedSearch(section.name).includes(normalized),
+            )
+          );
+        });
+        const page = projects.slice(offset, offset + limit).map((project) => ({
+          ...project,
+          sections: sections.filter((section) => section.projectId === project.id),
+        }));
+        const output = {
+          query: search || null,
+          offset,
+          limit,
+          total: projects.length,
+          hasMore: offset + page.length < projects.length,
+          projects: page,
+        };
+        return {
+          content: [{ type: "text", text: projectListText(page, projects.length, offset) }],
+          structuredContent: output,
+        };
+      }),
+  );
+
+  server.registerTool(
+    "list_tasks",
+    {
+      title: "List Worktodo Tasks",
+      description:
+        "List and search a bounded page of local tasks by view. Use projectId only with view=project and sectionId only with view=section.",
+      inputSchema: z
+        .object({
+          view: taskViewSchema.optional(),
+          projectId: z.string().optional(),
+          sectionId: z.string().optional(),
+          timeZone: z.string().optional().describe("IANA timezone for all-day and Today/Upcoming evaluation"),
+          ...pageInputSchema,
+        })
+        .strict(),
+      outputSchema: z
+        .object({
+          view: taskViewSchema,
+          query: z.string().nullable(),
+          evaluatedAtMs: nonNegativeSafeIntegerSchema,
+          timeZone: z.string(),
+          ...pageSchema,
+          tasks: z.array(taskSchema),
+        })
+        .strict(),
+      annotations: READ_ANNOTATIONS,
+    },
+    async ({ view = "all", projectId, sectionId, timeZone, query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
+      withSession("list_tasks", dependencies, (service) => {
+        const evaluatedAtMs = dependencies.now();
+        const effectiveTimeZone = canonicalizeTimeZone(timeZone ?? dependencies.viewerTimeZone());
+        const search = query?.trim();
+        const matched = filterTasks(
+          service,
+          tasksForView(service, view, projectId, sectionId, evaluatedAtMs, effectiveTimeZone),
+          search,
+        );
+        const page = matched.slice(offset, offset + limit);
+        const output = {
+          view,
+          query: search || null,
+          evaluatedAtMs,
+          timeZone: effectiveTimeZone,
+          offset,
+          limit,
+          total: matched.length,
+          hasMore: offset + page.length < matched.length,
+          tasks: page.map(taskDocument),
+        };
+        return {
+          content: [{ type: "text", text: taskListText(view, page, matched.length, offset) }],
+          structuredContent: output,
+        };
+      }),
+  );
+
+  server.registerTool(
+    "get_task",
+    {
+      title: "Get Worktodo Task",
+      description: "Get one local Worktodo task by its stable ID, including completed or trashed tasks.",
+      inputSchema: z.object({ id: z.string() }).strict(),
+      outputSchema: taskOutputSchema,
+      annotations: READ_ANNOTATIONS,
+    },
+    async ({ id }) =>
+      withSession("get_task", dependencies, (service) => successTaskResult("Found", service.getTask(id))),
+  );
+
+  server.registerTool(
+    "create_task",
+    {
+      title: "Create Worktodo Task",
+      description:
+        "Create a local task. Placement defaults to Inbox; notes, priority, and due value use the shared Worktodo task model.",
+      inputSchema: z
+        .object({
+          title: z.string(),
+          notes: z.string().optional(),
+          priority: prioritySchema.optional(),
+          placement: placementSchema.optional(),
+          due: dueSchema.optional(),
+        })
+        .strict(),
+      outputSchema: taskOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ title, notes, priority, placement = { kind: "inbox" }, due }) =>
+      withSession("create_task", dependencies, (service) =>
+        successTaskResult("Created", service.createTask({ title, notes, priority, placement, due })),
+      ),
+  );
+
+  server.registerTool(
+    "update_task",
+    {
+      title: "Update Worktodo Task",
+      description:
+        "Replace selected content fields on one active local task. This tool does not move or change lifecycle state.",
+      inputSchema: z
+        .object({
+          id: z.string(),
+          title: z.string().optional(),
+          notes: z.string().optional(),
+          priority: prioritySchema.optional(),
+          due: dueSchema.optional(),
+        })
+        .strict(),
+      outputSchema: taskOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ id, title, notes, priority, due }) =>
+      withSession("update_task", dependencies, (service) => {
+        if (title === undefined && notes === undefined && priority === undefined && due === undefined) {
+          throw new DomainError("INVALID_ARGUMENT", "Provide at least one task field to update");
+        }
+        return successTaskResult("Updated", service.updateTask(id, { title, notes, priority, due }));
+      }),
+  );
+
+  server.registerTool(
+    "move_task",
+    {
+      title: "Move Worktodo Task",
+      description: "Move one active local task to Inbox, a project, or a project section using stable IDs.",
+      inputSchema: z.object({ id: z.string(), placement: placementSchema }).strict(),
+      outputSchema: taskOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ id, placement }) =>
+      withSession("move_task", dependencies, (service) => successTaskResult("Moved", service.moveTask(id, placement))),
+  );
+
+  const lifecycleTools = [
+    {
+      name: "complete_task",
+      title: "Complete Worktodo Task",
+      description: "Mark one active local task complete. Repeating the call is a no-op.",
+      action: "Completed",
+      run: (service: TaskService, id: string) => service.completeTask(id),
+    },
+    {
+      name: "reopen_task",
+      title: "Reopen Worktodo Task",
+      description: "Reopen one completed local task. Repeating the call is a no-op.",
+      action: "Reopened",
+      run: (service: TaskService, id: string) => service.reopenTask(id),
+    },
+    {
+      name: "trash_task",
+      title: "Trash Worktodo Task",
+      description: "Move one local task to recoverable Trash. This never permanently deletes task data.",
+      action: "Trashed",
+      run: (service: TaskService, id: string) => service.trashTask(id),
+    },
+    {
+      name: "restore_task",
+      title: "Restore Worktodo Task",
+      description: "Restore one local task from Trash while preserving its content, placement, and completion state.",
+      action: "Restored",
+      run: (service: TaskService, id: string) => service.restoreTask(id),
+    },
+  ] as const;
+
+  for (const tool of lifecycleTools) {
+    server.registerTool(
+      tool.name,
+      {
+        title: tool.title,
+        description: tool.description,
+        inputSchema: z.object({ id: z.string() }).strict(),
+        outputSchema: taskOutputSchema,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async ({ id }) =>
+        withSession(tool.name, dependencies, (service) => successTaskResult(tool.action, tool.run(service, id))),
+    );
+  }
+}

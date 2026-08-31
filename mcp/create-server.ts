@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { openProductionWorktodo } from "../src/shared/application/worktodo";
 import { getRuntimeInfo } from "../src/shared/runtime-info";
+import { registerTaskTools, type TaskToolDependencies } from "./task-tools";
 
 const pingOutputSchema = z.object({
   status: z.literal("ok"),
@@ -12,9 +14,17 @@ const pingOutputSchema = z.object({
   }),
 });
 
-export function createServer() {
+export type CreateServerOptions = Partial<TaskToolDependencies>;
+
+export function createServer(options: CreateServerOptions = {}) {
   const runtimeInfo = getRuntimeInfo();
-  const server = new McpServer({ name: "worktodo", version: runtimeInfo.version });
+  const server = new McpServer(
+    { name: "worktodo", version: runtimeInfo.version },
+    {
+      instructions:
+        "Use list_projects and list_tasks to resolve stable IDs before writing. Worktodo stores tasks locally. Write tools change the shared task database; trash is recoverable and permanent deletion is unavailable. Use allDay dates as YYYY-MM-DD and timed due values as an exact Unix-millisecond instant plus IANA timezone. External writes appear in Raycast on its next supported refresh.",
+    },
+  );
 
   server.registerTool(
     "ping",
@@ -39,6 +49,12 @@ export function createServer() {
       };
     },
   );
+
+  registerTaskTools(server, {
+    openSession: options.openSession ?? openProductionWorktodo,
+    now: options.now ?? Date.now,
+    viewerTimeZone: options.viewerTimeZone ?? (() => Intl.DateTimeFormat().resolvedOptions().timeZone),
+  });
 
   return server;
 }
