@@ -1,5 +1,6 @@
 import { Action, ActionPanel, Form, Icon, showToast, Toast, useNavigation } from "@raycast/api";
 import { useMemo, useState } from "react";
+import { moveTaskFromForm, saveTaskFromForm } from "./shared/application/task-workflows";
 import {
   DomainError,
   placementOf,
@@ -10,14 +11,9 @@ import {
   type Task,
 } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
-import {
-  formToCreateTask,
-  formToUpdateTask,
-  taskFormDefaults,
-  type TaskFormValues,
-} from "./shared/presentation/task-form";
-import { placementFromKey, placementKey } from "./shared/presentation/placement";
-import { dueDateFormValueForPreset, dueDatePresetForDue } from "./shared/presentation/due-date";
+import { taskFormDefaults } from "./shared/presentation/task-form";
+import { placementKey } from "./shared/presentation/placement";
+import { dueDatePresetForDue } from "./shared/presentation/due-date";
 import { DueDateFields, ProjectDropdown } from "./task-form-controls";
 
 type FormValues = {
@@ -70,27 +66,21 @@ export function TaskForm({
       return false;
     }
     try {
-      const selectedDue = dueDateFormValueForPreset(
-        dueDatePreset,
-        customDueDate?.getTime() ?? null,
-        referenceInstantMs,
-        viewerTimeZone,
+      saveTaskFromForm(
+        service,
+        task,
+        {
+          title: values.title,
+          notes: values.notes,
+          priority,
+          dueDatePreset,
+          customDueAtMs: customDueDate?.getTime() ?? null,
+          referenceInstantMs,
+          viewerTimeZone,
+        },
+        { selectedPlacement, projects, sections },
+        onSaved,
       );
-      const mapped: TaskFormValues = {
-        title: values.title,
-        notes: values.notes,
-        priority,
-        ...(task?.due.kind === "timed" && dueDatePreset === "custom" && customDueDate?.getTime() === defaults.dueAtMs
-          ? { dueKind: "timed", dueAtMs: task.due.instantMs }
-          : selectedDue),
-      };
-      if (task) {
-        service.updateTask(task.id, formToUpdateTask(mapped, viewerTimeZone));
-      } else {
-        const placement = placementFromKey(selectedPlacement, projects, sections);
-        service.createTask(formToCreateTask(mapped, viewerTimeZone, placement));
-      }
-      onSaved();
       await showToast(Toast.Style.Success, task ? "Task updated" : "Task created");
       pop();
       return true;
@@ -181,8 +171,7 @@ export function MoveTaskForm({
   async function submit(): Promise<boolean> {
     setFormError(undefined);
     try {
-      service.moveTask(task.id, placementFromKey(selectedPlacement, projects, sections));
-      onSaved();
+      moveTaskFromForm(service, task.id, { selectedPlacement, projects, sections }, onSaved);
       await showToast(Toast.Style.Success, "Task moved");
       pop();
       return true;

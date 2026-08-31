@@ -1,11 +1,10 @@
 import { Action, ActionPanel, closeMainWindow, Form, Icon, PopToRootType, showToast, Toast } from "@raycast/api";
 import { useState } from "react";
 import { requestMenuBarRefresh } from "./raycast-commands";
+import { createQuickTask } from "./shared/application/task-workflows";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import { DomainError, type Project, type Section } from "./shared/domain/model";
-import { dueDateFormValueForPreset, type DueDatePreset } from "./shared/presentation/due-date";
-import { placementFromKey } from "./shared/presentation/placement";
-import { formToCreateTask } from "./shared/presentation/task-form";
+import type { DueDatePreset } from "./shared/presentation/due-date";
 import { DueDateFields, ProjectDropdown } from "./task-form-controls";
 
 type QuickAddFormValues = {
@@ -60,27 +59,19 @@ export default function QuickAdd() {
     }
 
     setIsSubmitting(true);
-    let session: WorktodoSession | undefined;
     try {
-      const placement = placementFromKey(selectedPlacement, state.projects, state.sections);
-      const due = dueDateFormValueForPreset(
-        dueDatePreset,
-        customDueDate?.getTime() ?? null,
-        referenceInstantMs,
-        viewerTimeZone,
-      );
-      session = openProductionWorktodo();
-      session.service.createTask(
-        formToCreateTask(
-          {
-            title: values.title,
-            notes: values.notes,
-            priority: "none",
-            ...due,
-          },
+      createQuickTask(
+        openProductionWorktodo,
+        {
+          title: values.title,
+          notes: values.notes,
+          dueDatePreset,
+          customDueAtMs: customDueDate?.getTime() ?? null,
+          referenceInstantMs,
           viewerTimeZone,
-          placement,
-        ),
+        },
+        { selectedPlacement, projects: state.projects, sections: state.sections },
+        requestMenuBarRefresh,
       );
     } catch (error) {
       setIsSubmitting(false);
@@ -89,11 +80,8 @@ export default function QuickAdd() {
       }
       await showToast(Toast.Style.Failure, "Unable to add task", messageFrom(error));
       return false;
-    } finally {
-      session?.close();
     }
 
-    requestMenuBarRefresh();
     await showToast(Toast.Style.Success, "Task added");
     await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     return true;
