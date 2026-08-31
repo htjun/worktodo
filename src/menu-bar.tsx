@@ -1,7 +1,7 @@
 import { Cache, Color, Icon, Keyboard, LaunchType, MenuBarExtra, Toast, type LaunchProps } from "@raycast/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { showMenuBarFeedback } from "./menu-bar-feedback";
-import { launchMenuBarAction, launchMyTasks } from "./raycast-commands";
+import { launchMyTasks } from "./raycast-commands";
 import {
   completeMenuBarTask,
   hideMenuBar as persistMenuBarHidden,
@@ -16,13 +16,7 @@ import {
 } from "./shared/application/timed-task-history";
 import { openProductionWorktodo } from "./shared/application/worktodo";
 import type { Priority, Task } from "./shared/domain/model";
-import {
-  buildMenuBarTaskHistoryItem,
-  menuBarTaskTitle,
-  type MenuBarLaunchAction,
-  type MenuBarModel,
-  resolveMenuBarLaunchAction,
-} from "./shared/presentation/menu-bar";
+import { buildMenuBarTaskHistoryItem, menuBarTaskTitle, type MenuBarModel } from "./shared/presentation/menu-bar";
 import { timedTaskHistoryPresentation } from "./shared/presentation/task-history";
 import type { MyTasksLaunchContext } from "./shared/presentation/task-launch";
 
@@ -57,7 +51,7 @@ function menuIcon(source: Icon) {
   return { source, tintColor: Color.SecondaryText };
 }
 
-export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaunchAction }>) {
+export default function Command(props: LaunchProps) {
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [hidden, setHidden] = useState(() =>
     initialMenuBarHidden(menuBarVisibilityCache, props.launchType === LaunchType.UserInitiated),
@@ -69,7 +63,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
     taskHistory.current = new TimedTaskHistoryController(setTaskHistoryState);
   }
   const performTaskHistoryRef = useRef<(state: TimedTaskHistoryState) => Promise<void>>(async () => undefined);
-  const didExecuteLaunchAction = useRef(false);
 
   const showFeedback = useCallback(
     (options: Toast.Options) => showMenuBarFeedback(props.launchType, options),
@@ -145,7 +138,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
   );
   performTaskHistoryRef.current = performTaskHistory;
 
-  const completeTaskLocally = useCallback(
+  const completeTask = useCallback(
     async (taskId: string) => {
       let completed: Task;
       try {
@@ -173,7 +166,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
     [refresh, showFeedback, showHistoryToast],
   );
 
-  const hideMenuBarLocally = useCallback(async () => {
+  const hideMenuBar = useCallback(async () => {
     try {
       persistMenuBarHidden(menuBarVisibilityCache);
     } catch (error) {
@@ -186,48 +179,13 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
     }
 
     taskHistory.current?.clear();
-    setHidden(true);
     await showFeedback({
       style: Toast.Style.Success,
       title: "Worktodo hidden from menu bar",
       message: "Run Worktodo Menu Bar to restore it.",
     });
+    setHidden(true);
   }, [showFeedback]);
-
-  useEffect(() => {
-    const action = resolveMenuBarLaunchAction(
-      props.launchContext,
-      props.launchType === LaunchType.UserInitiated,
-      didExecuteLaunchAction.current,
-    );
-    if (!action) {
-      return;
-    }
-
-    didExecuteLaunchAction.current = true;
-    if (action.action === "complete-task") {
-      void completeTaskLocally(action.taskId);
-    } else {
-      void hideMenuBarLocally();
-    }
-  }, [completeTaskLocally, hideMenuBarLocally, props.launchContext, props.launchType]);
-
-  async function completeTask(taskId: string) {
-    if (props.launchType === LaunchType.Background) {
-      try {
-        await launchMenuBarAction({ action: "complete-task", taskId });
-      } catch (error) {
-        await showFeedback({
-          style: Toast.Style.Failure,
-          title: "Unable to complete task",
-          message: messageFrom(error),
-        });
-      }
-      return;
-    }
-
-    await completeTaskLocally(taskId);
-  }
 
   async function openMyTasks(context: MyTasksLaunchContext) {
     try {
@@ -239,23 +197,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
         message: messageFrom(error),
       });
     }
-  }
-
-  async function hideMenuBar() {
-    if (props.launchType === LaunchType.Background) {
-      try {
-        await launchMenuBarAction({ action: "hide-menu-bar" });
-      } catch (error) {
-        await showFeedback({
-          style: Toast.Style.Failure,
-          title: "Unable to hide Worktodo",
-          message: messageFrom(error),
-        });
-      }
-      return;
-    }
-
-    await hideMenuBarLocally();
   }
 
   if (hidden) {

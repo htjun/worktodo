@@ -28,8 +28,6 @@ export type MenuBarVisibility = {
   clearStoredHidden: boolean;
 };
 
-export type MenuBarLaunchAction = { action: "complete-task"; taskId: string } | { action: "hide-menu-bar" };
-
 export type MenuBarTaskHistoryItem = {
   direction: TimedTaskHistoryState["direction"];
   title: string;
@@ -49,24 +47,6 @@ export function resolveMenuBarVisibility(storedHidden: boolean, userInitiated: b
     hidden: storedHidden && !userInitiated,
     clearStoredHidden: storedHidden && userInitiated,
   };
-}
-
-export function resolveMenuBarLaunchAction(
-  value: unknown,
-  userInitiated: boolean,
-  alreadyExecuted: boolean,
-): MenuBarLaunchAction | null {
-  if (!userInitiated || alreadyExecuted || typeof value !== "object" || value === null) {
-    return null;
-  }
-
-  const context = value as Record<string, unknown>;
-  if (context.action === "complete-task") {
-    return typeof context.taskId === "string" && context.taskId.trim().length > 0
-      ? { action: "complete-task", taskId: context.taskId }
-      : null;
-  }
-  return context.action === "hide-menu-bar" ? { action: "hide-menu-bar" } : null;
 }
 
 function menuBarTask(task: Task, projects: ReadonlyMap<string, Project>, view: MenuBarTask["view"]): MenuBarTask {

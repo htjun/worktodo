@@ -8,11 +8,11 @@ This note records local evidence used to choose the initial repository shape. It
 
 **Package-manager update (2026-08-30):** The initial validation below used npm. The repository now uses pnpm 11.24.0 via Corepack, commits `pnpm-lock.yaml`, and remains a single root package without workspace packages.
 
-**Menu-bar feedback update (2026-08-31):** Raycast 2.1.2 retains the background launch type on action callbacks registered by a background-rendered menu. Its installed backend rejects `showToast` for those callbacks with `Toast API is not available when command is launched in background`. In a local reproduction, the task mutation committed before the success Toast was rejected, and a second Toast from the catch block escaped as a menu callback error. Worktodo now relays Toast-bearing Complete and Hide actions into a user-initiated menu command, uses HUD feedback for any remaining background path, and keeps feedback failures outside mutation error handling.
+**Menu-bar feedback update (2026-09-01):** Raycast 2.1.2 retains the background launch type on action callbacks registered by a background-rendered menu. Its installed backend rejects `showToast` for those callbacks with `Toast API is not available when command is launched in background`. An initial workaround relaunched the active menu command as user-initiated so it could show a Toast. That self-relaunch unloaded the worker while the original menu callback was still executing, producing `Worker unloaded` and replacing the menu item with an error icon even though the task mutation had committed six milliseconds earlier. Worktodo now executes Complete and Hide in the active callback, uses HUD feedback for background launches, and reserves Toast feedback for user-initiated launches.
 
 ## Confirmed locally
 
-- Installed Raycast host: `2.0.5.0`, bundle ID `com.raycast.macos`.
+- Installed Raycast host: `2.1.2.0`, bundle ID `com.raycast.macos`.
 - Current npm package: `@raycast/api 2.0.5`, requiring Node `>=22.22.2` and React 19.
 - Raycast's bundled Create Extension template still declares:
   - `@raycast/api ^1.104.20`

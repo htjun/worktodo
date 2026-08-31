@@ -18,7 +18,7 @@ vi.mock("@raycast/api", () => ({
 
 import { LaunchType } from "@raycast/api";
 import { showMenuBarFeedback } from "../src/menu-bar-feedback";
-import { launchMenuBarAction, launchMyTasks, requestMenuBarRefresh } from "../src/raycast-commands";
+import { launchMyTasks, requestMenuBarRefresh } from "../src/raycast-commands";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -32,18 +32,13 @@ afterEach(() => {
 });
 
 describe("Raycast command launches", () => {
-  it("keeps refreshes background-launched and relays menu actions as user-initiated", async () => {
+  it("keeps menu bar refreshes background-launched", () => {
     requestMenuBarRefresh();
-    await launchMenuBarAction({ action: "complete-task", taskId: "task-1" });
 
-    expect(raycast.launchCommand).toHaveBeenNthCalledWith(1, {
+    expect(raycast.launchCommand).toHaveBeenCalledOnce();
+    expect(raycast.launchCommand).toHaveBeenCalledWith({
       name: "menu-bar",
       type: LaunchType.Background,
-    });
-    expect(raycast.launchCommand).toHaveBeenNthCalledWith(2, {
-      name: "menu-bar",
-      type: LaunchType.UserInitiated,
-      context: { action: "complete-task", taskId: "task-1" },
     });
   });
 
