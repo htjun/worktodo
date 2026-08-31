@@ -13,6 +13,7 @@ import {
 } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { launchMyTasks, requestMenuBarRefresh } from "./raycast-commands";
+import { replaceBackupIfConfirmed } from "./shared/application/backup-workflows";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import type { PortabilityService } from "./shared/portability/portability-service";
 import type { PreparedImport } from "./shared/portability/import-preview";
@@ -123,13 +124,11 @@ function ImportPreviewView({ portability, prepared }: { portability: Portability
       message: prepared.preview.warning,
       primaryAction: { title: "Replace Worktodo Data", style: Alert.ActionStyle.Destructive },
     });
-    if (!confirmed) {
-      return;
-    }
-
     try {
-      const result = portability.replace(prepared);
-      requestMenuBarRefresh();
+      const result = replaceBackupIfConfirmed(portability, prepared, confirmed, requestMenuBarRefresh);
+      if (result === null) {
+        return;
+      }
       await showToast(Toast.Style.Success, "Worktodo data replaced", result.recoveryPath);
       push(<ImportResult recoveryPath={result.recoveryPath} />);
     } catch (error) {

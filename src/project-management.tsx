@@ -12,6 +12,14 @@ import {
   useNavigation,
 } from "@raycast/api";
 import { useCallback, useEffect, useState } from "react";
+import {
+  createProject,
+  createSection,
+  removeProject,
+  removeSection,
+  renameProject,
+  renameSection,
+} from "./shared/application/project-workflows";
 import type { Project, Section } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
 
@@ -32,7 +40,6 @@ function NameForm({
   successTitle,
   initialName = "",
   save,
-  onSaved,
 }: {
   navigationTitle: string;
   fieldTitle: string;
@@ -40,7 +47,6 @@ function NameForm({
   successTitle: string;
   initialName?: string;
   save: (name: string) => void;
-  onSaved: () => void;
 }) {
   const { pop } = useNavigation();
   const [nameError, setNameError] = useState<string>();
@@ -53,7 +59,6 @@ function NameForm({
     }
     try {
       save(values.name);
-      onSaved();
       await showToast(Toast.Style.Success, successTitle);
       pop();
       return true;
@@ -118,8 +123,7 @@ function SectionsView({
       fieldTitle="Section Name"
       submitTitle="Create Section"
       successTitle="Section created"
-      save={(name) => service.createSection(project.id, name)}
-      onSaved={changed}
+      save={(name) => createSection(service, project.id, name, changed)}
     />
   );
 
@@ -133,8 +137,7 @@ function SectionsView({
       return;
     }
     try {
-      service.removeSection(section.id);
-      changed();
+      removeSection(service, section.id, changed);
       await showToast(Toast.Style.Success, "Section removed", `Its tasks moved to ${project.name}.`);
     } catch (error) {
       await showToast(Toast.Style.Failure, "Unable to remove section", messageFrom(error));
@@ -179,8 +182,7 @@ function SectionsView({
                       submitTitle="Save Section"
                       successTitle="Section renamed"
                       initialName={section.name}
-                      save={(name) => service.renameSection(section.id, name)}
-                      onSaved={changed}
+                      save={(name) => renameSection(service, section.id, name, changed)}
                     />
                   }
                 />
@@ -233,8 +235,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
       fieldTitle="Project Name"
       submitTitle="Create Project"
       successTitle="Project created"
-      save={(name) => service.createProject(name)}
-      onSaved={changed}
+      save={(name) => createProject(service, name, changed)}
     />
   );
 
@@ -248,8 +249,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
       return;
     }
     try {
-      service.removeProject(project.id);
-      changed();
+      removeProject(service, project.id, changed);
       await showToast(Toast.Style.Success, "Project removed", "Its tasks moved to Inbox.");
     } catch (error) {
       await showToast(Toast.Style.Failure, "Unable to remove project", messageFrom(error));
@@ -298,8 +298,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
                         submitTitle="Save Project"
                         successTitle="Project renamed"
                         initialName={project.name}
-                        save={(name) => service.renameProject(project.id, name)}
-                        onSaved={changed}
+                        save={(name) => renameProject(service, project.id, name, changed)}
                       />
                     }
                   />

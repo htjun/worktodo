@@ -158,6 +158,33 @@ describe("shared domain operations", () => {
     }
   });
 
+  it("renames projects and sections with normalized values and monotonic no-ops", async () => {
+    const context = await createContext();
+    const { service, db } = context;
+    try {
+      const project = service.createProject("Work");
+      const section = service.createSection(project.id, "Next");
+      context.setNow(500);
+
+      const renamedProject = service.renameProject(project.id, "  Personal  ");
+      const renamedSection = service.renameSection(section.id, "  Later  ");
+      expect(renamedProject).toMatchObject({ name: "Personal", updatedAtMs: 1_001 });
+      expect(renamedSection).toMatchObject({ name: "Later", updatedAtMs: 1_001 });
+
+      context.setNow(9_000);
+      expect(service.renameProject(project.id, " Personal ")).toEqual(renamedProject);
+      expect(service.renameSection(section.id, " Later ")).toEqual(renamedSection);
+      expectDomainError(() => service.renameProject(project.id, " "), "INVALID_ARGUMENT");
+      expectDomainError(() => service.renameSection(section.id, " "), "INVALID_ARGUMENT");
+      expectDomainError(() => service.renameProject(id(999), "Missing"), "NOT_FOUND");
+      expectDomainError(() => service.renameSection(id(999), "Missing"), "NOT_FOUND");
+      expect(service.listProjects()).toEqual([renamedProject]);
+      expect(service.listSections()).toEqual([renamedSection]);
+    } finally {
+      db.close();
+    }
+  });
+
   it("enforces lifecycle transitions, monotonic timestamps, and idempotent no-ops", async () => {
     const context = await createContext();
     const { service, db } = context;

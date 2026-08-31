@@ -3,7 +3,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { showMenuBarFeedback } from "./menu-bar-feedback";
 import { launchMenuBarAction, launchMyTasks } from "./raycast-commands";
 import {
-  performTimedTaskHistoryOperation,
+  completeMenuBarTask,
+  hideMenuBar as persistMenuBarHidden,
+  initialMenuBarHidden,
+  loadMenuBarModel,
+  performMenuBarTaskHistory,
+} from "./shared/application/menu-bar-workflows";
+import {
   TimedTaskHistoryController,
   type TimedTaskHistoryDirection,
   type TimedTaskHistoryState,
@@ -11,19 +17,16 @@ import {
 import { openProductionWorktodo } from "./shared/application/worktodo";
 import type { Priority, Task } from "./shared/domain/model";
 import {
-  buildMenuBarModel,
   buildMenuBarTaskHistoryItem,
   menuBarTaskTitle,
   type MenuBarLaunchAction,
   type MenuBarModel,
   resolveMenuBarLaunchAction,
-  resolveMenuBarVisibility,
 } from "./shared/presentation/menu-bar";
 import { timedTaskHistoryPresentation } from "./shared/presentation/task-history";
 import type { MyTasksLaunchContext } from "./shared/presentation/task-launch";
 
 const EMPTY_MODEL: MenuBarModel = { count: 0, title: undefined, sections: [] };
-const MENU_BAR_HIDDEN_KEY = "hidden";
 const menuBarVisibilityCache = new Cache({ namespace: "menu-bar-visibility" });
 const TASK_HISTORY_SHORTCUTS: Record<TimedTaskHistoryDirection, Keyboard.Shortcut> = {
   undo: { modifiers: ["cmd"], key: "z" },
@@ -46,20 +49,6 @@ function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "An unexpected error occurred";
 }
 
-function loadMenuBarModel(viewerTimeZone: string): MenuBarModel {
-  const session = openProductionWorktodo();
-  try {
-    const evaluationInstantMs = Date.now();
-    return buildMenuBarModel(
-      session.service.listToday(evaluationInstantMs, viewerTimeZone),
-      session.service.listUpcoming(evaluationInstantMs, viewerTimeZone),
-      session.service.listProjects(),
-    );
-  } finally {
-    session.close();
-  }
-}
-
 function priorityIcon(priority: Priority) {
   return { source: Icon.Circle, tintColor: PRIORITY_TINT[priority] };
 }
@@ -68,17 +57,11 @@ function menuIcon(source: Icon) {
   return { source, tintColor: Color.SecondaryText };
 }
 
-function initialMenuBarHidden(userInitiated: boolean): boolean {
-  const visibility = resolveMenuBarVisibility(menuBarVisibilityCache.has(MENU_BAR_HIDDEN_KEY), userInitiated);
-  if (visibility.clearStoredHidden) {
-    menuBarVisibilityCache.remove(MENU_BAR_HIDDEN_KEY);
-  }
-  return visibility.hidden;
-}
-
 export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaunchAction }>) {
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const [hidden, setHidden] = useState(() => initialMenuBarHidden(props.launchType === LaunchType.UserInitiated));
+  const [hidden, setHidden] = useState(() =>
+    initialMenuBarHidden(menuBarVisibilityCache, props.launchType === LaunchType.UserInitiated),
+  );
   const [state, setState] = useState<MenuState>({ isLoading: true, error: null, model: EMPTY_MODEL });
   const [taskHistoryState, setTaskHistoryState] = useState<TimedTaskHistoryState | null>(null);
   const taskHistory = useRef<TimedTaskHistoryController | null>(null);
@@ -96,7 +79,11 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
   const refresh = useCallback(() => {
     setState((current) => ({ ...current, isLoading: true, error: null }));
     try {
-      setState({ isLoading: false, error: null, model: loadMenuBarModel(viewerTimeZone) });
+      setState({
+        isLoading: false,
+        error: null,
+        model: loadMenuBarModel(openProductionWorktodo, viewerTimeZone),
+      });
     } catch (error) {
       setState({ isLoading: false, error: messageFrom(error), model: EMPTY_MODEL });
     }
@@ -133,17 +120,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
       }
       try {
         const result = taskHistory.current.perform(expected, () => {
-          const session = openProductionWorktodo();
-          try {
-            performTimedTaskHistoryOperation(expected, {
-              complete: () => session.service.completeTask(expected.taskId),
-              reopen: () => session.service.reopenTask(expected.taskId),
-              trash: () => session.service.trashTask(expected.taskId),
-              restore: () => session.service.restoreTask(expected.taskId),
-            });
-          } finally {
-            session.close();
-          }
+          performMenuBarTaskHistory(openProductionWorktodo, expected);
         });
         if (result.status === "unavailable") {
           await showFeedback({
@@ -172,12 +149,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
     async (taskId: string) => {
       let completed: Task;
       try {
-        const session = openProductionWorktodo();
-        try {
-          completed = session.service.completeTask(taskId);
-        } finally {
-          session.close();
-        }
+        completed = completeMenuBarTask(openProductionWorktodo, taskId);
       } catch (error) {
         await showFeedback({
           style: Toast.Style.Failure,
@@ -203,7 +175,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MenuBarLaun
 
   const hideMenuBarLocally = useCallback(async () => {
     try {
-      menuBarVisibilityCache.set(MENU_BAR_HIDDEN_KEY, "true");
+      persistMenuBarHidden(menuBarVisibilityCache);
     } catch (error) {
       await showFeedback({
         style: Toast.Style.Failure,
