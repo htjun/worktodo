@@ -43,7 +43,7 @@ export type TaskDetailPresentation = {
 export type TaskListAccessory = { kind: "text"; text: string } | { kind: "tag"; text: string };
 
 type DuePresentation = {
-  title: "Due Date" | "Overdue" | "Today";
+  title: "Due date" | "Overdue" | "Today";
   text: string;
 };
 
@@ -63,9 +63,9 @@ function instantLabel(instantMs: number, viewerTimeZone: string): string {
 }
 
 function duePresentation(entry: TaskListEntry, viewerTimeZone: string): DuePresentation {
-  const title = entry.todayStatus === "overdue" ? "Overdue" : entry.todayStatus === "dueToday" ? "Today" : "Due Date";
+  const title = entry.todayStatus === "overdue" ? "Overdue" : entry.todayStatus === "dueToday" ? "Today" : "Due date";
   if (entry.task.due.kind === "none") {
-    return { title: "Due Date", text: "None" };
+    return { title: "Due date", text: "None" };
   }
   if (entry.task.due.kind === "allDay") {
     return { title, text: entry.task.due.date };

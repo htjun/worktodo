@@ -1,10 +1,10 @@
 import type { TaskLifecycleHistoryState, TaskLifecycleMutationKind } from "../application/task-lifecycle-interaction";
 
 export type TaskLifecycleMutationPresentation = {
-  title: "Complete Task" | "Reopen Task" | "Move to Trash" | "Restore Task";
-  successTitle: "Task completed" | "Task reopened" | "Task moved to Trash" | "Task restored";
+  title: "Complete task" | "Reopen task" | "Move to trash" | "Restore task";
+  successTitle: "Task completed" | "Task reopened" | "Task moved to trash" | "Task restored";
   failureTitle:
-    "Unable to complete task" | "Unable to reopen task" | "Unable to move task to Trash" | "Unable to restore task";
+    "Unable to complete task" | "Unable to reopen task" | "Unable to move task to trash" | "Unable to restore task";
 };
 
 export function taskLifecycleMutationPresentation(
@@ -12,25 +12,25 @@ export function taskLifecycleMutationPresentation(
 ): TaskLifecycleMutationPresentation {
   switch (operation) {
     case "complete":
-      return { title: "Complete Task", successTitle: "Task completed", failureTitle: "Unable to complete task" };
+      return { title: "Complete task", successTitle: "Task completed", failureTitle: "Unable to complete task" };
     case "reopen":
-      return { title: "Reopen Task", successTitle: "Task reopened", failureTitle: "Unable to reopen task" };
+      return { title: "Reopen task", successTitle: "Task reopened", failureTitle: "Unable to reopen task" };
     case "trash":
       return {
-        title: "Move to Trash",
-        successTitle: "Task moved to Trash",
-        failureTitle: "Unable to move task to Trash",
+        title: "Move to trash",
+        successTitle: "Task moved to trash",
+        failureTitle: "Unable to move task to trash",
       };
     case "restore":
-      return { title: "Restore Task", successTitle: "Task restored", failureTitle: "Unable to restore task" };
+      return { title: "Restore task", successTitle: "Task restored", failureTitle: "Unable to restore task" };
   }
 }
 
 export function taskLifecycleHistoryTitle(
   state: TaskLifecycleHistoryState,
-): "Undo Completion" | "Redo Completion" | "Undo Move to Trash" | "Redo Move to Trash" {
+): "Undo completion" | "Redo completion" | "Undo move to trash" | "Redo move to trash" {
   if (state.kind === "complete") {
-    return state.direction === "undo" ? "Undo Completion" : "Redo Completion";
+    return state.direction === "undo" ? "Undo completion" : "Redo completion";
   }
-  return state.direction === "undo" ? "Undo Move to Trash" : "Redo Move to Trash";
+  return state.direction === "undo" ? "Undo move to trash" : "Redo move to trash";
 }

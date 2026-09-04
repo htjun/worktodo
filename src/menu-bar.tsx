@@ -188,7 +188,7 @@ export default function Command(props: LaunchProps) {
     await showFeedback({
       style: Toast.Style.Success,
       title: "Worktodo hidden from the menu bar",
-      message: "Run Worktodo Menu Bar to show it again.",
+      message: "Run Worktodo menu bar to show it again.",
     });
     setHidden(true);
   }, [showFeedback]);
@@ -223,7 +223,7 @@ export default function Command(props: LaunchProps) {
           <MenuBarExtra.Item title="Unable to load tasks" subtitle={state.error} icon={menuIcon(Icon.Warning)} />
         </MenuBarExtra.Section>
       ) : state.model.sections.length === 0 ? (
-        <MenuBarExtra.Section title="This Week">
+        <MenuBarExtra.Section title="This week">
           <MenuBarExtra.Item title="Nothing due this week" icon={menuIcon(Icon.CheckCircle)} />
         </MenuBarExtra.Section>
       ) : (
@@ -247,7 +247,7 @@ export default function Command(props: LaunchProps) {
                   onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id, editTask: true })}
                 />
                 <MenuBarExtra.Item
-                  title="Move to Trash"
+                  title="Move to trash"
                   icon={menuIcon(Icon.Trash)}
                   onAction={() => performLifecycleMutation("trash", task.id)}
                 />
@@ -258,7 +258,7 @@ export default function Command(props: LaunchProps) {
       )}
 
       {historyItem && historyAction && taskHistoryState ? (
-        <MenuBarExtra.Section title="Recent Action">
+        <MenuBarExtra.Section title="Recent action">
           <MenuBarExtra.Item
             title={historyItem.title}
             subtitle={historyItem.subtitle}
@@ -271,19 +271,19 @@ export default function Command(props: LaunchProps) {
 
       <MenuBarExtra.Section>
         <MenuBarExtra.Item
-          title="New Task"
+          title="New task"
           icon={menuIcon(Icon.Plus)}
           onAction={() => openMyTasks({ view: "all", createTask: true })}
         />
         <MenuBarExtra.Item
-          title="Open All Tasks"
+          title="Open all tasks"
           icon={menuIcon(Icon.AppWindowList)}
           onAction={() => openMyTasks({ view: "all" })}
         />
       </MenuBarExtra.Section>
 
       <MenuBarExtra.Section>
-        <MenuBarExtra.Item title="Hide from Menu Bar" icon={menuIcon(Icon.EyeDisabled)} onAction={hideMenuBar} />
+        <MenuBarExtra.Item title="Hide from menu bar" icon={menuIcon(Icon.EyeDisabled)} onAction={hideMenuBar} />
       </MenuBarExtra.Section>
     </MenuBarExtra>
   );

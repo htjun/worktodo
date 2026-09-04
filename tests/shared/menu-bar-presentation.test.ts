@@ -114,7 +114,7 @@ describe("menu-bar presentation", () => {
         },
         {
           key: "laterThisWeek",
-          title: "Later This Week",
+          title: "Later this week",
           tasks: [
             {
               id: "5",
@@ -228,7 +228,7 @@ describe("menu-bar presentation", () => {
     ).toBe(`${family.repeat(71)}…`);
   });
 
-  it("accepts only supported All Tasks launch context values", () => {
+  it("accepts only supported All tasks launch context values", () => {
     expect(parseMyTasksLaunchContext({ view: "all" })).toEqual({
       view: "all",
       selectedTaskId: undefined,
@@ -293,7 +293,7 @@ describe("menu-bar presentation", () => {
         taskId: "task-1",
         taskTitle: "Submit report",
       }),
-    ).toEqual({ direction: "undo", title: "Undo Completion", subtitle: "Submit report" });
+    ).toEqual({ direction: "undo", title: "Undo completion", subtitle: "Submit report" });
     expect(
       buildMenuBarTaskHistoryItem({
         direction: "redo",
@@ -301,7 +301,7 @@ describe("menu-bar presentation", () => {
         taskId: "task-1",
         taskTitle: "Submit report",
       }),
-    ).toEqual({ direction: "redo", title: "Redo Completion", subtitle: "Submit report" });
+    ).toEqual({ direction: "redo", title: "Redo completion", subtitle: "Submit report" });
   });
 
   it("truncates a long Undo or Redo task title within the menu label budget", () => {
@@ -314,7 +314,7 @@ describe("menu-bar presentation", () => {
       }),
     ).toEqual({
       direction: "undo",
-      title: "Undo Move to Trash",
+      title: "Undo move to trash",
       subtitle: `${"a".repeat(52)}…`,
     });
   });

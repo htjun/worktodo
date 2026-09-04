@@ -43,7 +43,7 @@ afterEach(async () => {
 });
 
 describe("main task workflows", () => {
-  it("runs Quick Add through completion, undo, redo, trash, and restore against one real store", async () => {
+  it("runs Quick add through completion, undo, redo, trash, and restore against one real store", async () => {
     vi.useFakeTimers();
     const directory = await mkdtemp(join(tmpdir(), "worktodo-task-workflow-test-"));
     temporaryDirectories.push(directory);

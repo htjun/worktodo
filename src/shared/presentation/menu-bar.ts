@@ -19,7 +19,7 @@ export type MenuBarTask = {
 
 export type MenuBarTaskSection = {
   key: "overdue" | "today" | "tomorrow" | "laterThisWeek";
-  title: "Overdue" | "Today" | "Tomorrow" | "Later This Week";
+  title: "Overdue" | "Today" | "Tomorrow" | "Later this week";
   tasks: MenuBarTask[];
 };
 
@@ -123,7 +123,7 @@ export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: read
     sections.push({ key: "tomorrow", title: "Tomorrow", tasks: tomorrow });
   }
   if (laterThisWeek.length > 0) {
-    sections.push({ key: "laterThisWeek", title: "Later This Week", tasks: laterThisWeek });
+    sections.push({ key: "laterThisWeek", title: "Later this week", tasks: laterThisWeek });
   }
 
   const count = overdue.length + today.length;

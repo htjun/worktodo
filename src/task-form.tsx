@@ -94,10 +94,10 @@ export function TaskForm({
 
   return (
     <Form
-      navigationTitle={task ? "Edit Task" : "New Task"}
+      navigationTitle={task ? "Edit task" : "New task"}
       actions={
         <ActionPanel>
-          <Action.SubmitForm title={task ? "Save Task" : "Create Task"} icon={Icon.Check} onSubmit={submit} />
+          <Action.SubmitForm title={task ? "Save task" : "Create task"} icon={Icon.Check} onSubmit={submit} />
         </ActionPanel>
       }
     >
@@ -198,10 +198,10 @@ export function MoveTaskForm({
 
   return (
     <Form
-      navigationTitle="Move Task"
+      navigationTitle="Move task"
       actions={
         <ActionPanel>
-          <Action.SubmitForm title="Move Task" icon={Icon.ArrowRight} onSubmit={submit} />
+          <Action.SubmitForm title="Move task" icon={Icon.ArrowRight} onSubmit={submit} />
         </ActionPanel>
       }
     >
@@ -259,10 +259,10 @@ export function EditLabelsForm({
 
   return (
     <Form
-      navigationTitle="Edit Labels"
+      navigationTitle="Edit labels"
       actions={
         <ActionPanel>
-          <Action.SubmitForm title="Save Labels" icon={Icon.Tag} onSubmit={submit} />
+          <Action.SubmitForm title="Save labels" icon={Icon.Tag} onSubmit={submit} />
         </ActionPanel>
       }
     >

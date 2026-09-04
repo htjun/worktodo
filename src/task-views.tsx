@@ -53,7 +53,7 @@ export function TaskViewDropdown({
 }) {
   return (
     <List.Dropdown
-      tooltip="Task View"
+      tooltip="Task view"
       value={taskViewKey(view)}
       onChange={(value) => onChange(taskViewFromKey(value, projects, labels))}
     >

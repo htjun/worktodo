@@ -12,7 +12,7 @@ export type TaskViewContent = {
 
 const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project" | "label">, TaskViewContent> = {
   all: {
-    title: "All Tasks",
+    title: "All tasks",
     searchPlaceholder: "Search tasks",
     emptyTitle: "No tasks yet",
     emptyDescription: "Create a task to get started.",
@@ -37,9 +37,9 @@ const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project" | "label">
   },
   trash: {
     title: "Trash",
-    searchPlaceholder: "Search Trash",
+    searchPlaceholder: "Search trash",
     emptyTitle: "Trash is empty",
-    emptyDescription: "Tasks moved to Trash appear here.",
+    emptyDescription: "Tasks moved to trash appear here.",
   },
 };
 

@@ -116,7 +116,7 @@ describe("Worktodo import validation and preview", () => {
           trashedCompleted: 0,
         },
       },
-      confirmationTitle: "Replace Worktodo Data",
+      confirmationTitle: "Replace Worktodo data",
       warning: "This will replace all current Worktodo data. Cancelling changes nothing.",
     });
   });

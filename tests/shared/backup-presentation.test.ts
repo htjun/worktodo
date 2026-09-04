@@ -23,20 +23,20 @@ const preview: ImportPreview = {
     tasks: 4,
     lifecycle: { activeIncomplete: 1, activeCompleted: 1, trashedIncomplete: 1, trashedCompleted: 1 },
   },
-  confirmationTitle: "Replace Worktodo Data",
+  confirmationTitle: "Replace Worktodo data",
   warning: "This will replace all current Worktodo data. Cancelling changes nothing.",
 };
 
 describe("backup and restore presentation", () => {
   it("renders the approved replacement preview with mutually exclusive counts", () => {
     const markdown = importPreviewMarkdown(preview);
-    expect(markdown).toContain("# Replace Worktodo Data");
+    expect(markdown).toContain("# Replace Worktodo data");
     expect(markdown).toContain("This will replace all current Worktodo data. Cancelling changes nothing.");
     expect(markdown).toContain("Exported: 2026-08-30T06:25:30.123Z");
     expect(markdown).toContain("| Tasks | 4 | 10 |");
     expect(markdown).toContain("| Labels | 1 | 3 |");
     expect(markdown).toContain("| Incomplete | 1 | 4 |");
-    expect(markdown).toContain("| Completed in Trash | 1 | 1 |");
+    expect(markdown).toContain("| Completed in trash | 1 | 1 |");
   });
 
   it("renders an allowed timestamp outside the JavaScript Date range without crashing", () => {

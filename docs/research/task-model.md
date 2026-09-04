@@ -72,7 +72,7 @@ through Sunday in the viewer's timezone. Completed excludes Trash; Trash include
 whether complete or incomplete.
 
 Ordinary Task order is Priority descending, then `position`, `createdAtMs`, and `id` ascending.
-All Tasks places dated Tasks first by effective due instant and undated Tasks last.
+All tasks places dated Tasks first by effective due instant and undated Tasks last.
 
 Completion, reopening, Trash, and restore are idempotent. Content, Project, and Label changes are
 blocked while a Task is in Trash. Restore preserves completion state, Project, and Labels.

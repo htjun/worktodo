@@ -46,7 +46,7 @@ function task(overrides: Partial<Task> = {}): Task {
 describe("task presentation mapping", () => {
   it("uses concise search and empty-state copy", () => {
     expect(taskViewContent({ kind: "all" }, [], [])).toEqual({
-      title: "All Tasks",
+      title: "All tasks",
       searchPlaceholder: "Search tasks",
       emptyTitle: "No tasks yet",
       emptyDescription: "Create a task to get started.",
@@ -98,7 +98,7 @@ describe("task presentation mapping", () => {
     ]);
   });
 
-  it("groups All Tasks under No project and non-empty projects in project order", () => {
+  it("groups All tasks under No project and non-empty projects in project order", () => {
     const work: Project = { ...project, id: "work", name: "Work", position: 2_048 };
     const empty: Project = { ...project, id: "empty", name: "Empty", position: 3_072 };
     const noProjectTask = task({ id: "no-project", projectId: null });
@@ -195,7 +195,7 @@ describe("task presentation mapping", () => {
       [
         { title: "Project", text: "No project" },
         { title: "Priority", text: "None" },
-        { title: "Due Date", text: "None" },
+        { title: "Due date", text: "None" },
       ],
       [
         { title: "Project", text: "Personal" },
@@ -267,7 +267,7 @@ describe("task presentation mapping", () => {
       const kind = taskLifecycleActionKindForViewKind(viewKind);
       expect({ kind, ...taskLifecycleMutationPresentation(kind) }).toEqual({
         kind: "complete",
-        title: "Complete Task",
+        title: "Complete task",
         successTitle: "Task completed",
         failureTitle: "Unable to complete task",
       });
@@ -275,14 +275,14 @@ describe("task presentation mapping", () => {
     const reopen = taskLifecycleActionKindForViewKind("completed");
     expect({ kind: reopen, ...taskLifecycleMutationPresentation(reopen) }).toEqual({
       kind: "reopen",
-      title: "Reopen Task",
+      title: "Reopen task",
       successTitle: "Task reopened",
       failureTitle: "Unable to reopen task",
     });
     const restore = taskLifecycleActionKindForViewKind("trash");
     expect({ kind: restore, ...taskLifecycleMutationPresentation(restore) }).toEqual({
       kind: "restore",
-      title: "Restore Task",
+      title: "Restore task",
       successTitle: "Task restored",
       failureTitle: "Unable to restore task",
     });
@@ -339,7 +339,7 @@ describe("task presentation mapping", () => {
     expect(item.detail.metadata).toEqual([
       { title: "Project", text: "Personal" },
       { title: "Priority", text: "None" },
-      { title: "Due Date", text: "None" },
+      { title: "Due date", text: "None" },
       { title: "Created", text: format.format(new Date(1_000)) },
       { title: "Updated", text: format.format(new Date(1_000)) },
       { title: "Completed", text: format.format(new Date(completedAtMs)) },

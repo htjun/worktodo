@@ -105,12 +105,12 @@ export default function QuickAdd() {
 
   return (
     <Form
-      navigationTitle="Quick Add"
+      navigationTitle="Quick add"
       isLoading={isSubmitting}
       actions={
         state.error === null ? (
           <ActionPanel>
-            <Action.SubmitForm title="Create Task" icon={Icon.Plus} onSubmit={submit} />
+            <Action.SubmitForm title="Create task" icon={Icon.Plus} onSubmit={submit} />
           </ActionPanel>
         ) : undefined
       }

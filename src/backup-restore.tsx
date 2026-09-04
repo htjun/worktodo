@@ -40,7 +40,7 @@ function ExportResult({ path }: { path: string }) {
       markdown={exportSuccessMarkdown(path)}
       actions={
         <ActionPanel>
-          <Action.ShowInFinder path={path} title="Show Backup in Finder" />
+          <Action.ShowInFinder path={path} title="Show backup in Finder" />
         </ActionPanel>
       }
     />
@@ -67,10 +67,10 @@ function ExportForm({ portability }: { portability: PortabilityService }) {
 
   return (
     <Form
-      navigationTitle="Export Backup"
+      navigationTitle="Export backup"
       actions={
         <ActionPanel>
-          <Action.SubmitForm title="Export Backup" icon={Icon.Download} onSubmit={submit} />
+          <Action.SubmitForm title="Export backup" icon={Icon.Download} onSubmit={submit} />
         </ActionPanel>
       }
     >
@@ -92,8 +92,8 @@ function ImportResult({ recoveryPath }: { recoveryPath: string }) {
       markdown={importSuccessMarkdown(recoveryPath)}
       actions={
         <ActionPanel>
-          <Action title="Open All Tasks" icon={Icon.CheckCircle} onAction={() => launchMyTasks({ view: "all" })} />
-          <Action.ShowInFinder path={recoveryPath} title="Show Recovery Backup in Finder" />
+          <Action title="Open all tasks" icon={Icon.CheckCircle} onAction={() => launchMyTasks({ view: "all" })} />
+          <Action.ShowInFinder path={recoveryPath} title="Show recovery backup in Finder" />
         </ActionPanel>
       }
     />
@@ -106,7 +106,7 @@ function ImportFailure({ message, recoveryPath }: { message: string; recoveryPat
       markdown={`# Backup restore failed\n\n${message}\n\nA recovery backup is available at:\n\n${recoveryPath}`}
       actions={
         <ActionPanel>
-          <Action.ShowInFinder path={recoveryPath} title="Show Recovery Backup in Finder" />
+          <Action.ShowInFinder path={recoveryPath} title="Show recovery backup in Finder" />
         </ActionPanel>
       }
     />
@@ -120,7 +120,7 @@ function ImportPreviewView({ portability, prepared }: { portability: Portability
     const confirmed = await confirmAlert({
       title: prepared.preview.confirmationTitle,
       message: prepared.preview.warning,
-      primaryAction: { title: "Replace Worktodo Data", style: Alert.ActionStyle.Destructive },
+      primaryAction: { title: "Replace Worktodo data", style: Alert.ActionStyle.Destructive },
     });
     if (!confirmed) {
       return;
@@ -145,7 +145,7 @@ function ImportPreviewView({ portability, prepared }: { portability: Portability
       actions={
         <ActionPanel>
           <Action
-            title="Replace Worktodo Data"
+            title="Replace Worktodo data"
             icon={Icon.HardDrive}
             style={Action.Style.Destructive}
             onAction={replace}
@@ -175,14 +175,14 @@ function ImportForm({ portability }: { portability: PortabilityService }) {
 
   return (
     <Form
-      navigationTitle="Restore Backup"
+      navigationTitle="Restore backup"
       actions={
         <ActionPanel>
-          <Action.SubmitForm title="Preview Backup" icon={Icon.Upload} onSubmit={submit} />
+          <Action.SubmitForm title="Preview backup" icon={Icon.Upload} onSubmit={submit} />
         </ActionPanel>
       }
     >
-      <Form.FilePicker id="selection" title="Backup File" allowMultipleSelection={false} />
+      <Form.FilePicker id="selection" title="Backup file" allowMultipleSelection={false} />
       <Form.Description text="Worktodo validates the entire backup before showing what will be replaced." />
     </Form>
   );
@@ -210,13 +210,13 @@ export default function Command() {
       ) : session ? (
         <>
           <List.Item
-            title="Export Backup"
+            title="Export backup"
             subtitle="Create a complete JSON backup"
             icon={Icon.Download}
             actions={
               <ActionPanel>
                 <Action.Push
-                  title="Export Backup"
+                  title="Export backup"
                   icon={Icon.Download}
                   target={<ExportForm portability={session.portability} />}
                 />
@@ -224,13 +224,13 @@ export default function Command() {
             }
           />
           <List.Item
-            title="Restore Backup"
+            title="Restore backup"
             subtitle="Preview a backup, then replace current data"
             icon={Icon.Upload}
             actions={
               <ActionPanel>
                 <Action.Push
-                  title="Restore Backup"
+                  title="Restore backup"
                   icon={Icon.Upload}
                   target={<ImportForm portability={session.portability} />}
                 />

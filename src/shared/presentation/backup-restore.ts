@@ -14,8 +14,8 @@ function countRows(counts: BackupCounts): Array<[string, number]> {
     ["Tasks", counts.tasks],
     ["Incomplete", counts.lifecycle.activeIncomplete],
     ["Completed", counts.lifecycle.activeCompleted],
-    ["Incomplete in Trash", counts.lifecycle.trashedIncomplete],
-    ["Completed in Trash", counts.lifecycle.trashedCompleted],
+    ["Incomplete in trash", counts.lifecycle.trashedIncomplete],
+    ["Completed in trash", counts.lifecycle.trashedCompleted],
   ];
 }
 
@@ -25,7 +25,7 @@ export function importPreviewMarkdown(preview: ImportPreview): string {
     return `| ${label} | ${current} | ${incoming} |`;
   });
   return [
-    "# Replace Worktodo Data",
+    "# Replace Worktodo data",
     "",
     preview.warning,
     "",

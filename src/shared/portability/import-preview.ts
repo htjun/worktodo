@@ -27,7 +27,7 @@ export type ImportPreview = {
   exportedAtMs: number;
   incoming: BackupCounts;
   current: BackupCounts;
-  confirmationTitle: "Replace Worktodo Data";
+  confirmationTitle: "Replace Worktodo data";
   warning: string;
 };
 
@@ -127,7 +127,7 @@ export function buildImportPreview(incoming: WorktodoBackupDocument, current: Wo
     exportedAtMs: incoming.exportedAtMs,
     incoming: countSnapshot(incoming),
     current: countSnapshot(current),
-    confirmationTitle: "Replace Worktodo Data",
+    confirmationTitle: "Replace Worktodo data",
     warning: "This will replace all current Worktodo data. Cancelling changes nothing.",
   };
 }
