@@ -1,7 +1,7 @@
 import { Icon, List } from "@raycast/api";
 import { taskLifecycleActionKindForViewKind } from "./shared/application/task-lifecycle-interaction";
 import type { TaskView } from "./shared/application/task-views";
-import type { Project, Section } from "./shared/domain/model";
+import type { Project } from "./shared/domain/model";
 import {
   taskViewContent as sharedTaskViewContent,
   taskViewFromKey,
@@ -20,12 +20,11 @@ const VIEW_ICONS = {
   completed: Icon.CheckCircle,
   trash: Icon.Trash,
   project: Icon.Folder,
-  section: Icon.BulletPoints,
 } as const;
 
-export function taskViewContent(view: TaskView, projects: readonly Project[], sections: readonly Section[]) {
+export function taskViewContent(view: TaskView, projects: readonly Project[]) {
   return {
-    ...sharedTaskViewContent(view, projects, sections),
+    ...sharedTaskViewContent(view, projects),
     icon: VIEW_ICONS[view.kind],
     taskIcon: view.kind === "completed" ? Icon.CheckCircle : view.kind === "trash" ? Icon.Trash : Icon.Circle,
   };
@@ -39,19 +38,17 @@ export function lifecycleActionForTaskView(view: TaskView) {
 export function TaskViewDropdown({
   view,
   projects,
-  sections,
   onChange,
 }: {
   view: TaskView;
   projects: readonly Project[];
-  sections: readonly Section[];
   onChange: (view: TaskView) => void;
 }) {
   return (
     <List.Dropdown
       tooltip="Task View"
       value={taskViewKey(view)}
-      onChange={(value) => onChange(taskViewFromKey(value, projects, sections))}
+      onChange={(value) => onChange(taskViewFromKey(value, projects))}
     >
       <List.Dropdown.Section title="Views">
         <List.Dropdown.Item value="all" title="All Tasks" icon={Icon.Folder} />
@@ -62,19 +59,7 @@ export function TaskViewDropdown({
         <List.Dropdown.Item value="trash" title="Trash" icon={Icon.Trash} />
       </List.Dropdown.Section>
       {projects.map((project) => (
-        <List.Dropdown.Section key={project.id} title={project.name}>
-          <List.Dropdown.Item value={`project:${project.id}`} title="All Tasks" icon={Icon.Folder} />
-          {sections
-            .filter((section) => section.projectId === project.id)
-            .map((section) => (
-              <List.Dropdown.Item
-                key={section.id}
-                value={`section:${section.id}`}
-                title={section.name}
-                icon={Icon.BulletPoints}
-              />
-            ))}
-        </List.Dropdown.Section>
+        <List.Dropdown.Item key={project.id} value={`project:${project.id}`} title={project.name} icon={Icon.Folder} />
       ))}
     </List.Dropdown>
   );

@@ -1,16 +1,14 @@
 import { Form, Icon } from "@raycast/api";
 import { taskEditingPlacementKey, type DueDatePreset } from "./shared/application/task-editing";
-import type { Project, Section } from "./shared/domain/model";
+import type { Project } from "./shared/domain/model";
 
 export function ProjectDropdown({
   projects,
-  sections,
   value,
   error,
   onChange,
 }: {
   projects: readonly Project[];
-  sections: readonly Section[];
   value: string;
   error?: string;
   onChange: (value: string) => void;
@@ -19,21 +17,12 @@ export function ProjectDropdown({
     <Form.Dropdown id="placement" title="Project" value={value} error={error} onChange={onChange}>
       <Form.Dropdown.Item value="inbox" title="Inbox" icon={Icon.Tray} />
       {projects.map((project) => (
-        <Form.Dropdown.Section key={project.id} title={project.name}>
-          <Form.Dropdown.Item
-            value={taskEditingPlacementKey({ kind: "project", projectId: project.id })}
-            title={project.name}
-          />
-          {sections
-            .filter((section) => section.projectId === project.id)
-            .map((section) => (
-              <Form.Dropdown.Item
-                key={section.id}
-                value={taskEditingPlacementKey({ kind: "section", projectId: project.id, sectionId: section.id })}
-                title={section.name}
-              />
-            ))}
-        </Form.Dropdown.Section>
+        <Form.Dropdown.Item
+          key={project.id}
+          value={taskEditingPlacementKey({ kind: "project", projectId: project.id })}
+          title={project.name}
+          icon={Icon.Folder}
+        />
       ))}
     </Form.Dropdown>
   );

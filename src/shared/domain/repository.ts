@@ -1,4 +1,4 @@
-import type { Project, Section, Task } from "./model";
+import type { Label, Project, Task } from "./model";
 
 export interface TaskRepository {
   transaction<T>(operation: () => T): T;
@@ -9,11 +9,11 @@ export interface TaskRepository {
   updateProject(project: Project): void;
   deleteProject(id: string): void;
 
-  getSection(id: string): Section | null;
-  listSections(): Section[];
-  insertSection(section: Section): void;
-  updateSection(section: Section): void;
-  deleteSection(id: string): void;
+  getLabel(id: string): Label | null;
+  listLabels(): Label[];
+  insertLabel(label: Label): void;
+  updateLabel(label: Label): void;
+  deleteLabel(id: string): void;
 
   getTask(id: string): Task | null;
   listTasks(): Task[];

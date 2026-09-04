@@ -41,10 +41,11 @@ describe("Worktodo application session", () => {
       recoveryDirectory,
     });
     const project = first.service.createProject("Work");
-    const section = first.service.createSection(project.id, "Next");
+    const label = first.service.createLabel("Next");
     const task = first.service.createTask({
       title: "Protect application wiring",
-      placement: { kind: "section", projectId: project.id, sectionId: section.id },
+      placement: { kind: "project", projectId: project.id },
+      labelIds: [label.id],
     });
     const exported = first.portability.exportTo(exportDirectory);
     first.close();
@@ -67,10 +68,10 @@ describe("Worktodo application session", () => {
 
     const inspection = openWorktodoDatabase(databasePath);
     try {
-      expect(inspection.prepare("PRAGMA user_version").get()?.user_version).toBe(1);
+      expect(inspection.prepare("PRAGMA user_version").get()?.user_version).toBe(2);
       expect(migrations).toEqual([
-        { applied: true, previousVersion: 0, currentVersion: 1 },
-        { applied: false, previousVersion: 1, currentVersion: 1 },
+        { applied: true, previousVersion: 0, currentVersion: 2 },
+        { applied: false, previousVersion: 2, currentVersion: 2 },
       ]);
     } finally {
       inspection.close();

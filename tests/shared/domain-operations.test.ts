@@ -55,11 +55,11 @@ afterEach(async () => {
 });
 
 describe("shared domain operations", () => {
-  it("round-trips every placement, due kind, priority, and combined lifecycle state", async () => {
+  it("round-trips every placement, due kind, priority, label set, and combined lifecycle state", async () => {
     const context = await createContext();
     const { service, db, databasePath } = context;
     const project = service.createProject("  Personal  ");
-    const section = service.createSection(project.id, "Next");
+    const next = service.createLabel("Next");
     const dueValues: DueValue[] = [
       { kind: "none" },
       { kind: "allDay", date: "2026-10-04" },
@@ -78,38 +78,39 @@ describe("shared domain operations", () => {
       placement: { kind: "project", projectId: project.id },
       due: dueValues[1],
     });
-    const sectionTask = service.createTask({
-      title: "Section",
+    const labelledTask = service.createTask({
+      title: "Labelled",
       notes: "Unicode note: café ☕",
       priority: "medium",
-      placement: { kind: "section", projectId: project.id, sectionId: section.id },
+      placement: { kind: "project", projectId: project.id },
+      labelIds: [next.id],
       due: dueValues[2],
     });
     service.createTask({ title: "High", priority: "high", placement: { kind: "inbox" } });
 
     context.setNow(2_000);
-    service.completeTask(sectionTask.id);
+    service.completeTask(labelledTask.id);
     context.setNow(3_000);
-    const completedAndTrashed = service.trashTask(sectionTask.id);
+    const completedAndTrashed = service.trashTask(labelledTask.id);
     db.close();
 
     const reopened = openWorktodoDatabase(databasePath);
     try {
-      expect(applyMigrations(reopened)).toEqual({ applied: false, previousVersion: 1, currentVersion: 1 });
+      expect(applyMigrations(reopened)).toEqual({ applied: false, previousVersion: 2, currentVersion: 2 });
       const repository = new SqliteTaskRepository(reopened);
       expect(repository.getTask(inbox.id)).toMatchObject({
         projectId: null,
-        sectionId: null,
+        labelIds: [],
         due: { kind: "none" },
         priority: "none",
       });
       expect(repository.getTask(direct.id)).toMatchObject({
         projectId: project.id,
-        sectionId: null,
+        labelIds: [],
         due: { kind: "allDay", date: "2026-10-04" },
         priority: "low",
       });
-      expect(repository.getTask(sectionTask.id)).toEqual(completedAndTrashed);
+      expect(repository.getTask(labelledTask.id)).toEqual(completedAndTrashed);
       expect(
         repository
           .listTasks()
@@ -125,8 +126,7 @@ describe("shared domain operations", () => {
     const { service, repository, db } = await createContext();
     try {
       const firstProject = service.createProject("First");
-      const secondProject = service.createProject("Second");
-      const section = service.createSection(firstProject.id, "Next");
+      const label = service.createLabel("Next");
       const missing = id(999);
 
       expectDomainError(
@@ -134,12 +134,17 @@ describe("shared domain operations", () => {
         "INVALID_PLACEMENT",
       );
       expectDomainError(
+        () => service.createTask({ title: "Missing label", placement: { kind: "inbox" }, labelIds: [missing] }),
+        "NOT_FOUND",
+      );
+      expectDomainError(
         () =>
           service.createTask({
-            title: "Cross-project",
-            placement: { kind: "section", projectId: secondProject.id, sectionId: section.id },
+            title: "Duplicate label",
+            placement: { kind: "inbox" },
+            labelIds: [label.id, label.id],
           }),
-        "INVALID_PLACEMENT",
+        "INVALID_ARGUMENT",
       );
       expectDomainError(
         () =>
@@ -151,35 +156,38 @@ describe("shared domain operations", () => {
         "INVALID_DUE_VALUE",
       );
       expectDomainError(() => service.createTask({ title: "  ", placement: { kind: "inbox" } }), "INVALID_ARGUMENT");
-      expectDomainError(() => service.createSection(missing, "No parent"), "NOT_FOUND");
+      expect(firstProject.name).toBe("First");
       expect(repository.listTasks()).toEqual([]);
     } finally {
       db.close();
     }
   });
 
-  it("renames projects and sections with normalized values and monotonic no-ops", async () => {
+  it("renames projects and labels with normalized uniqueness and monotonic no-ops", async () => {
     const context = await createContext();
     const { service, db } = context;
     try {
       const project = service.createProject("Work");
-      const section = service.createSection(project.id, "Next");
+      const label = service.createLabel("Next");
+      service.createLabel("Waiting");
       context.setNow(500);
 
       const renamedProject = service.renameProject(project.id, "  Personal  ");
-      const renamedSection = service.renameSection(section.id, "  Later  ");
+      const renamedLabel = service.renameLabel(label.id, "  Later  ");
       expect(renamedProject).toMatchObject({ name: "Personal", updatedAtMs: 1_001 });
-      expect(renamedSection).toMatchObject({ name: "Later", updatedAtMs: 1_001 });
+      expect(renamedLabel).toMatchObject({ name: "Later", updatedAtMs: 1_001 });
 
       context.setNow(9_000);
       expect(service.renameProject(project.id, " Personal ")).toEqual(renamedProject);
-      expect(service.renameSection(section.id, " Later ")).toEqual(renamedSection);
+      expect(service.renameLabel(label.id, " Later ")).toEqual(renamedLabel);
       expectDomainError(() => service.renameProject(project.id, " "), "INVALID_ARGUMENT");
-      expectDomainError(() => service.renameSection(section.id, " "), "INVALID_ARGUMENT");
+      expectDomainError(() => service.renameLabel(label.id, " "), "INVALID_ARGUMENT");
       expectDomainError(() => service.renameProject(id(999), "Missing"), "NOT_FOUND");
-      expectDomainError(() => service.renameSection(id(999), "Missing"), "NOT_FOUND");
+      expectDomainError(() => service.renameLabel(id(999), "Missing"), "NOT_FOUND");
+      expectDomainError(() => service.createLabel("ＷＡＩＴＩＮＧ"), "INVALID_ARGUMENT");
+      expectDomainError(() => service.renameLabel(label.id, "waiting"), "INVALID_ARGUMENT");
       expect(service.listProjects()).toEqual([renamedProject]);
-      expect(service.listSections()).toEqual([renamedSection]);
+      expect(service.listLabels().map((item) => item.name)).toEqual(["Later", "Waiting"]);
     } finally {
       db.close();
     }
@@ -229,30 +237,37 @@ describe("shared domain operations", () => {
     const { service, db } = context;
     try {
       const project = service.createProject("Personal");
-      const section = service.createSection(project.id, "Next");
+      const firstLabel = service.createLabel("Next");
+      const secondLabel = service.createLabel("Waiting");
       const task = service.createTask({ title: "Draft", placement: { kind: "inbox" } });
       context.setNow(2_000);
       const updated = service.updateTask(task.id, {
         title: "Final",
         notes: "Details",
         priority: "high",
+        labelIds: [secondLabel.id, firstLabel.id],
         due: { kind: "timed", instantMs: 2_000_000, timeZone: "Australia/Melbourne" },
       });
-      expect(updated).toMatchObject({ title: "Final", notes: "Details", priority: "high", updatedAtMs: 2_000 });
+      expect(updated).toMatchObject({
+        title: "Final",
+        notes: "Details",
+        priority: "high",
+        labelIds: [firstLabel.id, secondLabel.id],
+        updatedAtMs: 2_000,
+      });
       context.setNow(3_000);
-      const moved = service.moveTask(task.id, { kind: "section", projectId: project.id, sectionId: section.id });
+      const moved = service.moveTask(task.id, { kind: "project", projectId: project.id });
       expect(moved).toMatchObject({
         projectId: project.id,
-        sectionId: section.id,
+        labelIds: [firstLabel.id, secondLabel.id],
         position: 1_024,
         updatedAtMs: 3_000,
       });
       context.setNow(4_000);
-      expect(service.moveTask(task.id, { kind: "section", projectId: project.id, sectionId: section.id })).toEqual(
-        moved,
-      );
+      expect(service.moveTask(task.id, { kind: "project", projectId: project.id })).toEqual(moved);
+      expect(service.updateTask(task.id, { labelIds: [firstLabel.id, secondLabel.id] })).toEqual(moved);
       expect(service.listProjectTasks(project.id)).toEqual([moved]);
-      expect(service.listSectionTasks(section.id)).toEqual([moved]);
+      expect(service.listLabelTasks(firstLabel.id)).toEqual([moved]);
     } finally {
       db.close();
     }
@@ -304,68 +319,67 @@ describe("shared domain operations", () => {
     }
   });
 
-  it("normalizes every task before removing its section or project", async () => {
+  it("preserves labels while removing projects and removes only associations with a label", async () => {
     const context = await createContext();
     const { service, repository, db } = context;
     try {
       const inbox = service.createTask({ title: "Existing inbox", placement: { kind: "inbox" } });
       const project = service.createProject("Project");
-      const firstSection = service.createSection(project.id, "First");
-      const secondSection = service.createSection(project.id, "Second");
+      const firstLabel = service.createLabel("First");
+      const secondLabel = service.createLabel("Second");
       const directFirst = service.createTask({
         title: "Direct first",
         priority: "low",
         placement: { kind: "project", projectId: project.id },
+        labelIds: [firstLabel.id],
       });
       const directSecond = service.createTask({
         title: "Direct second",
         priority: "high",
         placement: { kind: "project", projectId: project.id },
+        labelIds: [secondLabel.id],
       });
-      const sectionFirst = service.createTask({
-        title: "Section first",
-        placement: { kind: "section", projectId: project.id, sectionId: firstSection.id },
+      const completed = service.createTask({
+        title: "Completed",
+        placement: { kind: "project", projectId: project.id },
+        labelIds: [firstLabel.id, secondLabel.id],
       });
-      const sectionSecond = service.createTask({
-        title: "Section second",
-        placement: { kind: "section", projectId: project.id, sectionId: secondSection.id },
+      const trashed = service.createTask({
+        title: "Trashed",
+        placement: { kind: "project", projectId: project.id },
+        labelIds: [firstLabel.id],
       });
       context.setNow(2_000);
-      service.completeTask(sectionFirst.id);
+      service.completeTask(completed.id);
       context.setNow(3_000);
-      service.trashTask(sectionSecond.id);
+      service.trashTask(trashed.id);
       repository.updateTask({ ...service.getTask(inbox.id), position: Number.MAX_SAFE_INTEGER });
       context.setNow(4_000);
       service.removeProject(project.id);
 
       expectDomainError(() => service.removeProject(project.id), "NOT_FOUND");
       expect(service.listProjects()).toEqual([]);
-      expect(service.listSections()).toEqual([]);
-      expect([directFirst, directSecond, sectionFirst, sectionSecond].map((task) => service.getTask(task.id))).toEqual(
-        [directFirst, directSecond, sectionFirst, sectionSecond].map((task, index) =>
+      expect([directFirst, directSecond, completed, trashed].map((task) => service.getTask(task.id))).toEqual(
+        [directFirst, directSecond, completed, trashed].map((task, index) =>
           expect.objectContaining({
             id: task.id,
             projectId: null,
-            sectionId: null,
             position: (index + 2) * 1_024,
           }),
         ),
       );
-      expect(service.getTask(sectionFirst.id).completedAtMs).toBe(2_000);
-      expect(service.getTask(sectionSecond.id).trashedAtMs).toBe(3_000);
-      expect(service.getTask(inbox.id).position).toBe(1_024);
-
-      const nextProject = service.createProject("Next project");
-      const nextSection = service.createSection(nextProject.id, "Next section");
-      const direct = service.createTask({ title: "Direct", placement: { kind: "project", projectId: nextProject.id } });
-      const nested = service.createTask({
-        title: "Nested",
-        placement: { kind: "section", projectId: nextProject.id, sectionId: nextSection.id },
+      expect(service.getTask(completed.id)).toMatchObject({
+        completedAtMs: 2_000,
+        labelIds: [firstLabel.id, secondLabel.id],
       });
+      expect(service.getTask(trashed.id)).toMatchObject({ trashedAtMs: 3_000, labelIds: [firstLabel.id] });
+      expect(service.getTask(inbox.id).position).toBe(1_024);
       context.setNow(5_000);
-      service.removeSection(nextSection.id);
-      expect(service.getTask(direct.id).position).toBe(1_024);
-      expect(service.getTask(nested.id)).toMatchObject({ projectId: nextProject.id, sectionId: null, position: 2_048 });
+      service.removeLabel(firstLabel.id);
+      expect(service.listLabels()).toEqual([secondLabel]);
+      expect(service.getTask(directFirst.id).labelIds).toEqual([]);
+      expect(service.getTask(completed.id).labelIds).toEqual([secondLabel.id]);
+      expect(service.getTask(trashed.id).labelIds).toEqual([]);
     } finally {
       db.close();
     }

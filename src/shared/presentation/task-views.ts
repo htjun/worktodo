@@ -1,5 +1,5 @@
 import { isStaticTaskViewKind, type TaskView, type TaskViewResult } from "../application/task-views";
-import type { Placement, Project, Section } from "../domain/model";
+import type { Placement, Project } from "../domain/model";
 import { addCalendarDays, startOfCalendarDate } from "../domain/queries";
 import { buildAllTaskListSections, buildTaskListItems, type TaskListEntry, type TaskListSection } from "./task-list";
 
@@ -10,7 +10,7 @@ export type TaskViewContent = {
   emptyDescription: string;
 };
 
-const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project" | "section">, TaskViewContent> = {
+const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project">, TaskViewContent> = {
   all: {
     title: "All Tasks",
     searchPlaceholder: "Search All Tasks",
@@ -53,14 +53,12 @@ export function taskViewKey(view: TaskView): string {
   switch (view.kind) {
     case "project":
       return `project:${view.projectId}`;
-    case "section":
-      return `section:${view.sectionId}`;
     default:
       return view.kind;
   }
 }
 
-export function taskViewFromKey(value: string, projects: readonly Project[], sections: readonly Section[]): TaskView {
+export function taskViewFromKey(value: string, projects: readonly Project[]): TaskView {
   if (isStaticTaskViewKind(value)) {
     return { kind: value };
   }
@@ -70,21 +68,10 @@ export function taskViewFromKey(value: string, projects: readonly Project[], sec
       return { kind: "project", projectId };
     }
   }
-  if (value.startsWith("section:")) {
-    const sectionId = value.slice("section:".length);
-    const section = sections.find((candidate) => candidate.id === sectionId);
-    if (section && projects.some((project) => project.id === section.projectId)) {
-      return { kind: "section", projectId: section.projectId, sectionId };
-    }
-  }
   return { kind: "all" };
 }
 
-export function taskViewContent(
-  view: TaskView,
-  projects: readonly Project[],
-  sections: readonly Section[],
-): TaskViewContent {
+export function taskViewContent(view: TaskView, projects: readonly Project[]): TaskViewContent {
   if (view.kind === "project") {
     const title = projects.find((project) => project.id === view.projectId)?.name ?? "Project";
     return {
@@ -94,16 +81,6 @@ export function taskViewContent(
       emptyDescription: "Create a task in this project.",
     };
   }
-  if (view.kind === "section") {
-    const project = projects.find((candidate) => candidate.id === view.projectId)?.name ?? "Project";
-    const section = sections.find((candidate) => candidate.id === view.sectionId)?.name ?? "Section";
-    return {
-      title: `${project} / ${section}`,
-      searchPlaceholder: `Search ${section}`,
-      emptyTitle: `${section} is empty`,
-      emptyDescription: "Create a task in this section.",
-    };
-  }
   return STATIC_VIEW_CONTENT[view.kind];
 }
 
@@ -111,8 +88,6 @@ export function initialPlacementForTaskView(view: TaskView): Placement {
   switch (view.kind) {
     case "project":
       return { kind: "project", projectId: view.projectId };
-    case "section":
-      return { kind: "section", projectId: view.projectId, sectionId: view.sectionId };
     default:
       return { kind: "inbox" };
   }
@@ -134,20 +109,15 @@ function upcomingSectionTitle(date: string, localDate: string, viewerTimeZone: s
   return new Intl.DateTimeFormat(undefined, options).format(new Date(startOfCalendarDate(date, viewerTimeZone)));
 }
 
-export function buildTaskViewSections(
-  taskView: TaskViewResult,
-  projects: readonly Project[],
-  sections: readonly Section[],
-): TaskListSection[] {
+export function buildTaskViewSections(taskView: TaskViewResult, projects: readonly Project[]): TaskListSection[] {
   if (taskView.kind === "today") {
     return [
       {
         key: "today",
-        title: taskViewContent(taskView.view, projects, sections).title,
+        title: taskViewContent(taskView.view, projects).title,
         items: buildTaskListItems(
           taskView.result.tasks.map(({ task, status }) => ({ task, todayStatus: status })),
           projects,
-          sections,
           taskView.viewerTimeZone,
         ),
       },
@@ -164,22 +134,21 @@ export function buildTaskViewSections(
     return [...groups].map(([date, group]) => ({
       key: `upcoming:${date}`,
       title: upcomingSectionTitle(date, taskView.result.localDate, taskView.viewerTimeZone),
-      items: buildTaskListItems(group, projects, sections, taskView.viewerTimeZone),
+      items: buildTaskListItems(group, projects, taskView.viewerTimeZone),
     }));
   }
 
   if (taskView.view.kind === "all") {
-    return buildAllTaskListSections(taskView.result, projects, sections, taskView.viewerTimeZone);
+    return buildAllTaskListSections(taskView.result, projects, taskView.viewerTimeZone);
   }
 
   return [
     {
       key: taskViewKey(taskView.view),
-      title: taskViewContent(taskView.view, projects, sections).title,
+      title: taskViewContent(taskView.view, projects).title,
       items: buildTaskListItems(
         taskView.result.map((task) => ({ task })),
         projects,
-        sections,
         taskView.viewerTimeZone,
       ),
     },

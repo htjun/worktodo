@@ -19,10 +19,9 @@ function completeDocument(): WorktodoBackupDocument {
       { id: id(2), name: "Personal", position: 1_024, createdAtMs: 100, updatedAtMs: 200 },
       { id: id(1), name: "Work", position: 1_024, createdAtMs: 100, updatedAtMs: 100 },
     ],
-    sections: [
+    labels: [
       {
         id: id(4),
-        projectId: id(1),
         name: "Later",
         position: 1_024,
         createdAtMs: 200,
@@ -30,7 +29,6 @@ function completeDocument(): WorktodoBackupDocument {
       },
       {
         id: id(3),
-        projectId: id(1),
         name: "Next",
         position: 1_024,
         createdAtMs: 100,
@@ -45,7 +43,7 @@ function completeDocument(): WorktodoBackupDocument {
         priority: "high",
         position: 1_024,
         projectId: id(1),
-        sectionId: id(3),
+        labelIds: [id(4), id(3)],
         due: { kind: "timed", instantMs: 8_000, timeZone: "Australia/Melbourne" },
         createdAtMs: 100,
         updatedAtMs: 400,
@@ -59,7 +57,7 @@ function completeDocument(): WorktodoBackupDocument {
         priority: "medium",
         position: 1_024,
         projectId: id(1),
-        sectionId: null,
+        labelIds: [],
         due: { kind: "allDay", date: "2028-02-29" },
         createdAtMs: 100,
         updatedAtMs: 300,
@@ -73,7 +71,7 @@ function completeDocument(): WorktodoBackupDocument {
         priority: "low",
         position: 1_024,
         projectId: null,
-        sectionId: null,
+        labelIds: [],
         due: { kind: "none" },
         createdAtMs: 100,
         updatedAtMs: 200,
@@ -87,7 +85,7 @@ function completeDocument(): WorktodoBackupDocument {
         priority: "none",
         position: 1_024,
         projectId: null,
-        sectionId: null,
+        labelIds: [],
         due: { kind: "none" },
         createdAtMs: 100,
         updatedAtMs: 100,
@@ -108,6 +106,12 @@ function expectCode(operation: () => unknown, code: PortabilityError["code"]): v
   }
 }
 
+function legacyTask(task: WorktodoBackupDocument["tasks"][number]): Record<string, unknown> {
+  const converted: Record<string, unknown> = { ...task };
+  delete converted.labelIds;
+  return converted;
+}
+
 describe("Worktodo backup contract", () => {
   it("round-trips every supported state as deterministic readable JSON", () => {
     const document = completeDocument();
@@ -117,12 +121,13 @@ describe("Worktodo backup contract", () => {
     expect(serialized).toContain('\n  "format": "worktodo-backup"');
     expect(parseBackupJson(serialized)).toEqual(canonicalBackupDocument(document));
     expect(parseBackupJson(serialized).projects.map((project) => project.id)).toEqual([id(1), id(2)]);
+    expect(parseBackupJson(serialized).tasks.at(-1)?.labelIds).toEqual([id(3), id(4)]);
     expect(parseBackupJson(serialized).tasks.map((task) => task.id)).toEqual([id(5), id(6), id(7), id(8)]);
   });
 
   it("rejects malformed JSON and unsupported versions with bounded codes", () => {
     expectCode(() => parseBackupJson("{"), "INVALID_DOCUMENT");
-    expectCode(() => parseBackupDocument({ ...completeDocument(), version: 2 }), "UNSUPPORTED_VERSION");
+    expectCode(() => parseBackupDocument({ ...completeDocument(), version: 3 }), "UNSUPPORTED_VERSION");
     const missingVersion: Record<string, unknown> = { ...completeDocument() };
     delete missingVersion.version;
     expectCode(() => parseBackupDocument(missingVersion), "INVALID_MODEL");
@@ -196,13 +201,6 @@ describe("Worktodo backup contract", () => {
 
   it.each([
     [
-      "a missing section project",
-      (document: WorktodoBackupDocument) => ({
-        ...document,
-        sections: [{ ...document.sections[0], projectId: id(999) }, ...document.sections.slice(1)],
-      }),
-    ],
-    [
       "a missing task project",
       (document: WorktodoBackupDocument) => ({
         ...document,
@@ -210,13 +208,70 @@ describe("Worktodo backup contract", () => {
       }),
     ],
     [
-      "a cross-project task section",
+      "a missing task label",
       (document: WorktodoBackupDocument) => ({
         ...document,
-        tasks: [{ ...document.tasks[0], projectId: id(2) }, ...document.tasks.slice(1)],
+        tasks: [{ ...document.tasks[0], labelIds: [id(999)] }, ...document.tasks.slice(1)],
       }),
     ],
   ])("rejects %s", (_label, mutate) => {
     expectCode(() => parseBackupDocument(mutate(completeDocument())), "BROKEN_RELATIONSHIP");
+  });
+
+  it("converts version 1 sections, collisions, empty sections, ordering, and lifecycle values", () => {
+    const legacy = {
+      format: "worktodo-backup",
+      version: 1,
+      exportedAtMs: 9_000,
+      projects: completeDocument().projects,
+      sections: [
+        { id: id(10), projectId: id(1), name: "Waiting", position: 2, createdAtMs: 10, updatedAtMs: 10 },
+        { id: id(11), projectId: id(1), name: "Empty", position: 3, createdAtMs: 11, updatedAtMs: 11 },
+        { id: id(12), projectId: id(2), name: "ＷＡＩＴＩＮＧ", position: 1, createdAtMs: 12, updatedAtMs: 12 },
+      ],
+      tasks: [
+        { ...completeDocument().tasks[0], id: id(20), projectId: id(1), sectionId: null },
+        { ...completeDocument().tasks[1], id: id(21), projectId: id(1), sectionId: id(10) },
+        { ...completeDocument().tasks[2], id: id(22), projectId: id(2), sectionId: id(12) },
+      ].map(legacyTask),
+    };
+
+    const converted = parseBackupDocument(legacy);
+    expect(converted.version).toBe(2);
+    expect(converted.labels).toEqual([
+      expect.objectContaining({ id: id(10), name: "Waiting", position: 1_024 }),
+      expect.objectContaining({ id: id(11), name: "Empty", position: 2_048 }),
+    ]);
+    expect(converted.tasks.find((task) => task.id === id(20))).toMatchObject({ position: 1_024, labelIds: [] });
+    expect(converted.tasks.find((task) => task.id === id(21))).toMatchObject({
+      position: 2_048,
+      labelIds: [id(10)],
+      completedAtMs: 200,
+    });
+    expect(converted.tasks.find((task) => task.id === id(22))).toMatchObject({
+      position: 1_024,
+      labelIds: [id(10)],
+      trashedAtMs: 300,
+    });
+  });
+
+  it("rejects duplicate normalized label names and duplicate task assignments", () => {
+    const document = completeDocument();
+    expectCode(
+      () =>
+        parseBackupDocument({
+          ...document,
+          labels: [...document.labels, { ...document.labels[0], id: id(99), name: "ＬＡＴＥＲ" }],
+        }),
+      "DUPLICATE_ID",
+    );
+    expectCode(
+      () =>
+        parseBackupDocument({
+          ...document,
+          tasks: [{ ...document.tasks[0], labelIds: [id(3), id(3)] }, ...document.tasks.slice(1)],
+        }),
+      "DUPLICATE_ID",
+    );
   });
 });

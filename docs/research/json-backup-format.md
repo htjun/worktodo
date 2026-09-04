@@ -1,37 +1,68 @@
 # Worktodo JSON Backup Format
 
-**Status:** Version 1 product contract.
+Status: implemented
+Last verified: 2026-09-04
 
-Worktodo uses one lossless JSON document for manual exports, automatic pre-import recovery backups, and imports. SQLite remains the canonical store. Import version 1 replaces the complete store; it does not merge records or regenerate imported values.
+## Version 2 contract
 
-## Document
+A backup is UTF-8 JSON with this top-level shape:
 
 ```ts
-type WorktodoBackupV1 = {
+type WorktodoBackupDocument = {
   format: "worktodo-backup";
-  version: 1;
+  version: 2;
   exportedAtMs: number;
   projects: Project[];
-  sections: Section[];
+  labels: Label[];
   tasks: Task[];
 };
 ```
 
-The `Project`, `Section`, and `Task` fields and meanings are the approved model in [task-model.md](task-model.md). Every ID, timestamp, position, placement, due value, priority, note, and lifecycle value is preserved. `exportedAtMs` is a non-negative safe integer Unix epoch millisecond describing when the snapshot was captured.
+The Project, Label, and Task definitions come from [task-model.md](task-model.md). Each Task stores
+its complete canonical `labelIds` set. Every stable ID, display value, position, Due value,
+lifecycle timestamp, and Task timestamp is preserved.
 
-JSON is UTF-8, indented with two spaces, and ends with one newline. Each entity array is sorted by lowercase ID so equivalent snapshots serialize deterministically. Array order does not define product order; the stored `position`, creation time, and ID fields retain the approved ordering semantics.
+Serialization uses two-space JSON indentation, a final newline, Project/Label/Task collections
+ordered by ID, and each Task assignment ordered by canonical Label order. Import rejects unknown
+fields, malformed IDs, invalid timestamps or Due values, duplicate entity IDs, duplicate normalized
+Label names, duplicate Task Label IDs, and missing Project or Label relationships.
 
-## Validation
+## Version 1 compatibility
 
-- Objects are strict. Unknown top-level or entity fields are invalid in version 1.
-- IDs are lowercase UUID v4 strings and are unique within their entity collection.
-- Names and task titles are non-empty and already trimmed. Notes remain arbitrary strings.
-- Positions and timestamps are non-negative safe integers. Entity updates and task lifecycle timestamps obey the approved timestamp ordering.
-- Due values use the approved closed union. All-day dates are real Gregorian `YYYY-MM-DD` values; timed values contain a non-negative safe integer instant and canonical IANA timezone.
-- Every section references an included project. Every task project is included, and every task section belongs to its recorded project.
+Version 1 is import-only. Its `sections` collection and each Task `sectionId` are parsed with a
+strict isolated schema, validated, and converted to the version 2 model before preview or
+replacement.
 
-Malformed JSON, invalid model values, duplicate IDs, and broken relationships are rejected before production mutation. A document with `format: "worktodo-backup"` and any version other than `1` is reported as unsupported rather than interpreted as version 1.
+Conversion follows the production database migration:
 
-## Compatibility
+- Sections are visited in canonical Project and Section order.
+- The first Section for a normalized name retains identity; later collisions merge.
+- Empty Sections produce Labels.
+- Direct Project Tasks precede converted Section Tasks.
+- Section Tasks remain in their Project and receive the converted Label.
+- Content, Due values, lifecycle state, identity, and timestamps are preserved.
 
-Version 1 readers accept only version 1. A future format version requires an explicit reader and migration decision; unknown fields or versions are not silently ignored. Manual exports and automatic recovery backups share this exact contract so either artifact can be selected by the import workflow.
+Every new export and automatic recovery backup uses version 2.
+
+## Import workflow
+
+Worktodo accepts one absolute `.json` file up to 100 MiB, verifies it did not change while being
+read, parses the complete document, and then shows mutually exclusive lifecycle counts for the
+current and incoming Projects, Labels, and Tasks.
+
+Replacement requires explicit confirmation. In one database transaction Worktodo:
+
+1. publishes an owner-only version 2 recovery backup of current data;
+2. deletes Task associations, Tasks, Labels, and Projects in foreign-key-safe order;
+3. inserts the selected canonical snapshot;
+4. runs SQLite integrity and foreign-key checks; and
+5. compares the stored result with the selected backup.
+
+Any failure rolls the database back and reports whether a recovery file was already published.
+Recovery files are never overwritten.
+
+## Verification
+
+The backup contract, export, preview, replacement, recovery, file-stability, and presentation suites
+exercise version 2 round trips and version 1 compatibility. The repository-wide gate is
+`corepack pnpm run verify`.

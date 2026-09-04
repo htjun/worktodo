@@ -1,4 +1,4 @@
-import type { Project, Section } from "../domain/model";
+import type { Label, Project } from "../domain/model";
 import type { TaskService } from "../domain/task-service";
 
 function notifyAfter<T>(operation: () => T, onChanged: () => void): T {
@@ -19,14 +19,14 @@ export function removeProject(service: TaskService, projectId: string, onChanged
   notifyAfter(() => service.removeProject(projectId), onChanged);
 }
 
-export function createSection(service: TaskService, projectId: string, name: string, onChanged: () => void): Section {
-  return notifyAfter(() => service.createSection(projectId, name), onChanged);
+export function createLabel(service: TaskService, name: string, onChanged: () => void): Label {
+  return notifyAfter(() => service.createLabel(name), onChanged);
 }
 
-export function renameSection(service: TaskService, sectionId: string, name: string, onChanged: () => void): Section {
-  return notifyAfter(() => service.renameSection(sectionId, name), onChanged);
+export function renameLabel(service: TaskService, labelId: string, name: string, onChanged: () => void): Label {
+  return notifyAfter(() => service.renameLabel(labelId, name), onChanged);
 }
 
-export function removeSection(service: TaskService, sectionId: string, onChanged: () => void): void {
-  notifyAfter(() => service.removeSection(sectionId), onChanged);
+export function removeLabel(service: TaskService, labelId: string, onChanged: () => void): void {
+  notifyAfter(() => service.removeLabel(labelId), onChanged);
 }

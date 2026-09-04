@@ -22,6 +22,10 @@ export function validateText(value: unknown, label: string): string {
   return trimmed;
 }
 
+export function normalizeLabelName(value: string): string {
+  return value.normalize("NFKC").toLowerCase();
+}
+
 export function validateNotes(value: unknown): string {
   if (typeof value !== "string") {
     throw new DomainError("INVALID_ARGUMENT", "Notes must be text");
@@ -108,17 +112,6 @@ export function validatePlacement(value: unknown): Placement {
       return { kind: "project", projectId: validateId(value.projectId) };
     } catch {
       throw new DomainError("INVALID_PLACEMENT", "Project placement is invalid");
-    }
-  }
-  if (value.kind === "section" && "projectId" in value && "sectionId" in value) {
-    try {
-      return {
-        kind: "section",
-        projectId: validateId(value.projectId),
-        sectionId: validateId(value.sectionId),
-      };
-    } catch {
-      throw new DomainError("INVALID_PLACEMENT", "Section placement is invalid");
     }
   }
   throw new DomainError("INVALID_PLACEMENT", "Placement fields do not match its kind");

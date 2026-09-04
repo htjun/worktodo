@@ -5,7 +5,6 @@ import {
   type Placement,
   type Priority,
   type Project,
-  type Section,
   type Task,
 } from "../domain/model";
 import { addCalendarDays, calendarDateAt, startOfCalendarDate } from "../domain/queries";
@@ -26,7 +25,6 @@ export type TaskEditingContext = {
   referenceInstantMs: number;
   viewerTimeZone: string;
   projects: readonly Project[];
-  sections: readonly Section[];
 };
 
 export type TaskEditingDefaults = TaskEditingValues;
@@ -42,7 +40,6 @@ export type TaskEditingMutations = Pick<TaskService, "createTask" | "updateTask"
 type OpenTaskEditingSession = () => { service: TaskEditingMutations; close: () => void };
 
 const PROJECT_PREFIX = "project:";
-const SECTION_PREFIX = "section:";
 
 function dayOfWeek(date: string): number {
   const [year, month, day] = date.split("-").map(Number);
@@ -102,7 +99,7 @@ function dueForValues(task: Task | undefined, values: TaskEditingValues, context
 
 function createInput(values: TaskEditingValues, context: TaskEditingContext): CreateTaskInput {
   const due = dueForValues(undefined, values, context);
-  const placement = taskEditingPlacementFromKey(values.selectedPlacement, context.projects, context.sections);
+  const placement = taskEditingPlacementFromKey(values.selectedPlacement, context.projects);
   return {
     title: values.title,
     notes: values.notes,
@@ -144,16 +141,10 @@ export function taskEditingPlacementKey(placement: Placement): string {
       return "inbox";
     case "project":
       return `${PROJECT_PREFIX}${placement.projectId}`;
-    case "section":
-      return `${SECTION_PREFIX}${placement.projectId}:${placement.sectionId}`;
   }
 }
 
-export function taskEditingPlacementFromKey(
-  key: string,
-  projects: readonly Project[],
-  sections: readonly Section[],
-): Placement {
+export function taskEditingPlacementFromKey(key: string, projects: readonly Project[]): Placement {
   if (key === "inbox") {
     return { kind: "inbox" };
   }
@@ -163,15 +154,7 @@ export function taskEditingPlacementFromKey(
       return { kind: "project", projectId };
     }
   }
-  if (key.startsWith(SECTION_PREFIX)) {
-    const [projectId, sectionId, extra] = key.slice(SECTION_PREFIX.length).split(":");
-    const project = projects.find((candidate) => candidate.id === projectId);
-    const section = sections.find((candidate) => candidate.id === sectionId);
-    if (!extra && project && section?.projectId === project.id) {
-      return { kind: "section", projectId: project.id, sectionId: section.id };
-    }
-  }
-  throw new DomainError("INVALID_PLACEMENT", "Choose an existing project or section");
+  throw new DomainError("INVALID_PLACEMENT", "Choose an existing project");
 }
 
 export function taskEditingDefaults(
@@ -239,14 +222,9 @@ export class TaskEditingInteraction {
     }
   }
 
-  move(
-    taskId: string,
-    selectedPlacement: string,
-    projects: readonly Project[],
-    sections: readonly Section[],
-  ): TaskEditingOutcome {
+  move(taskId: string, selectedPlacement: string, projects: readonly Project[]): TaskEditingOutcome {
     try {
-      const placement = taskEditingPlacementFromKey(selectedPlacement, projects, sections);
+      const placement = taskEditingPlacementFromKey(selectedPlacement, projects);
       return { status: "succeeded", operation: "move", task: this.mutations.moveTask(taskId, placement) };
     } catch (error) {
       return failure("move", error);

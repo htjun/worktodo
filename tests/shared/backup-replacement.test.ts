@@ -29,14 +29,13 @@ function id(index: number): string {
 
 function snapshot(offset: number): WorktodoSnapshot {
   const projectId = id(offset + 1);
-  const sectionId = id(offset + 2);
+  const labelId = id(offset + 2);
   return {
     projects: [{ id: projectId, name: `Project ${offset}`, position: 1_024, createdAtMs: 100, updatedAtMs: 100 }],
-    sections: [
+    labels: [
       {
-        id: sectionId,
-        projectId,
-        name: `Section ${offset}`,
+        id: labelId,
+        name: `Label ${offset}`,
         position: 1_024,
         createdAtMs: 100,
         updatedAtMs: 100,
@@ -50,7 +49,7 @@ function snapshot(offset: number): WorktodoSnapshot {
         priority: "high",
         position: 1_024,
         projectId,
-        sectionId,
+        labelIds: [labelId],
         due: { kind: "timed", instantMs: 10_000, timeZone: "Australia/Melbourne" },
         createdAtMs: 100,
         updatedAtMs: 300,
@@ -64,7 +63,7 @@ function snapshot(offset: number): WorktodoSnapshot {
         priority: "medium",
         position: 1_024,
         projectId,
-        sectionId: null,
+        labelIds: [],
         due: { kind: "allDay", date: "2028-02-29" },
         createdAtMs: 100,
         updatedAtMs: 300,
@@ -78,7 +77,7 @@ function snapshot(offset: number): WorktodoSnapshot {
         priority: "low",
         position: 1_024,
         projectId: null,
-        sectionId: null,
+        labelIds: [],
         due: { kind: "none" },
         createdAtMs: 100,
         updatedAtMs: 200,
@@ -92,7 +91,7 @@ function snapshot(offset: number): WorktodoSnapshot {
         priority: "none",
         position: 1_024,
         projectId: null,
-        sectionId: null,
+        labelIds: [],
         due: { kind: "none" },
         createdAtMs: 100,
         updatedAtMs: 100,
@@ -111,7 +110,7 @@ async function createContext(initial: WorktodoSnapshot) {
   const repository = new SqliteTaskRepository(db);
   repository.transaction(() => {
     initial.projects.forEach((project) => repository.insertProject(project));
-    initial.sections.forEach((section) => repository.insertSection(section));
+    initial.labels.forEach((label) => repository.insertLabel(label));
     initial.tasks.forEach((task) => repository.insertTask(task));
   });
   return { db, directory, repository, recoveryDirectory: join(directory, "Backups") };
@@ -146,7 +145,7 @@ function prepared(document: WorktodoBackupDocument): PreparedImport {
   return {
     path: "/tmp/incoming.json",
     document,
-    preview: buildImportPreview(document, { projects: [], sections: [], tasks: [] }),
+    preview: buildImportPreview(document, { projects: [], labels: [], tasks: [] }),
   };
 }
 
@@ -173,7 +172,7 @@ describe("Worktodo backup replacement", () => {
       expect(storedDocument(repository, incoming.exportedAtMs)).toEqual(incoming);
       expect(result.replaced).toEqual({
         projects: 1,
-        sections: 1,
+        labels: 1,
         tasks: 4,
         lifecycle: {
           activeIncomplete: 1,
@@ -194,10 +193,10 @@ describe("Worktodo backup replacement", () => {
 
   it.each([
     "deleteAllTasks",
-    "deleteAllSections",
+    "deleteAllLabels",
     "deleteAllProjects",
     "insertProject",
-    "insertSection",
+    "insertLabel",
     "insertTask",
     "assertIntegrity",
   ] as const)("rolls back exact prior state when %s fails", async (method) => {

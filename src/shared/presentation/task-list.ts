@@ -1,4 +1,4 @@
-import type { Project, Section, Task } from "../domain/model";
+import type { Project, Task } from "../domain/model";
 import type { TodayTask } from "../domain/queries";
 
 export type TaskListEntry = {
@@ -44,16 +44,11 @@ type DuePresentation = {
   text: string;
 };
 
-function placementLabel(task: Task, projects: Map<string, Project>, sections: Map<string, Section>): string {
+function placementLabel(task: Task, projects: Map<string, Project>): string {
   if (task.projectId === null) {
     return "Inbox";
   }
-  const project = projects.get(task.projectId)?.name ?? task.projectId;
-  if (task.sectionId === null) {
-    return project;
-  }
-  const section = sections.get(task.sectionId)?.name ?? task.sectionId;
-  return `${project} / ${section}`;
+  return projects.get(task.projectId)?.name ?? task.projectId;
 }
 
 function instantLabel(instantMs: number, viewerTimeZone: string): string {
@@ -176,14 +171,12 @@ function detailPresentation(entry: TaskListEntry, placement: string, viewerTimeZ
 export function buildTaskListItems(
   entries: readonly TaskListEntry[],
   projects: readonly Project[],
-  sections: readonly Section[],
   viewerTimeZone: string,
 ): TaskListItem[] {
   const projectMap = new Map(projects.map((project) => [project.id, project]));
-  const sectionMap = new Map(sections.map((section) => [section.id, section]));
 
   return entries.map((entry) => {
-    const placement = placementLabel(entry.task, projectMap, sectionMap);
+    const placement = placementLabel(entry.task, projectMap);
     const due = entry.task.due.kind === "none" ? null : duePresentation(entry, viewerTimeZone);
     const priority = entry.task.priority === "none" ? null : `${entry.task.priority} priority`;
     const completed = lifecycleLabel("Completed", entry.task.completedAtMs, viewerTimeZone);
@@ -205,7 +198,6 @@ export function buildTaskListItems(
 export function buildAllTaskListSections(
   tasks: readonly Task[],
   projects: readonly Project[],
-  sections: readonly Section[],
   viewerTimeZone: string,
 ): TaskListSection[] {
   const groups = [
@@ -229,7 +221,6 @@ export function buildAllTaskListSections(
       items: buildTaskListItems(
         group.tasks.map((task) => ({ task })),
         projects,
-        sections,
         viewerTimeZone,
       ),
     }));

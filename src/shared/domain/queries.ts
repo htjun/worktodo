@@ -77,10 +77,7 @@ export function queryAllTasks(tasks: readonly Task[], viewerTimeZone: string): T
 
 export function queryInbox(tasks: readonly Task[]): Task[] {
   return tasks
-    .filter(
-      (task) =>
-        task.projectId === null && task.sectionId === null && task.completedAtMs === null && task.trashedAtMs === null,
-    )
+    .filter((task) => task.projectId === null && task.completedAtMs === null && task.trashedAtMs === null)
     .sort(compareOrdinaryTasks);
 }
 
@@ -90,9 +87,9 @@ export function queryProject(tasks: readonly Task[], projectId: string): Task[] 
     .sort(compareOrdinaryTasks);
 }
 
-export function querySection(tasks: readonly Task[], sectionId: string): Task[] {
+export function queryLabel(tasks: readonly Task[], labelId: string): Task[] {
   return tasks
-    .filter((task) => task.sectionId === sectionId && task.completedAtMs === null && task.trashedAtMs === null)
+    .filter((task) => task.labelIds.includes(labelId) && task.completedAtMs === null && task.trashedAtMs === null)
     .sort(compareOrdinaryTasks);
 }
 

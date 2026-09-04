@@ -1,13 +1,13 @@
 import { z } from "zod";
-import type { Project, Section, Task } from "../domain/model";
-import { canonicalizeTimeZone, validateCalendarDate } from "../domain/validation";
+import type { Label, Project, Task } from "../domain/model";
+import { canonicalizeTimeZone, normalizeLabelName, validateCalendarDate } from "../domain/validation";
 
 export const WORKTODO_BACKUP_FORMAT = "worktodo-backup";
-export const WORKTODO_BACKUP_VERSION = 1;
+export const WORKTODO_BACKUP_VERSION = 2;
 
 export type WorktodoSnapshot = {
   projects: Project[];
-  sections: Section[];
+  labels: Label[];
   tasks: Task[];
 };
 
@@ -58,7 +58,16 @@ const projectSchema = z
   })
   .refine((value) => value.updatedAtMs >= value.createdAtMs);
 
-const sectionSchema = z
+const labelSchema = z
+  .strictObject({
+    id: uuidV4,
+    name: trimmedText,
+    position: nonNegativeInteger,
+    ...timestampedEntity,
+  })
+  .refine((value) => value.updatedAtMs >= value.createdAtMs);
+
+const legacySectionSchema = z
   .strictObject({
     id: uuidV4,
     projectId: uuidV4,
@@ -93,25 +102,37 @@ const dueSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-const taskSchema = z
-  .strictObject({
-    id: uuidV4,
-    title: trimmedText,
-    notes: z.string(),
-    priority: z.enum(["none", "low", "medium", "high"]),
-    position: nonNegativeInteger,
-    projectId: uuidV4.nullable(),
-    sectionId: uuidV4.nullable(),
-    due: dueSchema,
-    ...timestampedEntity,
-    completedAtMs: nonNegativeInteger.nullable(),
-    trashedAtMs: nonNegativeInteger.nullable(),
-  })
-  .refine((value) => value.updatedAtMs >= value.createdAtMs)
-  .refine((value) => value.completedAtMs === null || value.completedAtMs >= value.createdAtMs)
-  .refine((value) => value.completedAtMs === null || value.completedAtMs <= value.updatedAtMs)
-  .refine((value) => value.trashedAtMs === null || value.trashedAtMs >= value.createdAtMs)
-  .refine((value) => value.trashedAtMs === null || value.trashedAtMs <= value.updatedAtMs)
+const lifecycleFields = {
+  ...timestampedEntity,
+  completedAtMs: nonNegativeInteger.nullable(),
+  trashedAtMs: nonNegativeInteger.nullable(),
+};
+
+function validLifecycle(value: z.infer<typeof taskSchemaBase>): boolean {
+  return (
+    value.updatedAtMs >= value.createdAtMs &&
+    (value.completedAtMs === null ||
+      (value.completedAtMs >= value.createdAtMs && value.completedAtMs <= value.updatedAtMs)) &&
+    (value.trashedAtMs === null || (value.trashedAtMs >= value.createdAtMs && value.trashedAtMs <= value.updatedAtMs))
+  );
+}
+
+const taskSchemaBase = z.strictObject({
+  id: uuidV4,
+  title: trimmedText,
+  notes: z.string(),
+  priority: z.enum(["none", "low", "medium", "high"]),
+  position: nonNegativeInteger,
+  projectId: uuidV4.nullable(),
+  due: dueSchema,
+  ...lifecycleFields,
+});
+
+const taskSchema = taskSchemaBase.extend({ labelIds: z.array(uuidV4) }).refine(validLifecycle);
+
+const legacyTaskSchema = taskSchemaBase
+  .extend({ sectionId: uuidV4.nullable() })
+  .refine(validLifecycle)
   .refine((value) => value.sectionId === null || value.projectId !== null);
 
 const backupSchema = z.strictObject({
@@ -119,9 +140,21 @@ const backupSchema = z.strictObject({
   version: z.literal(WORKTODO_BACKUP_VERSION),
   exportedAtMs: nonNegativeInteger,
   projects: z.array(projectSchema),
-  sections: z.array(sectionSchema),
+  labels: z.array(labelSchema),
   tasks: z.array(taskSchema),
 });
+
+const legacyBackupSchema = z.strictObject({
+  format: z.literal(WORKTODO_BACKUP_FORMAT),
+  version: z.literal(1),
+  exportedAtMs: nonNegativeInteger,
+  projects: z.array(projectSchema),
+  sections: z.array(legacySectionSchema),
+  tasks: z.array(legacyTaskSchema),
+});
+
+type LegacyBackupDocument = z.infer<typeof legacyBackupSchema>;
+type LegacyTask = z.infer<typeof legacyTaskSchema>;
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -134,11 +167,12 @@ function rejectUnsupportedVersion(value: unknown): void {
   if (
     candidate?.format === WORKTODO_BACKUP_FORMAT &&
     Number.isInteger(candidate.version) &&
+    candidate.version !== 1 &&
     candidate.version !== WORKTODO_BACKUP_VERSION
   ) {
     throw new PortabilityError(
       "UNSUPPORTED_VERSION",
-      `This Worktodo backup uses version ${String(candidate.version)}. This version of Worktodo supports version 1.`,
+      `This Worktodo backup uses version ${String(candidate.version)}. This version of Worktodo supports versions 1 and 2.`,
     );
   }
 }
@@ -153,7 +187,54 @@ function rejectDuplicates(collection: string, ids: string[]): void {
   }
 }
 
+function compareOrdered(
+  left: Pick<Project, "id" | "position" | "createdAtMs">,
+  right: Pick<Project, "id" | "position" | "createdAtMs">,
+): number {
+  return (
+    left.position - right.position ||
+    left.createdAtMs - right.createdAtMs ||
+    (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+  );
+}
+
 function validateRelationships(document: WorktodoBackupDocument): void {
+  rejectDuplicates(
+    "project",
+    document.projects.map((project) => project.id),
+  );
+  rejectDuplicates(
+    "label",
+    document.labels.map((label) => label.id),
+  );
+  rejectDuplicates(
+    "task",
+    document.tasks.map((task) => task.id),
+  );
+
+  const labelNames = new Set<string>();
+  for (const label of document.labels) {
+    const normalizedName = normalizeLabelName(label.name);
+    if (labelNames.has(normalizedName)) {
+      throw new PortabilityError("DUPLICATE_ID", "The backup contains duplicate normalized label names.");
+    }
+    labelNames.add(normalizedName);
+  }
+
+  const projects = new Set(document.projects.map((project) => project.id));
+  const labels = new Set(document.labels.map((label) => label.id));
+  for (const task of document.tasks) {
+    if (task.projectId !== null && !projects.has(task.projectId)) {
+      throw new PortabilityError("BROKEN_RELATIONSHIP", "A backup task references a missing project.");
+    }
+    rejectDuplicates("task label", task.labelIds);
+    if (task.labelIds.some((labelId) => !labels.has(labelId))) {
+      throw new PortabilityError("BROKEN_RELATIONSHIP", "A backup task references a missing label.");
+    }
+  }
+}
+
+function validateLegacyRelationships(document: LegacyBackupDocument): void {
   rejectDuplicates(
     "project",
     document.projects.map((project) => project.id),
@@ -166,16 +247,13 @@ function validateRelationships(document: WorktodoBackupDocument): void {
     "task",
     document.tasks.map((task) => task.id),
   );
-
   const projects = new Set(document.projects.map((project) => project.id));
   const sections = new Map(document.sections.map((section) => [section.id, section]));
-
   for (const section of document.sections) {
     if (!projects.has(section.projectId)) {
       throw new PortabilityError("BROKEN_RELATIONSHIP", "A backup section references a missing project.");
     }
   }
-
   for (const task of document.tasks) {
     if (task.projectId !== null && !projects.has(task.projectId)) {
       throw new PortabilityError("BROKEN_RELATIONSHIP", "A backup task references a missing project.");
@@ -192,28 +270,132 @@ function validateRelationships(document: WorktodoBackupDocument): void {
   }
 }
 
+function convertedLegacyTask(task: LegacyTask, position: number, labelIds: string[]): Task {
+  return {
+    id: task.id,
+    title: task.title,
+    notes: task.notes,
+    priority: task.priority,
+    position,
+    projectId: task.projectId,
+    labelIds,
+    due: task.due,
+    createdAtMs: task.createdAtMs,
+    updatedAtMs: task.updatedAtMs,
+    completedAtMs: task.completedAtMs,
+    trashedAtMs: task.trashedAtMs,
+  };
+}
+
+function convertLegacyDocument(document: LegacyBackupDocument): WorktodoBackupDocument {
+  validateLegacyRelationships(document);
+  const projects = [...document.projects].sort(compareOrdered);
+  const projectRank = new Map(projects.map((project, index) => [project.id, index]));
+  const sections = [...document.sections].sort(
+    (left, right) =>
+      (projectRank.get(left.projectId) ?? Number.MAX_SAFE_INTEGER) -
+        (projectRank.get(right.projectId) ?? Number.MAX_SAFE_INTEGER) || compareOrdered(left, right),
+  );
+  const labels: Label[] = [];
+  const labelByName = new Map<string, Label>();
+  const labelBySection = new Map<string, string>();
+  for (const section of sections) {
+    const nameKey = normalizeLabelName(section.name);
+    let label = labelByName.get(nameKey);
+    if (!label) {
+      label = {
+        id: section.id,
+        name: section.name,
+        position: (labels.length + 1) * 1_024,
+        createdAtMs: section.createdAtMs,
+        updatedAtMs: section.updatedAtMs,
+      };
+      labels.push(label);
+      labelByName.set(nameKey, label);
+    }
+    labelBySection.set(section.id, label.id);
+  }
+
+  const converted = new Map<string, Task>();
+  for (const task of document.tasks.filter((candidate) => candidate.projectId === null)) {
+    converted.set(task.id, convertedLegacyTask(task, task.position, []));
+  }
+  for (const project of projects) {
+    const direct = document.tasks
+      .filter((task) => task.projectId === project.id && task.sectionId === null)
+      .sort(compareOrdered);
+    const sectionTasks = sections
+      .filter((section) => section.projectId === project.id)
+      .flatMap((section) =>
+        document.tasks
+          .filter((task) => task.sectionId === section.id)
+          .sort(compareOrdered)
+          .map((task) => ({ task, labelId: labelBySection.get(section.id) })),
+      );
+    [...direct.map((task) => ({ task, labelId: undefined })), ...sectionTasks].forEach(({ task, labelId }, index) => {
+      converted.set(task.id, convertedLegacyTask(task, (index + 1) * 1_024, labelId ? [labelId] : []));
+    });
+  }
+
+  return {
+    format: WORKTODO_BACKUP_FORMAT,
+    version: WORKTODO_BACKUP_VERSION,
+    exportedAtMs: document.exportedAtMs,
+    projects: document.projects,
+    labels,
+    tasks: document.tasks.map((task) => {
+      const convertedTask = converted.get(task.id);
+      if (!convertedTask) {
+        throw new PortabilityError("BROKEN_RELATIONSHIP", "A legacy backup task could not be converted.");
+      }
+      return convertedTask;
+    }),
+  };
+}
+
 function compareId(left: { id: string }, right: { id: string }): number {
   return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
 }
 
 export function canonicalBackupDocument(document: WorktodoBackupDocument): WorktodoBackupDocument {
+  const labelRank = new Map([...document.labels].sort(compareOrdered).map((label, index) => [label.id, index]));
   return {
     ...document,
     projects: [...document.projects].sort(compareId),
-    sections: [...document.sections].sort(compareId),
-    tasks: [...document.tasks].sort(compareId),
+    labels: [...document.labels].sort(compareId),
+    tasks: [...document.tasks]
+      .map((task) => ({
+        ...task,
+        labelIds: [...task.labelIds].sort(
+          (left, right) =>
+            (labelRank.get(left) ?? Number.MAX_SAFE_INTEGER) - (labelRank.get(right) ?? Number.MAX_SAFE_INTEGER),
+        ),
+      }))
+      .sort(compareId),
   };
 }
 
-export function parseBackupDocument(value: unknown): WorktodoBackupDocument {
-  rejectUnsupportedVersion(value);
+function parseVersion2(value: unknown): WorktodoBackupDocument {
   const parsed = backupSchema.safeParse(value);
   if (!parsed.success) {
     throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
   }
   const document = parsed.data as WorktodoBackupDocument;
   validateRelationships(document);
-  return document;
+  return canonicalBackupDocument(document);
+}
+
+export function parseBackupDocument(value: unknown): WorktodoBackupDocument {
+  rejectUnsupportedVersion(value);
+  const candidate = record(value);
+  if (candidate?.format === WORKTODO_BACKUP_FORMAT && candidate.version === 1) {
+    const parsed = legacyBackupSchema.safeParse(value);
+    if (!parsed.success) {
+      throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
+    }
+    return parseVersion2(convertLegacyDocument(parsed.data));
+  }
+  return parseVersion2(value);
 }
 
 export function parseBackupJson(value: string): WorktodoBackupDocument {
@@ -227,7 +409,7 @@ export function parseBackupJson(value: string): WorktodoBackupDocument {
 }
 
 export function createBackupDocument(exportedAtMs: number, snapshot: WorktodoSnapshot): WorktodoBackupDocument {
-  return parseBackupDocument({
+  return parseVersion2({
     format: WORKTODO_BACKUP_FORMAT,
     version: WORKTODO_BACKUP_VERSION,
     exportedAtMs,
@@ -236,6 +418,5 @@ export function createBackupDocument(exportedAtMs: number, snapshot: WorktodoSna
 }
 
 export function serializeBackupDocument(document: WorktodoBackupDocument): string {
-  const valid = parseBackupDocument(document);
-  return `${JSON.stringify(canonicalBackupDocument(valid), null, 2)}\n`;
+  return `${JSON.stringify(parseVersion2(document), null, 2)}\n`;
 }

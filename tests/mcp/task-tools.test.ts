@@ -119,13 +119,12 @@ describe("Worktodo MCP task tools", () => {
     const context = await createContext();
     try {
       const project = context.service.createProject("Work");
-      const section = context.service.createSection(project.id, "Next");
-      const projectsResult = await callTool(context.client, "list_projects", { query: "next" });
+      const projectsResult = await callTool(context.client, "list_projects", { query: "work" });
 
       expect(projectsResult.isError).not.toBe(true);
       expect(projectsResult.structuredContent).toMatchObject({
         total: 1,
-        projects: [{ id: project.id, name: "Work", sections: [{ id: section.id, name: "Next" }] }],
+        projects: [{ id: project.id, name: "Work" }],
       });
 
       const created = taskFrom(
@@ -133,25 +132,25 @@ describe("Worktodo MCP task tools", () => {
           title: "Ship MCP tools",
           notes: "Follow the roadmap",
           priority: "high",
-          placement: { kind: "section", projectId: project.id, sectionId: section.id },
+          placement: { kind: "project", projectId: project.id },
           due: { kind: "allDay", date: "2026-08-31" },
         }),
       );
       expect(created).toMatchObject({
         title: "Ship MCP tools",
         priority: "high",
-        placement: { kind: "section", projectId: project.id, sectionId: section.id },
+        placement: { kind: "project", projectId: project.id },
       });
       const taskId = created.id as string;
 
       const listed = await callTool(context.client, "list_tasks", {
-        view: "section",
-        sectionId: section.id,
+        view: "project",
+        projectId: project.id,
         query: "roadmap",
         limit: 1,
       });
       expect(listed.structuredContent).toMatchObject({
-        view: "section",
+        view: "project",
         query: "roadmap",
         offset: 0,
         limit: 1,
@@ -243,7 +242,6 @@ describe("Worktodo MCP task tools", () => {
     const context = await createContext();
     try {
       const project = context.service.createProject("Work");
-      const section = context.service.createSection(project.id, "Next");
       const inbox = context.service.createTask({ title: "Inbox", placement: { kind: "inbox" } });
       const today = context.service.createTask({
         title: "Today",
@@ -252,7 +250,7 @@ describe("Worktodo MCP task tools", () => {
       });
       const upcoming = context.service.createTask({
         title: "Tomorrow",
-        placement: { kind: "section", projectId: project.id, sectionId: section.id },
+        placement: { kind: "project", projectId: project.id },
         due: { kind: "allDay", date: "2026-09-01" },
       });
       context.service.completeTask(today.id);
@@ -266,7 +264,6 @@ describe("Worktodo MCP task tools", () => {
         [{ view: "completed" }, [today.id]],
         [{ view: "trash" }, [inbox.id]],
         [{ view: "project", projectId: project.id }, [upcoming.id]],
-        [{ view: "section", sectionId: section.id }, [upcoming.id]],
       ];
 
       for (const [args, expectedIds] of views) {
@@ -281,7 +278,7 @@ describe("Worktodo MCP task tools", () => {
         expect(tasks.map((task) => task.id)).toEqual(expectedIds);
       }
 
-      expect(context.getCloseCount()).toBe(8);
+      expect(context.getCloseCount()).toBe(7);
     } finally {
       await context.close();
     }
@@ -293,22 +290,17 @@ describe("Worktodo MCP task tools", () => {
       const invalidView = await callTool(context.client, "list_tasks", { view: "project" });
       expect(invalidView).toMatchObject({ isError: true });
       expect(invalidView.content).toEqual([
-        { type: "text", text: "INVALID_ARGUMENT: The project view requires only projectId" },
+        { type: "text", text: "INVALID_ARGUMENT: The project view requires projectId" },
       ]);
 
-      const invalidSection = await callTool(context.client, "list_tasks", {
-        view: "section",
+      const invalidCombination = await callTool(context.client, "list_tasks", {
+        view: "inbox",
         projectId: id(1),
-        sectionId: id(2),
       });
-      expect(invalidSection).toMatchObject({ isError: true });
-      expect(invalidSection.content).toEqual([
-        { type: "text", text: "INVALID_ARGUMENT: The section view requires only sectionId" },
+      expect(invalidCombination).toMatchObject({ isError: true });
+      expect(invalidCombination.content).toEqual([
+        { type: "text", text: "INVALID_ARGUMENT: projectId is valid only for the project view" },
       ]);
-
-      const missingSection = await callTool(context.client, "list_tasks", { view: "section", sectionId: id(999) });
-      expect(missingSection).toMatchObject({ isError: true });
-      expect(missingSection.content).toEqual([{ type: "text", text: "NOT_FOUND: Section not found" }]);
 
       const invalidTimeZone = await callTool(context.client, "list_tasks", {
         view: "inbox",
@@ -328,7 +320,7 @@ describe("Worktodo MCP task tools", () => {
       expect(emptyUpdate.content).toEqual([
         { type: "text", text: "INVALID_ARGUMENT: Provide at least one task field to update" },
       ]);
-      expect(context.getCloseCount()).toBe(6);
+      expect(context.getCloseCount()).toBe(5);
     } finally {
       await context.close();
     }

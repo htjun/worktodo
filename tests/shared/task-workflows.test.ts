@@ -57,12 +57,10 @@ describe("main task workflows", () => {
 
     try {
       const project = session.service.createProject("Work");
-      const section = session.service.createSection(project.id, "Next");
       const buildSections = (view: TaskView) =>
         buildTaskViewSections(
           loadTaskView(session.service, view, { evaluationInstantMs, viewerTimeZone }),
           session.service.listProjects(),
-          session.service.listSections(),
         );
       const events: string[] = [];
       let quickSessionCloseCount = 0;
@@ -89,7 +87,7 @@ describe("main task workflows", () => {
           customDueAtMs: null,
           selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
         },
-        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], sections: [section] },
+        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project] },
       );
       if (quickOutcome.status !== "succeeded") {
         throw new Error(quickOutcome.message);
@@ -119,7 +117,7 @@ describe("main task workflows", () => {
           customDueAtMs: null,
           selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
         },
-        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], sections: [section] },
+        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project] },
       );
       if (savedOutcome.status !== "succeeded") {
         throw new Error(savedOutcome.message);
@@ -127,12 +125,9 @@ describe("main task workflows", () => {
       events.push("task saved");
       const saved = savedOutcome.task;
       now = 3_000;
-      const movedOutcome = editing.move(
-        saved.id,
-        taskEditingPlacementKey({ kind: "section", projectId: project.id, sectionId: section.id }),
-        [project],
-        [section],
-      );
+      const movedOutcome = editing.move(saved.id, taskEditingPlacementKey({ kind: "project", projectId: project.id }), [
+        project,
+      ]);
       if (movedOutcome.status !== "succeeded") {
         throw new Error(movedOutcome.message);
       }
@@ -143,15 +138,12 @@ describe("main task workflows", () => {
         notes: "Keep behavior stable",
         priority: "high",
         projectId: project.id,
-        sectionId: section.id,
         due: { kind: "allDay", date: "2026-09-01" },
       });
       expect(buildSections({ kind: "inbox" })[0].items).toEqual([]);
-      expect(
-        buildSections({ kind: "section", projectId: project.id, sectionId: section.id })[0].items.map(
-          (item) => item.id,
-        ),
-      ).toEqual([quickTask.id]);
+      expect(buildSections({ kind: "project", projectId: project.id })[0].items.map((item) => item.id)).toEqual([
+        quickTask.id,
+      ]);
       expect(buildSections({ kind: "upcoming" })).toMatchObject([
         { key: "upcoming:2026-09-01", title: "Tomorrow", items: [{ id: quickTask.id }] },
       ]);
@@ -211,7 +203,7 @@ describe("main task workflows", () => {
     }
   });
 
-  it("loads every canonical view and normalizes deleted containers without adapter values", async () => {
+  it("loads every baseline view and normalizes deleted projects without adapter values", async () => {
     const directory = await mkdtemp(join(tmpdir(), "worktodo-task-view-test-"));
     temporaryDirectories.push(directory);
     let nextId = 1;
@@ -222,7 +214,6 @@ describe("main task workflows", () => {
     });
     try {
       const project = session.service.createProject("Work");
-      const section = session.service.createSection(project.id, "Next");
       const inbox = session.service.createTask({ title: "Inbox", placement: { kind: "inbox" } });
       const today = session.service.createTask({
         title: "Today",
@@ -231,7 +222,7 @@ describe("main task workflows", () => {
       });
       const upcoming = session.service.createTask({
         title: "Tomorrow",
-        placement: { kind: "section", projectId: project.id, sectionId: section.id },
+        placement: { kind: "project", projectId: project.id },
         due: { kind: "allDay", date: "2026-09-01" },
       });
       session.service.completeTask(today.id);
@@ -245,7 +236,6 @@ describe("main task workflows", () => {
         { kind: "completed" },
         { kind: "trash" },
         { kind: "project", projectId: project.id },
-        { kind: "section", projectId: project.id, sectionId: section.id },
       ];
       const idsFor = (view: TaskView) =>
         tasksInTaskView(loadTaskView(session.service, view, { evaluationInstantMs, viewerTimeZone })).map(
@@ -260,28 +250,17 @@ describe("main task workflows", () => {
         ["completed", [today.id]],
         ["trash", [inbox.id]],
         [`project:${project.id}`, [upcoming.id]],
-        [`section:${section.id}`, [upcoming.id]],
       ]);
-      expect(taskViewFromKey(`section:${section.id}`, [project], [section])).toEqual({
-        kind: "section",
+      expect(taskViewFromKey(`project:${project.id}`, [project])).toEqual({ kind: "project", projectId: project.id });
+      expect(normalizeTaskView({ kind: "project", projectId: project.id }, [])).toEqual({ kind: "all" });
+      expect(initialPlacementForTaskView({ kind: "project", projectId: project.id })).toEqual({
+        kind: "project",
         projectId: project.id,
-        sectionId: section.id,
       });
-      expect(
-        normalizeTaskView({ kind: "section", projectId: project.id, sectionId: section.id }, [project], []),
-      ).toEqual({ kind: "project", projectId: project.id });
-      expect(normalizeTaskView({ kind: "project", projectId: project.id }, [], [])).toEqual({ kind: "all" });
-      expect(
-        normalizeTaskView({ kind: "section", projectId: id(999), sectionId: section.id }, [project], [section]),
-      ).toEqual({ kind: "section", projectId: project.id, sectionId: section.id });
-      expect(initialPlacementForTaskView({ kind: "section", projectId: project.id, sectionId: section.id })).toEqual({
-        kind: "section",
-        projectId: project.id,
-        sectionId: section.id,
+      expect(taskViewContent({ kind: "project", projectId: project.id }, [project])).toMatchObject({
+        title: "Work",
+        searchPlaceholder: "Search Work",
       });
-      expect(
-        taskViewContent({ kind: "section", projectId: project.id, sectionId: section.id }, [project], [section]),
-      ).toMatchObject({ title: "Work / Next", searchPlaceholder: "Search Next" });
     } finally {
       session.close();
     }
@@ -298,7 +277,6 @@ describe("main task workflows", () => {
     });
     try {
       const project = session.service.createProject("Work");
-      const section = session.service.createSection(project.id, "Next");
       const overdue = session.service.createTask({
         title: "Overdue",
         placement: { kind: "inbox" },
@@ -311,7 +289,7 @@ describe("main task workflows", () => {
       });
       const upcoming = session.service.createTask({
         title: "Tomorrow",
-        placement: { kind: "section", projectId: project.id, sectionId: section.id },
+        placement: { kind: "project", projectId: project.id },
         due: { kind: "allDay", date: "2026-09-01" },
       });
       const context = { evaluationInstantMs, viewerTimeZone: "Australia/Victoria" };
@@ -354,22 +332,12 @@ describe("main task workflows", () => {
       expect(melbourneToday.result.tasks.find((entry) => entry.task.id === today.id)?.status).toBe("overdue");
       expect(melbourneToday.result.tasks.find((entry) => entry.task.id === upcoming.id)?.status).toBe("dueToday");
 
-      expect(resolveTaskView(session.service, "project", project.id, undefined)).toEqual({
+      expect(resolveTaskView("project", project.id)).toEqual({
         kind: "project",
         projectId: project.id,
       });
-      expect(resolveTaskView(session.service, "section", undefined, section.id)).toEqual({
-        kind: "section",
-        projectId: project.id,
-        sectionId: section.id,
-      });
-      expect(() => resolveTaskView(session.service, "project", undefined, undefined)).toThrow(
-        "The project view requires only projectId",
-      );
-      expect(() => resolveTaskView(session.service, "section", undefined, id(999))).toThrow("Section not found");
-      expect(() => resolveTaskView(session.service, "inbox", project.id, undefined)).toThrow(
-        "projectId and sectionId are valid only for their matching views",
-      );
+      expect(() => resolveTaskView("project", undefined)).toThrow("The project view requires projectId");
+      expect(() => resolveTaskView("inbox", project.id)).toThrow("projectId is valid only for the project view");
       expect(() => loadTaskView(session.service, { kind: "inbox" }, { ...context, evaluationInstantMs: -1 })).toThrow(
         "Evaluation instant must be a non-negative safe integer",
       );

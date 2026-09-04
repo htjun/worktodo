@@ -3,10 +3,7 @@ export type Priority = "none" | "low" | "medium" | "high";
 export type DueValue =
   { kind: "none" } | { kind: "allDay"; date: string } | { kind: "timed"; instantMs: number; timeZone: string };
 
-export type Placement =
-  | { kind: "inbox" }
-  | { kind: "project"; projectId: string }
-  | { kind: "section"; projectId: string; sectionId: string };
+export type Placement = { kind: "inbox" } | { kind: "project"; projectId: string };
 
 export type Project = {
   id: string;
@@ -16,9 +13,8 @@ export type Project = {
   updatedAtMs: number;
 };
 
-export type Section = {
+export type Label = {
   id: string;
-  projectId: string;
   name: string;
   position: number;
   createdAtMs: number;
@@ -32,7 +28,7 @@ export type Task = {
   priority: Priority;
   position: number;
   projectId: string | null;
-  sectionId: string | null;
+  labelIds: string[];
   due: DueValue;
   createdAtMs: number;
   updatedAtMs: number;
@@ -53,26 +49,16 @@ export class DomainError extends Error {
   }
 }
 
-export function placementOf(task: Pick<Task, "projectId" | "sectionId">): Placement {
-  if (task.projectId === null && task.sectionId === null) {
+export function placementOf(task: Pick<Task, "projectId">): Placement {
+  if (task.projectId === null) {
     return { kind: "inbox" };
   }
-  if (task.projectId !== null && task.sectionId === null) {
-    return { kind: "project", projectId: task.projectId };
-  }
-  if (task.projectId !== null && task.sectionId !== null) {
-    return { kind: "section", projectId: task.projectId, sectionId: task.sectionId };
-  }
-
-  throw new DomainError("INVALID_PLACEMENT", "A task section requires a project");
+  return { kind: "project", projectId: task.projectId };
 }
 
-export function placementFields(placement: Placement): Pick<Task, "projectId" | "sectionId"> {
+export function placementFields(placement: Placement): Pick<Task, "projectId"> {
   if (placement.kind === "inbox") {
-    return { projectId: null, sectionId: null };
+    return { projectId: null };
   }
-  if (placement.kind === "project") {
-    return { projectId: placement.projectId, sectionId: null };
-  }
-  return { projectId: placement.projectId, sectionId: placement.sectionId };
+  return { projectId: placement.projectId };
 }

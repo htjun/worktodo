@@ -22,10 +22,9 @@ function id(index: number): string {
 function populatedSnapshot(): WorktodoSnapshot {
   return {
     projects: [{ id: id(1), name: "Work", position: 1_024, createdAtMs: 100, updatedAtMs: 100 }],
-    sections: [
+    labels: [
       {
         id: id(2),
-        projectId: id(1),
         name: "Next",
         position: 1_024,
         createdAtMs: 100,
@@ -44,7 +43,7 @@ function task(index: number, completedAtMs: number | null, trashedAtMs: number |
     priority: "none" as const,
     position: 1_024,
     projectId: null,
-    sectionId: null,
+    labelIds: [],
     due: { kind: "none" as const },
     createdAtMs: 100,
     updatedAtMs: Math.max(completedAtMs ?? 100, trashedAtMs ?? 100),
@@ -74,7 +73,7 @@ function serviceFor(current: WorktodoSnapshot, transaction = vi.fn(<Result>(oper
   const repository = {
     transaction,
     listProjects: () => current.projects,
-    listSections: () => current.sections,
+    listLabels: () => current.labels,
     listTasks: () => current.tasks,
   } as unknown as ReplaceableTaskRepository;
   return { service: new PortabilityService(repository, "/tmp/recovery", () => 10_000), transaction };
@@ -90,14 +89,14 @@ describe("Worktodo import validation and preview", () => {
     const document = createBackupDocument(9_000, populatedSnapshot());
     await writeFile(path, serializeBackupDocument(document), "utf8");
 
-    const prepared = serviceFor({ projects: [], sections: [], tasks: [] }).service.prepare(path);
+    const prepared = serviceFor({ projects: [], labels: [], tasks: [] }).service.prepare(path);
     expect(prepared.document).toEqual(document);
     expect(prepared.preview).toEqual({
-      formatVersion: 1,
+      formatVersion: 2,
       exportedAtMs: 9_000,
       incoming: {
         projects: 1,
-        sections: 1,
+        labels: 1,
         tasks: 4,
         lifecycle: {
           activeIncomplete: 1,
@@ -108,7 +107,7 @@ describe("Worktodo import validation and preview", () => {
       },
       current: {
         projects: 0,
-        sections: 0,
+        labels: 0,
         tasks: 0,
         lifecycle: {
           activeIncomplete: 0,
@@ -159,14 +158,14 @@ describe("Worktodo import validation and preview", () => {
   it.each([
     [
       "unsupported versions",
-      (document: WorktodoBackupDocument) => ({ ...document, version: 2 }),
+      (document: WorktodoBackupDocument) => ({ ...document, version: 3 }),
       "UNSUPPORTED_VERSION",
     ],
     [
       "broken relationships",
       (document: WorktodoBackupDocument) => ({
         ...document,
-        sections: [{ ...document.sections[0], projectId: id(999) }],
+        tasks: [{ ...document.tasks[0], labelIds: [id(999)] }, ...document.tasks.slice(1)],
       }),
       "BROKEN_RELATIONSHIP",
     ],
@@ -185,7 +184,7 @@ describe("Worktodo import validation and preview", () => {
   it("calls the current snapshot reader only after a valid document", async () => {
     const path = await temporaryPath("backup.json");
     await writeFile(path, serializeBackupDocument(createBackupDocument(9_000, populatedSnapshot())), "utf8");
-    const current = { projects: [], sections: [], tasks: [] };
+    const current = { projects: [], labels: [], tasks: [] };
     const { service, transaction } = serviceFor(current);
 
     const prepared = service.prepare(path);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { taskLifecycleActionKindForViewKind } from "../../src/shared/application/task-lifecycle-interaction";
-import type { Project, Section, Task } from "../../src/shared/domain/model";
+import type { Project, Task } from "../../src/shared/domain/model";
 import { taskLifecycleMutationPresentation } from "../../src/shared/presentation/task-lifecycle";
 import {
   buildAllTaskListSections,
@@ -17,15 +17,6 @@ const project: Project = {
   createdAtMs: 1_000,
   updatedAtMs: 1_000,
 };
-const section: Section = {
-  id: "00000000-0000-4000-8000-000000000002",
-  projectId: project.id,
-  name: "Next",
-  position: 1_024,
-  createdAtMs: 1_000,
-  updatedAtMs: 1_000,
-};
-
 function task(overrides: Partial<Task> = {}): Task {
   return {
     id: "00000000-0000-4000-8000-000000000003",
@@ -34,7 +25,7 @@ function task(overrides: Partial<Task> = {}): Task {
     priority: "high",
     position: 1_024,
     projectId: project.id,
-    sectionId: section.id,
+    labelIds: [],
     due: { kind: "allDay", date: "2026-10-04" },
     createdAtMs: 1_000,
     updatedAtMs: 1_000,
@@ -48,15 +39,14 @@ describe("task presentation mapping", () => {
   it("groups All Tasks under Inbox and non-empty projects in project order", () => {
     const work: Project = { ...project, id: "work", name: "Work", position: 2_048 };
     const empty: Project = { ...project, id: "empty", name: "Empty", position: 3_072 };
-    const inboxTask = task({ id: "inbox", projectId: null, sectionId: null });
-    const workTask = task({ id: "work-task", projectId: work.id, sectionId: null });
-    const directPersonalTask = task({ id: "personal-direct", sectionId: null });
-    const sectionPersonalTask = task({ id: "personal-section" });
+    const inboxTask = task({ id: "inbox", projectId: null });
+    const workTask = task({ id: "work-task", projectId: work.id });
+    const directPersonalTask = task({ id: "personal-direct" });
+    const secondPersonalTask = task({ id: "personal-second" });
 
     const groups = buildAllTaskListSections(
-      [inboxTask, workTask, directPersonalTask, sectionPersonalTask],
+      [inboxTask, workTask, directPersonalTask, secondPersonalTask],
       [work, empty, project],
-      [section],
       "Australia/Melbourne",
     );
 
@@ -70,7 +60,7 @@ describe("task presentation mapping", () => {
       [["work-task", "Work"]],
       [
         ["personal-direct", "Personal"],
-        ["personal-section", "Personal / Next"],
+        ["personal-second", "Personal"],
       ],
     ]);
   });
@@ -81,21 +71,19 @@ describe("task presentation mapping", () => {
       id: "00000000-0000-4000-8000-000000000004",
       title: "Inbox task",
       projectId: null,
-      sectionId: null,
       priority: "none",
       due: { kind: "none" },
     });
     const items = buildTaskListItems(
       [{ task: first, todayStatus: "overdue" }, { task: second }],
       [project],
-      [section],
       "Australia/Melbourne",
     );
     expect(items.map((item) => item.id)).toEqual([first.id, second.id]);
     expect(items[0]).toMatchObject({
-      subtitle: "Personal / Next",
+      subtitle: "Personal",
       metadata: ["high priority", "Overdue 2026-10-04"],
-      keywords: ["Personal / Next", "Open the planning workspace"],
+      keywords: ["Personal", "Open the planning workspace"],
     });
     expect(items[1]).toMatchObject({ subtitle: "Inbox", metadata: [] });
   });
@@ -111,14 +99,12 @@ describe("task presentation mapping", () => {
       task({
         id: "00000000-0000-4000-8000-000000000010",
         projectId: null,
-        sectionId: null,
         priority: "none",
         due: { kind: "none" },
       }),
       task({
         id: "00000000-0000-4000-8000-000000000011",
         projectId: project.id,
-        sectionId: null,
         priority: "low",
         due: { kind: "allDay", date: "2026-10-04" },
       }),
@@ -135,8 +121,8 @@ describe("task presentation mapping", () => {
       { task: sourceTasks[2], todayStatus: "dueToday" as const },
     ];
 
-    const first = buildTaskListItems(entries, [project], [section], "Australia/Melbourne");
-    const second = buildTaskListItems(entries, [project], [section], "Australia/Melbourne");
+    const first = buildTaskListItems(entries, [project], "Australia/Melbourne");
+    const second = buildTaskListItems(entries, [project], "Australia/Melbourne");
 
     expect(first.map((item) => item.detail.metadata.slice(0, 3))).toEqual([
       [
@@ -150,7 +136,7 @@ describe("task presentation mapping", () => {
         { title: "Overdue", text: "2026-10-04" },
       ],
       [
-        { title: "Project", text: "Personal / Next" },
+        { title: "Project", text: "Personal" },
         { title: "Priority", text: "Medium" },
         { title: "Today", text: timedLabel },
       ],
@@ -173,7 +159,7 @@ describe("task presentation mapping", () => {
   });
 
   it("maps lifecycle actions for safe secondary placement", () => {
-    for (const viewKind of ["all", "today", "upcoming", "inbox", "project", "section"]) {
+    for (const viewKind of ["all", "today", "upcoming", "inbox", "project"]) {
       const kind = taskLifecycleActionKindForViewKind(viewKind);
       expect({ kind, ...taskLifecycleMutationPresentation(kind) }).toEqual({
         kind: "complete",
@@ -197,7 +183,7 @@ describe("task presentation mapping", () => {
 
   it("shows completion acknowledgement without changing the task title or source item", () => {
     const source = task({ priority: "medium", due: { kind: "none" } });
-    const [item] = buildTaskListItems([{ task: source }], [], [], "Australia/Melbourne");
+    const [item] = buildTaskListItems([{ task: source }], [], "Australia/Melbourne");
     const before = structuredClone(item);
     const completed = { ...source, completedAtMs: 2_000, updatedAtMs: 2_000 };
 
@@ -235,7 +221,6 @@ describe("task presentation mapping", () => {
         },
       ],
       [project],
-      [section],
       "Australia/Melbourne",
     );
 
@@ -244,7 +229,7 @@ describe("task presentation mapping", () => {
       `Trashed ${format.format(new Date(trashedAtMs))}`,
     ]);
     expect(item.detail.metadata).toEqual([
-      { title: "Project", text: "Personal / Next" },
+      { title: "Project", text: "Personal" },
       { title: "Priority", text: "None" },
       { title: "Due Date", text: "None" },
       { title: "Created", text: format.format(new Date(1_000)) },

@@ -17,7 +17,7 @@ export function backupFilename(exportedAtMs: number): string {
 export function readSnapshot(repository: TaskRepository): WorktodoSnapshot {
   return {
     projects: repository.listProjects(),
-    sections: repository.listSections(),
+    labels: repository.listLabels(),
     tasks: repository.listTasks(),
   };
 }

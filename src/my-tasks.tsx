@@ -20,7 +20,7 @@ import {
 } from "./shared/application/task-lifecycle-interaction";
 import { loadTaskView, normalizeTaskView, type TaskView } from "./shared/application/task-views";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import { placementOf, type Project, type Section, type Task } from "./shared/domain/model";
+import { placementOf, type Project, type Task } from "./shared/domain/model";
 import { taskLifecycleHistoryTitle, taskLifecycleMutationPresentation } from "./shared/presentation/task-lifecycle";
 import { parseMyTasksLaunchContext, type MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { taskListRowPresentation } from "./shared/presentation/task-list";
@@ -42,7 +42,6 @@ type ListState = {
   mutationError: string | null;
   taskSections: TaskListSection[];
   projects: Project[];
-  sections: Section[];
 };
 
 function messageFrom(error: unknown): string {
@@ -88,7 +87,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     mutationError: null,
     taskSections: [],
     projects: [],
-    sections: [],
   });
 
   useEffect(() => {
@@ -103,7 +101,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         mutationError: null,
         taskSections: [],
         projects: [],
-        sections: [],
       });
     }
     return () => opened?.close();
@@ -116,8 +113,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     setState((current) => ({ ...current, isLoading: true, error: null }));
     try {
       const projects = session.service.listProjects();
-      const sections = session.service.listSections();
-      const nextView = normalizeTaskView(view, projects, sections);
+      const nextView = normalizeTaskView(view, projects);
       if (taskViewKey(nextView) !== taskViewKey(view)) {
         lifecycle.current?.clearAcknowledgements();
         setIsShowingDetail(false);
@@ -130,10 +126,8 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         taskSections: buildTaskViewSections(
           loadTaskView(session.service, nextView, { evaluationInstantMs: Date.now(), viewerTimeZone }),
           projects,
-          sections,
         ),
         projects,
-        sections,
       });
     } catch (error) {
       setState((current) => ({
@@ -265,7 +259,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       <TaskForm
         service={session.service}
         projects={state.projects}
-        sections={state.sections}
         initialPlacement={{ kind: "inbox" }}
         viewerTimeZone={viewerTimeZone}
         onSaved={refreshAfterUnrelatedMutation}
@@ -279,7 +272,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     state.error,
     state.isLoading,
     state.projects,
-    state.sections,
     viewerTimeZone,
   ]);
 
@@ -300,7 +292,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
           service={session.service}
           task={task}
           projects={state.projects}
-          sections={state.sections}
           initialPlacement={placementOf(task)}
           viewerTimeZone={viewerTimeZone}
           onSaved={refreshAfterUnrelatedMutation}
@@ -318,17 +309,15 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     state.error,
     state.isLoading,
     state.projects,
-    state.sections,
     viewerTimeZone,
   ]);
 
-  const content = taskViewContent(view, state.projects, state.sections);
+  const content = taskViewContent(view, state.projects);
   const taskCount = state.taskSections.reduce((count, section) => count + section.items.length, 0);
   const createTarget = session ? (
     <TaskForm
       service={session.service}
       projects={state.projects}
-      sections={state.sections}
       initialPlacement={initialPlacementForTaskView(view)}
       viewerTimeZone={viewerTimeZone}
       onSaved={refreshAfterUnrelatedMutation}
@@ -356,9 +345,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         }
       }}
       searchBarPlaceholder={content.searchPlaceholder}
-      searchBarAccessory={
-        <TaskViewDropdown view={view} projects={state.projects} sections={state.sections} onChange={changeView} />
-      }
+      searchBarAccessory={<TaskViewDropdown view={view} projects={state.projects} onChange={changeView} />}
     >
       {state.error ? (
         <List.EmptyView icon={Icon.Warning} title="Unable to open Worktodo" description={state.error} />
@@ -465,7 +452,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                                   service={session.service}
                                   task={item.task}
                                   projects={state.projects}
-                                  sections={state.sections}
                                   initialPlacement={placementOf(item.task)}
                                   viewerTimeZone={viewerTimeZone}
                                   onSaved={refreshAfterUnrelatedMutation}
@@ -482,7 +468,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                                   service={session.service}
                                   task={item.task}
                                   projects={state.projects}
-                                  sections={state.sections}
                                   onSaved={refreshAfterUnrelatedMutation}
                                 />
                               }

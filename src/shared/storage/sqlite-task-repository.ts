@@ -1,6 +1,7 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
-import type { DueValue, Priority, Project, Section, Task } from "../domain/model";
+import type { DueValue, Label, Priority, Project, Task } from "../domain/model";
 import type { TaskRepository } from "../domain/repository";
+import { normalizeLabelName } from "../domain/validation";
 
 type Row = Record<string, unknown>;
 
@@ -74,10 +75,9 @@ function projectFromRow(row: Row): Project {
   };
 }
 
-function sectionFromRow(row: Row): Section {
+function labelFromRow(row: Row): Label {
   return {
     id: requiredString(row, "id"),
-    projectId: requiredString(row, "project_id"),
     name: requiredString(row, "name"),
     position: requiredInteger(row, "position"),
     createdAtMs: requiredInteger(row, "created_at_ms"),
@@ -85,7 +85,7 @@ function sectionFromRow(row: Row): Section {
   };
 }
 
-function taskFromRow(row: Row): Task {
+function taskFromRow(row: Row, labelIds: string[]): Task {
   return {
     id: requiredString(row, "id"),
     title: requiredString(row, "title"),
@@ -93,7 +93,7 @@ function taskFromRow(row: Row): Task {
     priority: priority(row),
     position: requiredInteger(row, "position"),
     projectId: nullableString(row, "project_id"),
-    sectionId: nullableString(row, "section_id"),
+    labelIds,
     due: dueValue(row),
     createdAtMs: requiredInteger(row, "created_at_ms"),
     updatedAtMs: requiredInteger(row, "updated_at_ms"),
@@ -148,38 +148,76 @@ export class SqliteTaskRepository implements TaskRepository {
     this.db.prepare("DELETE FROM projects WHERE id = ?").run(id);
   }
 
-  getSection(id: string): Section | null {
-    return first(this.db.prepare("SELECT * FROM sections WHERE id = ?"), id, sectionFromRow);
+  getLabel(id: string): Label | null {
+    return first(this.db.prepare("SELECT * FROM labels WHERE id = ?"), id, labelFromRow);
   }
 
-  listSections(): Section[] {
-    return (this.db.prepare("SELECT * FROM sections").all() as Row[]).map(sectionFromRow);
+  listLabels(): Label[] {
+    return (this.db.prepare("SELECT * FROM labels").all() as Row[]).map(labelFromRow);
   }
 
-  insertSection(section: Section): void {
+  insertLabel(label: Label): void {
     this.db
       .prepare(
-        "INSERT INTO sections(id, project_id, name, position, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO labels(id, name, name_key, position, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(section.id, section.projectId, section.name, section.position, section.createdAtMs, section.updatedAtMs);
+      .run(label.id, label.name, normalizeLabelName(label.name), label.position, label.createdAtMs, label.updatedAtMs);
   }
 
-  updateSection(section: Section): void {
+  updateLabel(label: Label): void {
     this.db
-      .prepare("UPDATE sections SET name = ?, position = ?, updated_at_ms = ? WHERE id = ?")
-      .run(section.name, section.position, section.updatedAtMs, section.id);
+      .prepare("UPDATE labels SET name = ?, name_key = ?, position = ?, updated_at_ms = ? WHERE id = ?")
+      .run(label.name, normalizeLabelName(label.name), label.position, label.updatedAtMs, label.id);
   }
 
-  deleteSection(id: string): void {
-    this.db.prepare("DELETE FROM sections WHERE id = ?").run(id);
+  deleteLabel(id: string): void {
+    this.db.prepare("DELETE FROM labels WHERE id = ?").run(id);
   }
 
   getTask(id: string): Task | null {
-    return first(this.db.prepare("SELECT * FROM tasks WHERE id = ?"), id, taskFromRow);
+    const task = first(this.db.prepare("SELECT * FROM tasks WHERE id = ?"), id, (row) => row);
+    return task ? taskFromRow(task, this.labelIdsForTask(id)) : null;
   }
 
   listTasks(): Task[] {
-    return (this.db.prepare("SELECT * FROM tasks").all() as Row[]).map(taskFromRow);
+    const labelIds = new Map<string, string[]>();
+    const associations = this.db
+      .prepare(
+        `SELECT task_labels.task_id, task_labels.label_id
+         FROM task_labels
+         JOIN labels ON labels.id = task_labels.label_id
+         ORDER BY labels.position, labels.created_at_ms, labels.id`,
+      )
+      .all() as Row[];
+    for (const row of associations) {
+      const taskId = requiredString(row, "task_id");
+      const taskLabels = labelIds.get(taskId) ?? [];
+      taskLabels.push(requiredString(row, "label_id"));
+      labelIds.set(taskId, taskLabels);
+    }
+    return (this.db.prepare("SELECT * FROM tasks").all() as Row[]).map((row) =>
+      taskFromRow(row, labelIds.get(requiredString(row, "id")) ?? []),
+    );
+  }
+
+  private labelIdsForTask(taskId: string): string[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT task_labels.label_id
+           FROM task_labels
+           JOIN labels ON labels.id = task_labels.label_id
+           WHERE task_labels.task_id = ?
+           ORDER BY labels.position, labels.created_at_ms, labels.id`,
+        )
+        .all(taskId) as Row[]
+    ).map((row) => requiredString(row, "label_id"));
+  }
+
+  private replaceTaskLabels(task: Task): void {
+    this.db.prepare("DELETE FROM task_labels WHERE task_id = ?").run(task.id);
+    const insert = this.db.prepare("INSERT INTO task_labels(task_id, label_id) VALUES (?, ?)");
+    task.labelIds.forEach((labelId) => insert.run(task.id, labelId));
   }
 
   insertTask(task: Task): void {
@@ -188,10 +226,10 @@ export class SqliteTaskRepository implements TaskRepository {
       .prepare(
         `
         INSERT INTO tasks(
-          id, title, notes, priority, position, project_id, section_id,
+          id, title, notes, priority, position, project_id,
           due_kind, due_date, due_at_ms, due_timezone,
           created_at_ms, updated_at_ms, completed_at_ms, trashed_at_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       )
       .run(
@@ -201,13 +239,13 @@ export class SqliteTaskRepository implements TaskRepository {
         task.priority,
         task.position,
         task.projectId,
-        task.sectionId,
         ...due,
         task.createdAtMs,
         task.updatedAtMs,
         task.completedAtMs,
         task.trashedAtMs,
       );
+    this.replaceTaskLabels(task);
   }
 
   updateTask(task: Task): void {
@@ -216,7 +254,7 @@ export class SqliteTaskRepository implements TaskRepository {
       .prepare(
         `
         UPDATE tasks SET
-          title = ?, notes = ?, priority = ?, position = ?, project_id = ?, section_id = ?,
+          title = ?, notes = ?, priority = ?, position = ?, project_id = ?,
           due_kind = ?, due_date = ?, due_at_ms = ?, due_timezone = ?,
           updated_at_ms = ?, completed_at_ms = ?, trashed_at_ms = ?
         WHERE id = ?
@@ -228,21 +266,21 @@ export class SqliteTaskRepository implements TaskRepository {
         task.priority,
         task.position,
         task.projectId,
-        task.sectionId,
         ...due,
         task.updatedAtMs,
         task.completedAtMs,
         task.trashedAtMs,
         task.id,
       );
+    this.replaceTaskLabels(task);
   }
 
   deleteAllTasks(): void {
     this.db.exec("DELETE FROM tasks");
   }
 
-  deleteAllSections(): void {
-    this.db.exec("DELETE FROM sections");
+  deleteAllLabels(): void {
+    this.db.exec("DELETE FROM labels");
   }
 
   deleteAllProjects(): void {

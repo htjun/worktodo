@@ -9,7 +9,7 @@ import {
   type TaskEditingFailureField,
 } from "./shared/application/task-editing";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import type { Project, Section } from "./shared/domain/model";
+import type { Project } from "./shared/domain/model";
 import { DueDateFields, ProjectDropdown } from "./task-form-controls";
 
 type QuickAddFormValues = {
@@ -19,7 +19,6 @@ type QuickAddFormValues = {
 
 type QuickAddState = {
   projects: Project[];
-  sections: Section[];
   error: string | null;
 };
 
@@ -36,11 +35,10 @@ export default function QuickAdd() {
       session = openProductionWorktodo();
       return {
         projects: session.service.listProjects(),
-        sections: session.service.listSections(),
         error: null,
       };
     } catch (error) {
-      return { projects: [], sections: [], error: messageFrom(error) };
+      return { projects: [], error: messageFrom(error) };
     } finally {
       session?.close();
     }
@@ -77,7 +75,7 @@ export default function QuickAdd() {
         customDueAtMs: customDueDate?.getTime() ?? null,
         selectedPlacement,
       },
-      { referenceInstantMs, viewerTimeZone, projects: state.projects, sections: state.sections },
+      { referenceInstantMs, viewerTimeZone, projects: state.projects },
     );
     if (outcome.status === "failed") {
       setIsSubmitting(false);
@@ -113,7 +111,6 @@ export default function QuickAdd() {
       <Form.TextField id="title" title="Title" autoFocus error={titleError} onChange={() => setTitleError(undefined)} />
       <ProjectDropdown
         projects={state.projects}
-        sections={state.sections}
         value={selectedPlacement}
         error={placementError}
         onChange={(placement) => {

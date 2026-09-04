@@ -10,7 +10,7 @@ export type FailurePresentation = {
 function countRows(counts: BackupCounts): Array<[string, number]> {
   return [
     ["Projects", counts.projects],
-    ["Sections", counts.sections],
+    ["Labels", counts.labels],
     ["Tasks", counts.tasks],
     ["Active incomplete", counts.lifecycle.activeIncomplete],
     ["Active completed", counts.lifecycle.activeCompleted],

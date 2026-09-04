@@ -6,7 +6,7 @@ import type { BackupCounts } from "./import-preview";
 
 export interface ReplaceableTaskRepository extends TaskRepository {
   deleteAllTasks(): void;
-  deleteAllSections(): void;
+  deleteAllLabels(): void;
   deleteAllProjects(): void;
   assertIntegrity(): void;
 }

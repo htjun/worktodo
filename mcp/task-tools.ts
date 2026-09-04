@@ -29,7 +29,6 @@ const dueSchema = z.discriminatedUnion("kind", [
 const placementSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("inbox") }).strict(),
   z.object({ kind: z.literal("project"), projectId: z.string() }).strict(),
-  z.object({ kind: z.literal("section"), projectId: z.string(), sectionId: z.string() }).strict(),
 ]);
 const taskSchema = z
   .object({
@@ -46,16 +45,6 @@ const taskSchema = z
     trashedAtMs: nonNegativeSafeIntegerSchema.nullable(),
   })
   .strict();
-const sectionSchema = z
-  .object({
-    id: z.string(),
-    projectId: z.string(),
-    name: z.string(),
-    position: nonNegativeSafeIntegerSchema,
-    createdAtMs: nonNegativeSafeIntegerSchema,
-    updatedAtMs: nonNegativeSafeIntegerSchema,
-  })
-  .strict();
 const projectSchema = z
   .object({
     id: z.string(),
@@ -63,12 +52,11 @@ const projectSchema = z
     position: nonNegativeSafeIntegerSchema,
     createdAtMs: nonNegativeSafeIntegerSchema,
     updatedAtMs: nonNegativeSafeIntegerSchema,
-    sections: z.array(sectionSchema),
   })
   .strict();
 const taskViewSchema = z.enum(TASK_VIEW_KINDS);
 const pageInputSchema = {
-  query: z.string().optional().describe("Case-insensitive title, notes, project, or section substring"),
+  query: z.string().optional().describe("Case-insensitive title, notes, or project substring"),
   offset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
 };
@@ -178,13 +166,11 @@ function filterTasks(service: TaskService, tasks: Task[], query: string | undefi
 
   const search = normalizedSearch(trimmed);
   const projectNames = new Map(service.listProjects().map((project) => [project.id, project.name]));
-  const sectionNames = new Map(service.listSections().map((section) => [section.id, section.name]));
   return tasks.filter((task) => {
     const values = [
       task.title,
       task.notes,
       task.projectId === null ? "Inbox" : (projectNames.get(task.projectId) ?? ""),
-      task.sectionId === null ? "" : (sectionNames.get(task.sectionId) ?? ""),
     ];
     return values.some((value) => normalizedSearch(value).includes(search));
   });
@@ -198,18 +184,11 @@ function taskListText(view: TaskViewKind, tasks: Task[], total: number, offset: 
   return [header, ...tasks.map((task) => `- ${singleLine(task.title)} (${task.id})`)].join("\n");
 }
 
-function projectListText(
-  projects: Array<{ id: string; name: string; sections: Array<{ id: string; name: string }> }>,
-  total: number,
-  offset: number,
-): string {
+function projectListText(projects: Array<{ id: string; name: string }>, total: number, offset: number): string {
   if (total === 0) {
     return "No projects matched.";
   }
-  const lines = projects.flatMap((project) => [
-    `- ${singleLine(project.name)} (${project.id})`,
-    ...project.sections.map((section) => `  - ${singleLine(section.name)} (${section.id})`),
-  ]);
+  const lines = projects.map((project) => `- ${singleLine(project.name)} (${project.id})`);
   return [`Returned ${projects.length} of ${total} matching projects from offset ${offset}.`, ...lines].join("\n");
 }
 
@@ -218,7 +197,7 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     "list_projects",
     {
       title: "List Worktodo Projects",
-      description: "List a bounded page of local Worktodo projects and their sections, including stable placement IDs.",
+      description: "List a bounded page of local Worktodo projects, including stable placement IDs.",
       inputSchema: z.object(pageInputSchema).strict(),
       outputSchema: z
         .object({
@@ -232,23 +211,14 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     async ({ query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
       withSession("list_projects", dependencies, (service) => {
         const search = query?.trim();
-        const sections = service.listSections();
         const projects = service.listProjects().filter((project) => {
           if (!search) {
             return true;
           }
           const normalized = normalizedSearch(search);
-          return (
-            normalizedSearch(project.name).includes(normalized) ||
-            sections.some(
-              (section) => section.projectId === project.id && normalizedSearch(section.name).includes(normalized),
-            )
-          );
+          return normalizedSearch(project.name).includes(normalized);
         });
-        const page = projects.slice(offset, offset + limit).map((project) => ({
-          ...project,
-          sections: sections.filter((section) => section.projectId === project.id),
-        }));
+        const page = projects.slice(offset, offset + limit);
         const output = {
           query: search || null,
           offset,
@@ -268,13 +238,11 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     "list_tasks",
     {
       title: "List Worktodo Tasks",
-      description:
-        "List and search a bounded page of local tasks by view. Use projectId only with view=project and sectionId only with view=section.",
+      description: "List and search a bounded page of local tasks by view. Use projectId only with view=project.",
       inputSchema: z
         .object({
           view: taskViewSchema.optional(),
           projectId: z.string().optional(),
-          sectionId: z.string().optional(),
           timeZone: z.string().optional().describe("IANA timezone for all-day and Today/Upcoming evaluation"),
           ...pageInputSchema,
         })
@@ -291,9 +259,9 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
         .strict(),
       annotations: READ_ANNOTATIONS,
     },
-    async ({ view = "all", projectId, sectionId, timeZone, query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
+    async ({ view = "all", projectId, timeZone, query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
       withSession("list_tasks", dependencies, (service) => {
-        const taskView = loadTaskView(service, resolveTaskView(service, view, projectId, sectionId), {
+        const taskView = loadTaskView(service, resolveTaskView(view, projectId), {
           evaluationInstantMs: dependencies.now(),
           viewerTimeZone: timeZone ?? dependencies.viewerTimeZone(),
         });
@@ -396,7 +364,7 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     "move_task",
     {
       title: "Move Worktodo Task",
-      description: "Move one active local task to Inbox, a project, or a project section using stable IDs.",
+      description: "Move one active local task to Inbox or a project using stable IDs.",
       inputSchema: z.object({ id: z.string(), placement: placementSchema }).strict(),
       outputSchema: taskOutputSchema,
       annotations: {

@@ -17,7 +17,7 @@ export type TaskLifecycleCounts = {
 
 export type BackupCounts = {
   projects: number;
-  sections: number;
+  labels: number;
   tasks: number;
   lifecycle: TaskLifecycleCounts;
 };
@@ -115,7 +115,7 @@ export function countSnapshot(snapshot: WorktodoSnapshot): BackupCounts {
 
   return {
     projects: snapshot.projects.length,
-    sections: snapshot.sections.length,
+    labels: snapshot.labels.length,
     tasks: snapshot.tasks.length,
     lifecycle,
   };

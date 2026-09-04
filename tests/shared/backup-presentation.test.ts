@@ -9,17 +9,17 @@ import {
 } from "../../src/shared/presentation/backup-restore";
 
 const preview: ImportPreview = {
-  formatVersion: 1,
+  formatVersion: 2,
   exportedAtMs: Date.parse("2026-08-30T06:25:30.123Z"),
   incoming: {
     projects: 2,
-    sections: 3,
+    labels: 3,
     tasks: 10,
     lifecycle: { activeIncomplete: 4, activeCompleted: 3, trashedIncomplete: 2, trashedCompleted: 1 },
   },
   current: {
     projects: 1,
-    sections: 1,
+    labels: 1,
     tasks: 4,
     lifecycle: { activeIncomplete: 1, activeCompleted: 1, trashedIncomplete: 1, trashedCompleted: 1 },
   },
@@ -34,6 +34,7 @@ describe("backup and restore presentation", () => {
     expect(markdown).toContain("This will replace all current Worktodo data. Cancelling changes nothing.");
     expect(markdown).toContain("Exported: 2026-08-30T06:25:30.123Z");
     expect(markdown).toContain("| Tasks | 4 | 10 |");
+    expect(markdown).toContain("| Labels | 1 | 3 |");
     expect(markdown).toContain("| Active incomplete | 1 | 4 |");
     expect(markdown).toContain("| Trashed completed | 1 | 1 |");
   });

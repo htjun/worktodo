@@ -6,14 +6,7 @@ import {
   taskEditingPlacementKey,
   type TaskEditingFailureField,
 } from "./shared/application/task-editing";
-import {
-  placementOf,
-  type Placement,
-  type Priority,
-  type Project,
-  type Section,
-  type Task,
-} from "./shared/domain/model";
+import { placementOf, type Placement, type Priority, type Project, type Task } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
 import { DueDateFields, ProjectDropdown } from "./task-form-controls";
 
@@ -26,7 +19,6 @@ export function TaskForm({
   service,
   task,
   projects,
-  sections,
   initialPlacement,
   viewerTimeZone,
   onSaved,
@@ -34,7 +26,6 @@ export function TaskForm({
   service: TaskService;
   task?: Task;
   projects: readonly Project[];
-  sections: readonly Section[];
   initialPlacement: Placement;
   viewerTimeZone: string;
   onSaved: () => void;
@@ -72,7 +63,7 @@ export function TaskForm({
         customDueAtMs: customDueDate?.getTime() ?? null,
         selectedPlacement,
       },
-      { referenceInstantMs, viewerTimeZone, projects, sections },
+      { referenceInstantMs, viewerTimeZone, projects },
     );
     if (outcome.status === "failed") {
       const setFieldError: Record<TaskEditingFailureField, (message: string) => void> = {
@@ -112,7 +103,6 @@ export function TaskForm({
       {!task ? (
         <ProjectDropdown
           projects={projects}
-          sections={sections}
           value={selectedPlacement}
           error={placementError}
           onChange={(placement) => {
@@ -155,13 +145,11 @@ export function MoveTaskForm({
   service,
   task,
   projects,
-  sections,
   onSaved,
 }: {
   service: TaskService;
   task: Task;
   projects: readonly Project[];
-  sections: readonly Section[];
   onSaved: () => void;
 }) {
   const { pop } = useNavigation();
@@ -173,7 +161,7 @@ export function MoveTaskForm({
   async function submit(): Promise<boolean> {
     setFormError(undefined);
     setPlacementError(undefined);
-    const outcome = editing.move(task.id, selectedPlacement, projects, sections);
+    const outcome = editing.move(task.id, selectedPlacement, projects);
     if (outcome.status === "failed") {
       if (outcome.field === "placement") {
         setPlacementError(outcome.message);
@@ -202,7 +190,6 @@ export function MoveTaskForm({
       <Form.Description title="Task" text={task.title} />
       <ProjectDropdown
         projects={projects}
-        sections={sections}
         value={selectedPlacement}
         error={placementError}
         onChange={(placement) => {

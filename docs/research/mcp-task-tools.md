@@ -25,20 +25,20 @@ automating it would launch a separate model session rather than only testing the
 | Tool            | Read-only | Destructive | Idempotent | Purpose                                                        |
 | --------------- | --------- | ----------- | ---------- | -------------------------------------------------------------- |
 | `ping`          | Yes       | No          | Yes        | Report server and runtime readiness.                           |
-| `list_projects` | Yes       | No          | Yes        | Page and search projects with their stable section IDs.        |
+| `list_projects` | Yes       | No          | Yes        | Page and search projects with stable IDs.                      |
 | `list_tasks`    | Yes       | No          | Yes        | Page and search tasks in one supported task view.              |
 | `get_task`      | Yes       | No          | Yes        | Return one task by stable ID, including Trash and Completed.   |
 | `create_task`   | No        | No          | No         | Create an active task, defaulting to Inbox.                    |
 | `update_task`   | No        | Yes         | Yes        | Replace selected content fields on an active task.             |
-| `move_task`     | No        | Yes         | Yes        | Move an active task to Inbox, a project, or a section.         |
+| `move_task`     | No        | Yes         | Yes        | Move an active task to Inbox or a project.                     |
 | `complete_task` | No        | Yes         | Yes        | Complete an active task.                                       |
 | `reopen_task`   | No        | Yes         | Yes        | Reopen an active completed task.                               |
 | `trash_task`    | No        | Yes         | Yes        | Move a task to recoverable Trash without deleting its content. |
 | `restore_task`  | No        | Yes         | Yes        | Restore a task while preserving its completion state.          |
 
-`list_tasks` supports `all`, `today`, `upcoming`, `inbox`, `completed`, `trash`, `project`, and
-`section` views. Project and section views require their matching stable ID. Search is a
-case-insensitive substring match across title, notes, project name, and section name. Search runs
+`list_tasks` supports `all`, `today`, `upcoming`, `inbox`, `completed`, `trash`, and `project`
+views. Project views require their matching stable ID. Search is a case-insensitive substring match
+across title, notes, and Project name. Search runs
 before pagination. Both list tools default to 50 results and reject limits above 100; results report
 the offset, total, and whether another page exists.
 
@@ -49,7 +49,7 @@ to the MCP process's current system timezone, but callers can provide another ti
 
 ## Safety and failure behavior
 
-- No tool exposes arbitrary SQL, shell access, permanent task deletion, or project and section writes.
+- No tool exposes arbitrary SQL, shell access, permanent task deletion, or Project and Label writes.
 - MCP marks every state-replacing operation as destructive; only task creation is an additive write.
 - Domain failures return bounded error codes and messages as MCP tool errors.
 - Unexpected infrastructure failures are logged to stderr and returned as a generic internal error;
@@ -65,7 +65,7 @@ The protocol tests prove:
 
 - discovery of all eleven tools and the server instructions;
 - exact read-only, destructive, idempotent, and closed-world annotations;
-- project and section ID discovery;
+- Project ID discovery;
 - create, search, get, update, move, complete, reopen, Trash, and restore behavior;
 - Today evaluation in an explicit timezone and filtering before pagination;
 - production-session closure after both successful and failed calls;

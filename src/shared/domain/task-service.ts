@@ -3,18 +3,18 @@ import {
   placementFields,
   placementOf,
   type DueValue,
+  type Label,
   type Placement,
   type Priority,
   type Project,
-  type Section,
   type Task,
 } from "./model";
 import {
   queryAllTasks,
   queryCompleted,
   queryInbox,
+  queryLabel,
   queryProject,
-  querySection,
   queryToday,
   queryTrash,
   type TodayResult,
@@ -25,6 +25,7 @@ import type { TaskRepository } from "./repository";
 import {
   validateDueValue,
   validateId,
+  normalizeLabelName,
   validateNonNegativeInteger,
   validateNotes,
   validatePlacement,
@@ -46,6 +47,7 @@ export type CreateTaskInput = {
   notes?: string;
   priority?: Priority;
   placement: Placement;
+  labelIds?: string[];
   due?: DueValue;
 };
 
@@ -53,6 +55,7 @@ export type UpdateTaskInput = {
   title?: string;
   notes?: string;
   priority?: Priority;
+  labelIds?: string[];
   due?: DueValue;
 };
 
@@ -68,10 +71,11 @@ function samePlacement(left: Placement, right: Placement): boolean {
   if (left.kind === "inbox") {
     return right.kind === "inbox";
   }
-  if (left.kind === "project") {
-    return right.kind === "project" && left.projectId === right.projectId;
-  }
-  return right.kind === "section" && left.projectId === right.projectId && left.sectionId === right.sectionId;
+  return right.kind === "project" && left.projectId === right.projectId;
+}
+
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function sameDue(left: DueValue, right: DueValue): boolean {
@@ -141,12 +145,12 @@ export class TaskService {
     return project;
   }
 
-  private requireSection(id: string): Section {
-    const section = this.repository.getSection(validateId(id));
-    if (!section) {
-      throw new DomainError("NOT_FOUND", "Section not found");
+  private requireLabel(id: string): Label {
+    const label = this.repository.getLabel(validateId(id));
+    if (!label) {
+      throw new DomainError("NOT_FOUND", "Label not found");
     }
-    return section;
+    return label;
   }
 
   private requireTask(id: string): Task {
@@ -174,13 +178,23 @@ export class TaskService {
     if (!project) {
       throw new DomainError("INVALID_PLACEMENT", "Placement project does not exist");
     }
-    if (placement.kind === "section") {
-      const section = this.repository.getSection(placement.sectionId);
-      if (!section || section.projectId !== project.id) {
-        throw new DomainError("INVALID_PLACEMENT", "Placement section does not belong to the project");
-      }
-    }
     return placement;
+  }
+
+  private validatedLabelIds(values: readonly string[]): string[] {
+    if (!Array.isArray(values)) {
+      throw new DomainError("INVALID_ARGUMENT", "Label IDs must be a list");
+    }
+    const validIds = values.map(validateId);
+    if (new Set(validIds).size !== validIds.length) {
+      throw new DomainError("INVALID_ARGUMENT", "Label IDs cannot contain duplicates");
+    }
+    const requested = new Set(validIds);
+    const labels = this.listLabels();
+    if (labels.filter((label) => requested.has(label.id)).length !== requested.size) {
+      throw new DomainError("NOT_FOUND", "Label not found");
+    }
+    return labels.filter((label) => requested.has(label.id)).map((label) => label.id);
   }
 
   private tasksInPlacement(placement: Placement): Task[] {
@@ -236,21 +250,12 @@ export class TaskService {
     const validId = validateId(id);
     this.repository.transaction(() => {
       const project = this.requireProject(validId);
-      const sections = this.repository
-        .listSections()
-        .filter((section) => section.projectId === project.id)
-        .sort(compareOrdered);
       const tasks = this.repository.listTasks();
-      const directTasks = tasks
-        .filter((task) => task.projectId === project.id && task.sectionId === null)
-        .sort(compareOrdered);
-      const sectionTasks = sections.flatMap((section) =>
-        tasks.filter((task) => task.sectionId === section.id).sort(compareOrdered),
-      );
-      const inboxTasks = tasks.filter((task) => task.projectId === null && task.sectionId === null);
+      const projectTasks = tasks.filter((task) => task.projectId === project.id).sort(compareOrdered);
+      const inboxTasks = tasks.filter((task) => task.projectId === null);
       const operationTime = this.operationTime();
 
-      for (const task of [...directTasks, ...sectionTasks]) {
+      for (const task of projectTasks) {
         const position = appendPosition(inboxTasks, (existing) =>
           this.repository.updateTask({
             ...existing,
@@ -260,103 +265,78 @@ export class TaskService {
         const updated = {
           ...task,
           projectId: null,
-          sectionId: null,
           position,
           updatedAtMs: effectiveUpdate(task.updatedAtMs, operationTime),
         };
         this.repository.updateTask(updated);
         inboxTasks.push(updated);
       }
-      sections.forEach((section) => this.repository.deleteSection(section.id));
       this.repository.deleteProject(project.id);
     });
   }
 
-  createSection(projectId: string, name: string): Section {
-    const validProjectId = validateId(projectId);
-    const validName = validateText(name, "Section name");
+  createLabel(name: string): Label {
+    const validName = validateText(name, "Label name");
+    const normalizedName = normalizeLabelName(validName);
     return this.repository.transaction(() => {
-      this.requireProject(validProjectId);
-      const sections = this.repository.listSections().filter((section) => section.projectId === validProjectId);
+      const labels = this.repository.listLabels();
+      if (labels.some((label) => normalizeLabelName(label.name) === normalizedName)) {
+        throw new DomainError("INVALID_ARGUMENT", "Label name already exists");
+      }
       const timestamp = this.operationTime();
-      const position = appendPosition(sections, (section) =>
-        this.repository.updateSection({
-          ...section,
-          updatedAtMs: effectiveUpdate(section.updatedAtMs, timestamp),
+      const position = appendPosition(labels, (label) =>
+        this.repository.updateLabel({
+          ...label,
+          updatedAtMs: effectiveUpdate(label.updatedAtMs, timestamp),
         }),
       );
-      const section: Section = {
-        id: this.newId((id) => this.repository.getSection(id)),
-        projectId: validProjectId,
+      const label: Label = {
+        id: this.newId((id) => this.repository.getLabel(id)),
         name: validName,
         position,
         createdAtMs: timestamp,
         updatedAtMs: timestamp,
       };
-      this.repository.insertSection(section);
-      return section;
+      this.repository.insertLabel(label);
+      return label;
     });
   }
 
-  renameSection(id: string, name: string): Section {
+  renameLabel(id: string, name: string): Label {
     const validId = validateId(id);
-    const validName = validateText(name, "Section name");
+    const validName = validateText(name, "Label name");
+    const normalizedName = normalizeLabelName(validName);
     return this.repository.transaction(() => {
-      const section = this.requireSection(validId);
-      if (section.name === validName) {
-        return section;
+      const label = this.requireLabel(validId);
+      if (label.name === validName) {
+        return label;
+      }
+      if (
+        this.repository
+          .listLabels()
+          .some((candidate) => candidate.id !== label.id && normalizeLabelName(candidate.name) === normalizedName)
+      ) {
+        throw new DomainError("INVALID_ARGUMENT", "Label name already exists");
       }
       const updated = {
-        ...section,
+        ...label,
         name: validName,
-        updatedAtMs: effectiveUpdate(section.updatedAtMs, this.operationTime()),
+        updatedAtMs: effectiveUpdate(label.updatedAtMs, this.operationTime()),
       };
-      this.repository.updateSection(updated);
+      this.repository.updateLabel(updated);
       return updated;
     });
   }
 
-  listSections(projectId?: string): Section[] {
-    const validProjectId = projectId === undefined ? undefined : validateId(projectId);
-    if (validProjectId !== undefined) {
-      this.requireProject(validProjectId);
-    }
-    return this.repository
-      .listSections()
-      .filter((section) => validProjectId === undefined || section.projectId === validProjectId)
-      .sort(
-        (left, right) =>
-          (left.projectId < right.projectId ? -1 : left.projectId > right.projectId ? 1 : 0) ||
-          compareOrdered(left, right),
-      );
+  listLabels(): Label[] {
+    return this.repository.listLabels().sort(compareOrdered);
   }
 
-  removeSection(id: string): void {
+  removeLabel(id: string): void {
     const validId = validateId(id);
     this.repository.transaction(() => {
-      const section = this.requireSection(validId);
-      const allTasks = this.repository.listTasks();
-      const sectionTasks = allTasks.filter((task) => task.sectionId === section.id).sort(compareOrdered);
-      const directTasks = allTasks.filter((task) => task.projectId === section.projectId && task.sectionId === null);
-      const operationTime = this.operationTime();
-
-      for (const task of sectionTasks) {
-        const position = appendPosition(directTasks, (existing) =>
-          this.repository.updateTask({
-            ...existing,
-            updatedAtMs: effectiveUpdate(existing.updatedAtMs, operationTime),
-          }),
-        );
-        const updated = {
-          ...task,
-          sectionId: null,
-          position,
-          updatedAtMs: effectiveUpdate(task.updatedAtMs, operationTime),
-        };
-        this.repository.updateTask(updated);
-        directTasks.push(updated);
-      }
-      this.repository.deleteSection(section.id);
+      const label = this.requireLabel(validId);
+      this.repository.deleteLabel(label.id);
     });
   }
 
@@ -367,6 +347,7 @@ export class TaskService {
     const due = validateDueValue(input.due ?? { kind: "none" });
     return this.repository.transaction(() => {
       const placement = this.validatedPlacement(input.placement);
+      const labelIds = this.validatedLabelIds(input.labelIds ?? []);
       const tasks = this.tasksInPlacement(placement);
       const timestamp = this.operationTime();
       const position = appendPosition(tasks, (task) =>
@@ -382,6 +363,7 @@ export class TaskService {
         priority,
         position,
         ...placementFields(placement),
+        labelIds,
         due,
         createdAtMs: timestamp,
         updatedAtMs: timestamp,
@@ -405,17 +387,20 @@ export class TaskService {
     const due = input.due === undefined ? undefined : validateDueValue(input.due);
     return this.repository.transaction(() => {
       const task = this.requireActiveTask(validId);
+      const labelIds = input.labelIds === undefined ? task.labelIds : this.validatedLabelIds(input.labelIds);
       const updated = {
         ...task,
         title: title ?? task.title,
         notes: notes ?? task.notes,
         priority: priority ?? task.priority,
+        labelIds,
         due: due ?? task.due,
       };
       if (
         task.title === updated.title &&
         task.notes === updated.notes &&
         task.priority === updated.priority &&
+        sameIds(task.labelIds, updated.labelIds) &&
         sameDue(task.due, updated.due)
       ) {
         return task;
@@ -529,10 +514,10 @@ export class TaskService {
     return queryProject(this.repository.listTasks(), validProjectId);
   }
 
-  listSectionTasks(sectionId: string): Task[] {
-    const validSectionId = validateId(sectionId);
-    this.requireSection(validSectionId);
-    return querySection(this.repository.listTasks(), validSectionId);
+  listLabelTasks(labelId: string): Task[] {
+    const validLabelId = validateId(labelId);
+    this.requireLabel(validLabelId);
+    return queryLabel(this.repository.listTasks(), validLabelId);
   }
 
   listCompleted(): Task[] {

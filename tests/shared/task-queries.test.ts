@@ -4,8 +4,8 @@ import {
   queryAllTasks,
   queryCompleted,
   queryInbox,
+  queryLabel,
   queryProject,
-  querySection,
   queryToday,
   queryTrash,
   queryUpcoming,
@@ -21,7 +21,7 @@ function task(
   index: number,
   due: DueValue,
   options: Partial<
-    Pick<Task, "priority" | "position" | "createdAtMs" | "completedAtMs" | "trashedAtMs" | "projectId" | "sectionId">
+    Pick<Task, "priority" | "position" | "createdAtMs" | "completedAtMs" | "trashedAtMs" | "projectId" | "labelIds">
   > = {},
 ): Task {
   return {
@@ -31,7 +31,7 @@ function task(
     priority: options.priority ?? "none",
     position: options.position ?? 1_024,
     projectId: options.projectId ?? null,
-    sectionId: options.sectionId ?? null,
+    labelIds: options.labelIds ?? [],
     due,
     createdAtMs: options.createdAtMs ?? 1_000,
     updatedAtMs: 1_000,
@@ -203,22 +203,22 @@ describe("task queries", () => {
     expect(queryInbox(tasks).map((task) => task.id)).toEqual([id(3), id(2), id(1)]);
   });
 
-  it("returns active incomplete project and section tasks in canonical ordinary order", () => {
+  it("returns active incomplete project and label tasks in canonical ordinary order", () => {
     const projectId = id(100);
-    const sectionId = id(101);
+    const labelId = id(101);
     const otherProjectId = id(102);
     const tasks = [
       task(1, { kind: "none" }, { projectId, priority: "none", position: 1_024 }),
-      task(2, { kind: "none" }, { projectId, sectionId, priority: "high", position: 2_048 }),
-      task(3, { kind: "none" }, { projectId, sectionId, priority: "high", position: 1_024 }),
-      task(4, { kind: "none" }, { projectId, sectionId, completedAtMs: 2_000 }),
+      task(2, { kind: "none" }, { projectId, labelIds: [labelId], priority: "high", position: 2_048 }),
+      task(3, { kind: "none" }, { projectId, labelIds: [labelId], priority: "high", position: 1_024 }),
+      task(4, { kind: "none" }, { projectId, labelIds: [labelId], completedAtMs: 2_000 }),
       task(5, { kind: "none" }, { projectId, trashedAtMs: 2_000 }),
-      task(6, { kind: "none" }, { projectId: otherProjectId, sectionId }),
+      task(6, { kind: "none" }, { projectId: otherProjectId, labelIds: [labelId] }),
       task(7, { kind: "none" }),
     ];
 
     expect(queryProject(tasks, projectId).map((value) => value.id)).toEqual([id(3), id(2), id(1)]);
-    expect(querySection(tasks, sectionId).map((value) => value.id)).toEqual([id(3), id(2), id(6)]);
+    expect(queryLabel(tasks, labelId).map((value) => value.id)).toEqual([id(3), id(2), id(6)]);
   });
 
   it("separates completed and trashed tasks while preserving ordinary ordering", () => {

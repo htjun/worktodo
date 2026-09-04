@@ -26,12 +26,13 @@ async function createContext(now = Date.parse("2026-08-30T06:25:30.123Z")) {
   let nextId = 1;
   const service = new TaskService(repository, { createId: () => id(nextId++), now: () => 1_000 });
   const project = service.createProject("Work");
-  const section = service.createSection(project.id, "Next");
+  const label = service.createLabel("Next");
   service.createTask({
     title: "Ship backup",
     notes: "Keep every field",
     priority: "high",
-    placement: { kind: "section", projectId: project.id, sectionId: section.id },
+    placement: { kind: "project", projectId: project.id },
+    labelIds: [label.id],
     due: { kind: "allDay", date: "2026-08-31" },
   });
   return { db, directory, portability: new PortabilityService(repository, join(directory, "recovery"), () => now) };
@@ -62,8 +63,9 @@ describe("Worktodo backup export", () => {
 
       expect(result.path).toBe(join(output, "worktodo-backup-20260830T062530123Z.json"));
       expect(parseBackupJson(serialized)).toEqual(result.document);
-      expect(result.document).toMatchObject({ projects: [{ name: "Work" }], sections: [{ name: "Next" }] });
+      expect(result.document).toMatchObject({ projects: [{ name: "Work" }], labels: [{ name: "Next" }] });
       expect(result.document.tasks).toHaveLength(1);
+      expect(result.document.tasks[0].labelIds).toEqual([result.document.labels[0].id]);
       expect((await stat(result.path)).mode & 0o777).toBe(0o600);
       expect((await readdir(output)).filter((name) => name.startsWith("."))).toEqual([]);
     } finally {

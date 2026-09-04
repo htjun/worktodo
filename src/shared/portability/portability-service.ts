@@ -27,10 +27,10 @@ function unchangedError(error: unknown): PortabilityError {
 
 function replaceRows(repository: ReplaceableTaskRepository, document: WorktodoBackupDocument): void {
   repository.deleteAllTasks();
-  repository.deleteAllSections();
+  repository.deleteAllLabels();
   repository.deleteAllProjects();
   document.projects.forEach((project) => repository.insertProject(project));
-  document.sections.forEach((section) => repository.insertSection(section));
+  document.labels.forEach((label) => repository.insertLabel(label));
   document.tasks.forEach((task) => repository.insertTask(task));
 }
 

@@ -9,12 +9,12 @@ import {
 } from "../../src/shared/application/task-lifecycle-interaction";
 import { hideMenuBar, initialMenuBarHidden, loadMenuBarModel } from "../../src/shared/application/menu-bar-workflows";
 import {
+  createLabel,
   createProject,
-  createSection,
+  removeLabel,
   removeProject,
-  removeSection,
+  renameLabel,
   renameProject,
-  renameSection,
 } from "../../src/shared/application/project-workflows";
 import { openWorktodoAtPath, type OpenWorktodoOptions } from "../../src/shared/application/worktodo";
 import { parseBackupJson } from "../../src/shared/portability/backup-contract";
@@ -31,7 +31,7 @@ afterEach(async () => {
 });
 
 describe("secondary human workflows", () => {
-  it("notifies only after project and section mutations persist", async () => {
+  it("notifies only after project and label mutations persist", async () => {
     const directory = await mkdtemp(join(tmpdir(), "worktodo-project-workflow-test-"));
     temporaryDirectories.push(directory);
     let nextId = 1;
@@ -45,27 +45,28 @@ describe("secondary human workflows", () => {
     const changed = () => changes.push("changed");
     try {
       const project = createProject(session.service, "Work", changed);
-      const section = createSection(session.service, project.id, "Next", changed);
+      const label = createLabel(session.service, "Next", changed);
       const task = session.service.createTask({
         title: "Organize regression coverage",
-        placement: { kind: "section", projectId: project.id, sectionId: section.id },
+        placement: { kind: "project", projectId: project.id },
+        labelIds: [label.id],
       });
       now = 500;
       const renamedProject = renameProject(session.service, project.id, " Personal ", changed);
-      const renamedSection = renameSection(session.service, section.id, " Later ", changed);
+      const renamedLabel = renameLabel(session.service, label.id, " Later ", changed);
       expect(renamedProject).toMatchObject({ name: "Personal", updatedAtMs: 1_001 });
-      expect(renamedSection).toMatchObject({ name: "Later", updatedAtMs: 1_001 });
+      expect(renamedLabel).toMatchObject({ name: "Later", updatedAtMs: 1_001 });
 
       const changeCount = changes.length;
       expect(() => renameProject(session.service, project.id, " ", changed)).toThrow("Project name cannot be empty");
       expect(changes).toHaveLength(changeCount);
 
       now = 2_000;
-      removeSection(session.service, section.id, changed);
-      expect(session.service.getTask(task.id)).toMatchObject({ projectId: project.id, sectionId: null });
+      removeLabel(session.service, label.id, changed);
+      expect(session.service.getTask(task.id)).toMatchObject({ projectId: project.id, labelIds: [] });
       now = 3_000;
       removeProject(session.service, project.id, changed);
-      expect(session.service.getTask(task.id)).toMatchObject({ projectId: null, sectionId: null });
+      expect(session.service.getTask(task.id)).toMatchObject({ projectId: null, labelIds: [] });
       expect(changes).toHaveLength(6);
     } finally {
       session.close();
