@@ -1,32 +1,28 @@
-import { Cache, Color, Icon, Keyboard, LaunchType, MenuBarExtra, Toast, type LaunchProps } from "@raycast/api";
+import { Cache, Color, Icon, LaunchType, MenuBarExtra, Toast, type LaunchProps } from "@raycast/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { showMenuBarFeedback } from "./menu-bar-feedback";
 import { launchMyTasks } from "./raycast-commands";
 import {
-  completeMenuBarTask,
+  createOperationScopedTaskLifecycleMutations,
+  IMMEDIATE_COMPLETION_POLICY,
+  TaskLifecycleInteraction,
+  type TaskLifecycleHistoryState,
+  type TaskLifecycleMutationKind,
+} from "./shared/application/task-lifecycle-interaction";
+import {
   hideMenuBar as persistMenuBarHidden,
   initialMenuBarHidden,
   loadMenuBarModel,
-  performMenuBarTaskHistory,
-  trashMenuBarTask,
 } from "./shared/application/menu-bar-workflows";
-import {
-  TimedTaskHistoryController,
-  type TimedTaskHistoryDirection,
-  type TimedTaskHistoryState,
-} from "./shared/application/timed-task-history";
 import { openProductionWorktodo } from "./shared/application/worktodo";
-import type { Priority, Task } from "./shared/domain/model";
+import type { Priority } from "./shared/domain/model";
 import { buildMenuBarTaskHistoryItem, menuBarTaskTitle, type MenuBarModel } from "./shared/presentation/menu-bar";
-import { timedTaskHistoryPresentation } from "./shared/presentation/task-history";
+import { taskLifecycleHistoryTitle, taskLifecycleMutationPresentation } from "./shared/presentation/task-lifecycle";
 import type { MyTasksLaunchContext } from "./shared/presentation/task-launch";
+import { taskLifecycleHistoryActionPresentation } from "./task-lifecycle-raycast";
 
 const EMPTY_MODEL: MenuBarModel = { count: 0, title: undefined, sections: [] };
 const menuBarVisibilityCache = new Cache({ namespace: "menu-bar-visibility" });
-const TASK_HISTORY_SHORTCUTS: Record<TimedTaskHistoryDirection, Keyboard.Shortcut> = {
-  undo: { modifiers: ["cmd"], key: "z" },
-  redo: { modifiers: ["cmd", "shift"], key: "z" },
-};
 const PRIORITY_TINT: Record<Priority, Color> = {
   none: Color.SecondaryText,
   low: Color.Blue,
@@ -58,12 +54,18 @@ export default function Command(props: LaunchProps) {
     initialMenuBarHidden(menuBarVisibilityCache, props.launchType === LaunchType.UserInitiated),
   );
   const [state, setState] = useState<MenuState>({ isLoading: true, error: null, model: EMPTY_MODEL });
-  const [taskHistoryState, setTaskHistoryState] = useState<TimedTaskHistoryState | null>(null);
-  const taskHistory = useRef<TimedTaskHistoryController | null>(null);
-  if (taskHistory.current === null) {
-    taskHistory.current = new TimedTaskHistoryController(setTaskHistoryState);
+  const [taskHistoryState, setTaskHistoryState] = useState<TaskLifecycleHistoryState | null>(null);
+  const refreshRef = useRef<() => void>(() => undefined);
+  const lifecycle = useRef<TaskLifecycleInteraction | null>(null);
+  if (lifecycle.current === null) {
+    lifecycle.current = new TaskLifecycleInteraction({
+      mutations: createOperationScopedTaskLifecycleMutations(openProductionWorktodo),
+      policy: IMMEDIATE_COMPLETION_POLICY,
+      refresh: { refreshView: () => refreshRef.current() },
+      onHistoryChanged: setTaskHistoryState,
+    });
   }
-  const performTaskHistoryRef = useRef<(state: TimedTaskHistoryState) => Promise<void>>(async () => undefined);
+  const performTaskHistoryRef = useRef<(state: TaskLifecycleHistoryState) => Promise<void>>(async () => undefined);
 
   const showFeedback = useCallback(
     (options: Toast.Options) => showMenuBarFeedback(props.launchType, options),
@@ -82,6 +84,7 @@ export default function Command(props: LaunchProps) {
       setState({ isLoading: false, error: messageFrom(error), model: EMPTY_MODEL });
     }
   }, [viewerTimeZone]);
+  refreshRef.current = refresh;
 
   useEffect(() => {
     if (!hidden) {
@@ -89,17 +92,16 @@ export default function Command(props: LaunchProps) {
     }
   }, [hidden, refresh]);
 
-  useEffect(() => () => taskHistory.current?.dispose(), []);
+  useEffect(() => () => lifecycle.current?.dispose(), []);
 
   const showHistoryToast = useCallback(
-    async (title: string, message: string, nextState: TimedTaskHistoryState) => {
-      const nextPresentation = timedTaskHistoryPresentation(nextState);
+    async (title: string, message: string, nextState: TaskLifecycleHistoryState) => {
       await showFeedback({
         style: Toast.Style.Success,
         title,
         message,
         primaryAction: {
-          title: nextPresentation.title,
+          title: taskLifecycleHistoryTitle(nextState),
           onAction: () => void performTaskHistoryRef.current(nextState),
         },
       });
@@ -108,91 +110,66 @@ export default function Command(props: LaunchProps) {
   );
 
   const performTaskHistory = useCallback(
-    async (expected: TimedTaskHistoryState) => {
-      if (!taskHistory.current) {
+    async (expected: TaskLifecycleHistoryState) => {
+      const interaction = lifecycle.current;
+      if (!interaction) {
         return;
       }
-      try {
-        const result = taskHistory.current.perform(expected, () => {
-          performMenuBarTaskHistory(openProductionWorktodo, expected);
+
+      const result = interaction.runHistory(expected);
+      if (result.status === "unavailable") {
+        await showFeedback({
+          style: Toast.Style.Failure,
+          title: expected.direction === "undo" ? "Undo no longer available" : "Redo no longer available",
+          message: expected.taskTitle,
         });
-        if (result.status === "unavailable") {
-          await showFeedback({
-            style: Toast.Style.Failure,
-            title: expected.direction === "undo" ? "Undo no longer available" : "Redo no longer available",
-            message: expected.taskTitle,
-          });
-          return;
-        }
-        refresh();
-        const completedPresentation = timedTaskHistoryPresentation(result.previous);
-        await showHistoryToast(completedPresentation.successTitle, expected.taskTitle, result.state);
-      } catch (error) {
+        return;
+      }
+      if (result.status === "failed") {
         await showFeedback({
           style: Toast.Style.Failure,
           title: expected.direction === "undo" ? "Unable to undo task" : "Unable to redo task",
-          message: messageFrom(error),
+          message: messageFrom(result.error),
         });
+        return;
       }
+      if (result.status === "duplicate") {
+        return;
+      }
+
+      const presentation = taskLifecycleMutationPresentation(result.operation);
+      await showHistoryToast(presentation.successTitle, result.task.title, result.history);
     },
-    [refresh, showFeedback, showHistoryToast],
+    [showFeedback, showHistoryToast],
   );
   performTaskHistoryRef.current = performTaskHistory;
 
-  const completeTask = useCallback(
-    async (taskId: string) => {
-      let completed: Task;
-      try {
-        completed = completeMenuBarTask(openProductionWorktodo, taskId);
-      } catch (error) {
+  const performLifecycleMutation = useCallback(
+    async (operation: TaskLifecycleMutationKind, taskId: string, failureTitle: string) => {
+      const interaction = lifecycle.current;
+      if (!interaction) {
+        return;
+      }
+
+      const result = interaction.runMutation(operation, taskId);
+      if (result.status === "failed") {
         await showFeedback({
           style: Toast.Style.Failure,
-          title: "Unable to complete task",
-          message: messageFrom(error),
+          title: failureTitle,
+          message: messageFrom(result.error),
         });
         return;
       }
-
-      const historyState = taskHistory.current?.record({
-        kind: "complete",
-        taskId: completed.id,
-        taskTitle: completed.title,
-      });
-      if (!historyState) {
+      if (result.status === "duplicate") {
         return;
       }
-      refresh();
-      await showHistoryToast("Task completed", completed.title, historyState);
+
+      const presentation = taskLifecycleMutationPresentation(result.operation);
+      if (result.history) {
+        await showHistoryToast(presentation.successTitle, result.task.title, result.history);
+      }
     },
-    [refresh, showFeedback, showHistoryToast],
-  );
-
-  const removeTask = useCallback(
-    async (taskId: string) => {
-      let trashed: Task;
-      try {
-        trashed = trashMenuBarTask(openProductionWorktodo, taskId);
-      } catch (error) {
-        await showFeedback({
-          style: Toast.Style.Failure,
-          title: "Unable to remove task",
-          message: messageFrom(error),
-        });
-        return;
-      }
-
-      const historyState = taskHistory.current?.record({
-        kind: "trash",
-        taskId: trashed.id,
-        taskTitle: trashed.title,
-      });
-      if (!historyState) {
-        return;
-      }
-      refresh();
-      await showHistoryToast("Task moved to Trash", trashed.title, historyState);
-    },
-    [refresh, showFeedback, showHistoryToast],
+    [showFeedback, showHistoryToast],
   );
 
   const hideMenuBar = useCallback(async () => {
@@ -207,7 +184,7 @@ export default function Command(props: LaunchProps) {
       return;
     }
 
-    taskHistory.current?.clear();
+    lifecycle.current?.clearHistory();
     await showFeedback({
       style: Toast.Style.Success,
       title: "Worktodo hidden from menu bar",
@@ -237,6 +214,7 @@ export default function Command(props: LaunchProps) {
       ? "Worktodo — nothing due today"
       : `Worktodo — ${state.model.count} ${state.model.count === 1 ? "task" : "tasks"} due`;
   const historyItem = taskHistoryState ? buildMenuBarTaskHistoryItem(taskHistoryState) : null;
+  const historyAction = taskHistoryState ? taskLifecycleHistoryActionPresentation(taskHistoryState) : null;
 
   return (
     <MenuBarExtra icon="extension-icon.png" title={state.model.title} tooltip={tooltip} isLoading={state.isLoading}>
@@ -256,7 +234,7 @@ export default function Command(props: LaunchProps) {
                 <MenuBarExtra.Item
                   title="Complete"
                   icon={menuIcon(Icon.CheckCircle)}
-                  onAction={() => completeTask(task.id)}
+                  onAction={() => performLifecycleMutation("complete", task.id, "Unable to complete task")}
                 />
                 <MenuBarExtra.Item
                   title="Open"
@@ -268,20 +246,24 @@ export default function Command(props: LaunchProps) {
                   icon={menuIcon(Icon.Pencil)}
                   onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id, editTask: true })}
                 />
-                <MenuBarExtra.Item title="Remove" icon={menuIcon(Icon.Trash)} onAction={() => removeTask(task.id)} />
+                <MenuBarExtra.Item
+                  title="Remove"
+                  icon={menuIcon(Icon.Trash)}
+                  onAction={() => performLifecycleMutation("trash", task.id, "Unable to remove task")}
+                />
               </MenuBarExtra.Submenu>
             ))}
           </MenuBarExtra.Section>
         ))
       )}
 
-      {historyItem && taskHistoryState ? (
+      {historyItem && historyAction && taskHistoryState ? (
         <MenuBarExtra.Section title="Recent Action">
           <MenuBarExtra.Item
             title={historyItem.title}
             subtitle={historyItem.subtitle}
-            icon={menuIcon(historyItem.direction === "undo" ? Icon.Undo : Icon.Redo)}
-            shortcut={TASK_HISTORY_SHORTCUTS[historyItem.direction]}
+            icon={menuIcon(historyAction.icon)}
+            shortcut={historyAction.shortcut}
             onAction={() => performTaskHistory(taskHistoryState)}
           />
         </MenuBarExtra.Section>

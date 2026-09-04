@@ -4,13 +4,11 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { replaceBackupIfConfirmed } from "../../src/shared/application/backup-workflows";
 import {
-  completeMenuBarTask,
-  hideMenuBar,
-  initialMenuBarHidden,
-  loadMenuBarModel,
-  performMenuBarTaskHistory,
-  trashMenuBarTask,
-} from "../../src/shared/application/menu-bar-workflows";
+  createOperationScopedTaskLifecycleMutations,
+  IMMEDIATE_COMPLETION_POLICY,
+  TaskLifecycleInteraction,
+} from "../../src/shared/application/task-lifecycle-interaction";
+import { hideMenuBar, initialMenuBarHidden, loadMenuBarModel } from "../../src/shared/application/menu-bar-workflows";
 import {
   createProject,
   createSection,
@@ -104,37 +102,41 @@ describe("secondary human workflows", () => {
         },
       };
     };
+    const lifecycle = new TaskLifecycleInteraction({
+      mutations: createOperationScopedTaskLifecycleMutations(openSession),
+      policy: IMMEDIATE_COMPLETION_POLICY,
+      refresh: { refreshView: () => undefined },
+    });
 
     expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
       count: 1,
       sections: [{ tasks: [{ id: task.id }] }],
     });
     now = 2_000;
-    expect(completeMenuBarTask(openSession, task.id)).toMatchObject({ id: task.id, completedAtMs: 2_000 });
+    const completed = lifecycle.runMutation("complete", task.id);
+    expect(completed).toMatchObject({ status: "succeeded", task: { id: task.id, completedAtMs: 2_000 } });
     expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
       count: 0,
       sections: [],
     });
     now = 3_000;
-    performMenuBarTaskHistory(openSession, {
-      direction: "undo",
-      kind: "complete",
-      taskId: task.id,
-      taskTitle: task.title,
-    });
+    if (completed.status !== "succeeded" || !completed.history) {
+      throw new Error("Expected completed menu-bar lifecycle action");
+    }
+    lifecycle.runHistory(completed.history);
     expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(1);
     now = 4_000;
-    expect(trashMenuBarTask(openSession, task.id)).toMatchObject({ id: task.id, trashedAtMs: 4_000 });
+    const trashed = lifecycle.runMutation("trash", task.id);
+    expect(trashed).toMatchObject({ status: "succeeded", task: { id: task.id, trashedAtMs: 4_000 } });
     expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(0);
     now = 5_000;
-    performMenuBarTaskHistory(openSession, {
-      direction: "undo",
-      kind: "trash",
-      taskId: task.id,
-      taskTitle: task.title,
-    });
+    if (trashed.status !== "succeeded" || !trashed.history) {
+      throw new Error("Expected trashed menu-bar lifecycle action");
+    }
+    lifecycle.runHistory(trashed.history);
     expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(1);
     expect(closeCount).toBe(9);
+    lifecycle.dispose();
 
     const values = new Map<string, string>();
     const store = {

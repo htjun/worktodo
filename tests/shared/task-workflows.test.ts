@@ -2,7 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CompletionFeedbackController } from "../../src/shared/application/completion-feedback";
+import {
+  DELAYED_COMPLETION_POLICY,
+  TaskLifecycleInteraction,
+} from "../../src/shared/application/task-lifecycle-interaction";
 import {
   loadTaskView,
   normalizeTaskView,
@@ -11,15 +14,10 @@ import {
   type TaskView,
 } from "../../src/shared/application/task-views";
 import { createQuickTask, moveTaskFromForm, saveTaskFromForm } from "../../src/shared/application/task-workflows";
-import {
-  performTimedTaskHistoryOperation,
-  TimedTaskHistoryController,
-} from "../../src/shared/application/timed-task-history";
 import { openWorktodoAtPath } from "../../src/shared/application/worktodo";
 import {
   buildTaskViewSections,
   initialPlacementForTaskView,
-  lifecycleActionForTaskView,
   taskViewContent,
   taskViewFromKey,
   taskViewKey,
@@ -140,28 +138,23 @@ describe("main task workflows", () => {
       ]);
 
       const acknowledgementSizes: number[] = [];
-      const completion = new CompletionFeedbackController((tasks) => acknowledgementSizes.push(tasks.size));
       const historyStates: Array<string | null> = [];
-      const history = new TimedTaskHistoryController((state) => historyStates.push(state?.direction ?? null));
       const menuRefresh = vi.fn();
       const listRefresh = vi.fn();
-      now = 4_000;
-      const completed = completion.complete(
-        quickTask.id,
-        () => session.service.completeTask(quickTask.id),
-        menuRefresh,
-        listRefresh,
-      );
-      expect(completed.status).toBe("acknowledged");
-      expect(
-        completion.complete(quickTask.id, () => session.service.completeTask(quickTask.id), menuRefresh, listRefresh)
-          .status,
-      ).toBe("duplicate");
-      const completeHistory = history.record({
-        kind: "complete",
-        taskId: quickTask.id,
-        taskTitle: completed.task.title,
+      const lifecycle = new TaskLifecycleInteraction({
+        mutations: session.service,
+        policy: DELAYED_COMPLETION_POLICY,
+        refresh: { refreshView: listRefresh, refreshRelated: menuRefresh },
+        onAcknowledgementsChanged: (tasks) => acknowledgementSizes.push(tasks.size),
+        onHistoryChanged: (state) => historyStates.push(state?.direction ?? null),
       });
+      now = 4_000;
+      const completed = lifecycle.runMutation("complete", quickTask.id);
+      expect(completed.status).toBe("succeeded");
+      expect(lifecycle.runMutation("complete", quickTask.id).status).toBe("duplicate");
+      if (completed.status !== "succeeded" || !completed.history) {
+        throw new Error("Expected completed lifecycle action");
+      }
       expect(session.service.listCompleted().map((task) => task.id)).toEqual([quickTask.id]);
       expect(menuRefresh).toHaveBeenCalledOnce();
 
@@ -170,52 +163,30 @@ describe("main task workflows", () => {
       expect(listRefresh).toHaveBeenCalledOnce();
 
       now = 5_000;
-      const undone = history.perform(completeHistory, () =>
-        performTimedTaskHistoryOperation(completeHistory, {
-          complete: () => session.service.completeTask(quickTask.id),
-          reopen: () => session.service.reopenTask(quickTask.id),
-          trash: () => session.service.trashTask(quickTask.id),
-          restore: () => session.service.restoreTask(quickTask.id),
-        }),
-      );
-      expect(undone).toMatchObject({ status: "performed", state: { direction: "redo" } });
+      const undone = lifecycle.runHistory(completed.history);
+      expect(undone).toMatchObject({ status: "succeeded", history: { direction: "redo" } });
       expect(session.service.getTask(quickTask.id).completedAtMs).toBeNull();
 
       now = 6_000;
-      const redone =
-        undone.status === "performed"
-          ? history.perform(undone.state, () =>
-              performTimedTaskHistoryOperation(undone.state, {
-                complete: () => session.service.completeTask(quickTask.id),
-                reopen: () => session.service.reopenTask(quickTask.id),
-                trash: () => session.service.trashTask(quickTask.id),
-                restore: () => session.service.restoreTask(quickTask.id),
-              }),
-            )
-          : undone;
-      expect(redone).toMatchObject({ status: "performed", state: { direction: "undo" } });
+      const redone = undone.status === "succeeded" && undone.history ? lifecycle.runHistory(undone.history) : undone;
+      expect(redone).toMatchObject({ status: "succeeded", history: { direction: "undo" } });
       expect(session.service.getTask(quickTask.id).completedAtMs).toBe(6_000);
 
       now = 7_000;
-      const trashed = session.service.trashTask(quickTask.id);
-      const trashHistory = history.record({ kind: "trash", taskId: trashed.id, taskTitle: trashed.title });
+      const trashed = lifecycle.runMutation("trash", quickTask.id);
+      if (trashed.status !== "succeeded" || !trashed.history) {
+        throw new Error("Expected trashed lifecycle action");
+      }
       expect(buildSections({ kind: "trash" })[0].items).toEqual([expect.objectContaining({ id: quickTask.id })]);
       now = 8_000;
-      expect(
-        history.perform(trashHistory, () =>
-          performTimedTaskHistoryOperation(trashHistory, {
-            complete: () => session.service.completeTask(quickTask.id),
-            reopen: () => session.service.reopenTask(quickTask.id),
-            trash: () => session.service.trashTask(quickTask.id),
-            restore: () => session.service.restoreTask(quickTask.id),
-          }),
-        ),
-      ).toMatchObject({ status: "performed", state: { direction: "redo" } });
+      expect(lifecycle.runHistory(trashed.history)).toMatchObject({
+        status: "succeeded",
+        history: { direction: "redo" },
+      });
       expect(session.service.getTask(quickTask.id)).toMatchObject({ completedAtMs: 6_000, trashedAtMs: null });
       expect(historyStates).toEqual(["undo", "redo", "undo", "undo", "redo"]);
       expect(events).toEqual(["quick session closed", "menu refreshed", "task saved", "task moved"]);
-      history.dispose();
-      completion.dispose();
+      lifecycle.dispose();
     } finally {
       session.close();
     }
@@ -292,14 +263,6 @@ describe("main task workflows", () => {
       expect(
         taskViewContent({ kind: "section", projectId: project.id, sectionId: section.id }, [project], [section]),
       ).toMatchObject({ title: "Work / Next", searchPlaceholder: "Search Next" });
-      expect(lifecycleActionForTaskView({ kind: "completed" }, session.service, today.id)).toMatchObject({
-        kind: "reopen",
-        title: "Reopen Task",
-      });
-      expect(lifecycleActionForTaskView({ kind: "trash" }, session.service, inbox.id)).toMatchObject({
-        kind: "restore",
-        title: "Restore Task",
-      });
     } finally {
       session.close();
     }

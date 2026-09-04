@@ -1,6 +1,4 @@
-import type { Task } from "../domain/model";
 import type { TaskService } from "../domain/task-service";
-import { performTimedTaskHistoryOperation, type TimedTaskHistoryState } from "./timed-task-history";
 import { buildMenuBarModel, resolveMenuBarVisibility, type MenuBarModel } from "../presentation/menu-bar";
 import { loadTaskView } from "./task-views";
 
@@ -25,38 +23,6 @@ export function loadMenuBarModel(
     const today = loadTaskView(session.service, { kind: "today" }, context);
     const upcoming = loadTaskView(session.service, { kind: "upcoming" }, context);
     return buildMenuBarModel(today.result, upcoming.result, session.service.listProjects());
-  } finally {
-    session.close();
-  }
-}
-
-export function completeMenuBarTask(openSession: () => MenuBarSession, taskId: string): Task {
-  const session = openSession();
-  try {
-    return session.service.completeTask(taskId);
-  } finally {
-    session.close();
-  }
-}
-
-export function trashMenuBarTask(openSession: () => MenuBarSession, taskId: string): Task {
-  const session = openSession();
-  try {
-    return session.service.trashTask(taskId);
-  } finally {
-    session.close();
-  }
-}
-
-export function performMenuBarTaskHistory(openSession: () => MenuBarSession, state: TimedTaskHistoryState): void {
-  const session = openSession();
-  try {
-    performTimedTaskHistoryOperation(state, {
-      complete: () => session.service.completeTask(state.taskId),
-      reopen: () => session.service.reopenTask(state.taskId),
-      trash: () => session.service.trashTask(state.taskId),
-      restore: () => session.service.restoreTask(state.taskId),
-    });
   } finally {
     session.close();
   }

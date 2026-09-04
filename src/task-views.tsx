@@ -1,13 +1,13 @@
 import { Icon, List } from "@raycast/api";
+import { taskLifecycleActionKindForViewKind } from "./shared/application/task-lifecycle-interaction";
 import type { TaskView } from "./shared/application/task-views";
 import type { Project, Section } from "./shared/domain/model";
-import type { TaskService } from "./shared/domain/task-service";
 import {
-  lifecycleActionForTaskView as sharedLifecycleActionForTaskView,
   taskViewContent as sharedTaskViewContent,
   taskViewFromKey,
   taskViewKey,
 } from "./shared/presentation/task-views";
+import { taskLifecycleMutationActionPresentation } from "./task-lifecycle-raycast";
 
 export { buildTaskViewSections, initialPlacementForTaskView, taskViewKey } from "./shared/presentation/task-views";
 export type { TaskListSection } from "./shared/presentation/task-views";
@@ -31,17 +31,9 @@ export function taskViewContent(view: TaskView, projects: readonly Project[], se
   };
 }
 
-export function lifecycleActionForTaskView(view: TaskView, service: TaskService, taskId: string) {
-  const action = sharedLifecycleActionForTaskView(view, service, taskId);
-  return {
-    ...action,
-    icon:
-      action.kind === "restore"
-        ? Icon.ArrowCounterClockwise
-        : action.kind === "reopen"
-          ? Icon.Circle
-          : Icon.CheckCircle,
-  };
+export function lifecycleActionForTaskView(view: TaskView) {
+  const kind = taskLifecycleActionKindForViewKind(view.kind);
+  return { kind, ...taskLifecycleMutationActionPresentation(kind) };
 }
 
 export function TaskViewDropdown({

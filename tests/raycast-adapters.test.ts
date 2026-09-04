@@ -7,6 +7,14 @@ const raycast = vi.hoisted(() => ({
 }));
 
 vi.mock("@raycast/api", () => ({
+  Icon: {
+    ArrowCounterClockwise: "arrow-counter-clockwise",
+    CheckCircle: "check-circle",
+    Circle: "circle",
+    Redo: "redo",
+    Trash: "trash",
+    Undo: "undo",
+  },
   LaunchType: {
     Background: "background",
     UserInitiated: "userInitiated",
@@ -19,6 +27,10 @@ vi.mock("@raycast/api", () => ({
 import { LaunchType } from "@raycast/api";
 import { showMenuBarFeedback } from "../src/menu-bar-feedback";
 import { launchMyTasks, requestMenuBarRefresh } from "../src/raycast-commands";
+import {
+  taskLifecycleHistoryActionPresentation,
+  taskLifecycleMutationActionPresentation,
+} from "../src/task-lifecycle-raycast";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -101,5 +113,47 @@ describe("menu bar feedback", () => {
       showMenuBarFeedback(LaunchType.Background, { title: "Unable to complete task" }),
     ).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledWith("Unable to show menu bar HUD", expect.any(Error));
+  });
+});
+
+describe("task lifecycle actions", () => {
+  it.each([
+    ["undo", "complete", "Undo Complete Task", "undo", ["cmd"]],
+    ["redo", "complete", "Redo Complete Task", "redo", ["cmd", "shift"]],
+    ["undo", "trash", "Undo Move to Trash", "undo", ["cmd"]],
+    ["redo", "trash", "Redo Move to Trash", "redo", ["cmd", "shift"]],
+  ] as const)("projects %s %s labels, icons, and shortcuts for Raycast", (direction, kind, title, icon, modifiers) => {
+    expect(
+      taskLifecycleHistoryActionPresentation({
+        direction,
+        kind,
+        taskId: "task-1",
+        taskTitle: "Submit report",
+      }),
+    ).toEqual({
+      title,
+      icon,
+      shortcut: { modifiers: [...modifiers], key: "z" },
+    });
+  });
+
+  it("projects mutation labels and icons without binding persistence", () => {
+    expect(taskLifecycleMutationActionPresentation("complete")).toEqual({
+      title: "Complete Task",
+      successTitle: "Task completed",
+      icon: "check-circle",
+    });
+    expect(taskLifecycleMutationActionPresentation("reopen")).toMatchObject({
+      title: "Reopen Task",
+      icon: "circle",
+    });
+    expect(taskLifecycleMutationActionPresentation("trash")).toMatchObject({
+      title: "Move to Trash",
+      icon: "trash",
+    });
+    expect(taskLifecycleMutationActionPresentation("restore")).toMatchObject({
+      title: "Restore Task",
+      icon: "arrow-counter-clockwise",
+    });
   });
 });

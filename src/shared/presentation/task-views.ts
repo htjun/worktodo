@@ -1,8 +1,6 @@
 import { isStaticTaskViewKind, type TaskView, type TaskViewResult } from "../application/task-views";
 import type { Placement, Project, Section } from "../domain/model";
 import { addCalendarDays, startOfCalendarDate } from "../domain/queries";
-import type { TaskService } from "../domain/task-service";
-import { lifecycleActionIntentForViewKind } from "./task-actions";
 import { buildAllTaskListSections, buildTaskListItems, type TaskListEntry, type TaskListSection } from "./task-list";
 
 export type TaskViewContent = {
@@ -186,18 +184,6 @@ export function buildTaskViewSections(
       ),
     },
   ];
-}
-
-export function lifecycleActionForTaskView(view: TaskView, service: TaskService, taskId: string) {
-  const intent = lifecycleActionIntentForViewKind(view.kind);
-  switch (intent.kind) {
-    case "restore":
-      return { ...intent, operation: () => service.restoreTask(taskId) };
-    case "reopen":
-      return { ...intent, operation: () => service.reopenTask(taskId) };
-    default:
-      return { ...intent, operation: () => service.completeTask(taskId) };
-  }
 }
 
 export type { TaskListSection } from "./task-list";

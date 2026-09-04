@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { taskLifecycleActionKindForViewKind } from "../../src/shared/application/task-lifecycle-interaction";
 import type { Project, Section, Task } from "../../src/shared/domain/model";
 import { dueDateFormValueForPreset, dueDatePresetForDue } from "../../src/shared/presentation/due-date";
-import { lifecycleActionIntentForViewKind } from "../../src/shared/presentation/task-actions";
 import { formToCreateTask, formToUpdateTask, taskFormDefaults } from "../../src/shared/presentation/task-form";
+import { taskLifecycleMutationPresentation } from "../../src/shared/presentation/task-lifecycle";
 import {
   buildAllTaskListSections,
   buildTaskListItems,
   extractTaskNoteLinks,
+  taskListRowPresentation,
   taskNotesMarkdown,
 } from "../../src/shared/presentation/task-list";
 import { placementFromKey, placementKey } from "../../src/shared/presentation/placement";
@@ -290,22 +292,45 @@ describe("task presentation mapping", () => {
 
   it("maps lifecycle actions for safe secondary placement", () => {
     for (const viewKind of ["all", "today", "upcoming", "inbox", "project", "section"]) {
-      expect(lifecycleActionIntentForViewKind(viewKind)).toEqual({
+      const kind = taskLifecycleActionKindForViewKind(viewKind);
+      expect({ kind, ...taskLifecycleMutationPresentation(kind) }).toEqual({
         kind: "complete",
         title: "Complete Task",
         successTitle: "Task completed",
       });
     }
-    expect(lifecycleActionIntentForViewKind("completed")).toEqual({
+    const reopen = taskLifecycleActionKindForViewKind("completed");
+    expect({ kind: reopen, ...taskLifecycleMutationPresentation(reopen) }).toEqual({
       kind: "reopen",
       title: "Reopen Task",
       successTitle: "Task reopened",
     });
-    expect(lifecycleActionIntentForViewKind("trash")).toEqual({
+    const restore = taskLifecycleActionKindForViewKind("trash");
+    expect({ kind: restore, ...taskLifecycleMutationPresentation(restore) }).toEqual({
       kind: "restore",
       title: "Restore Task",
       successTitle: "Task restored",
     });
+  });
+
+  it("shows completion acknowledgement without changing the task title or source item", () => {
+    const source = task({ priority: "medium", due: { kind: "none" } });
+    const [item] = buildTaskListItems([{ task: source }], [], [], "Australia/Melbourne");
+    const before = structuredClone(item);
+    const completed = { ...source, completedAtMs: 2_000, updatedAtMs: 2_000 };
+
+    expect(taskListRowPresentation(item, completed)).toEqual({
+      title: source.title,
+      accessories: ["Completed"],
+      isCompletionAcknowledged: true,
+    });
+    expect(taskListRowPresentation(item, undefined)).toEqual({
+      title: source.title,
+      accessories: ["medium priority"],
+      isCompletionAcknowledged: false,
+    });
+    expect(item).toEqual(before);
+    expect(source.completedAtMs).toBeNull();
   });
 
   it("shows independent completion and trash timestamps", () => {

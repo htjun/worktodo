@@ -1,7 +1,7 @@
 import type { Priority, Project, Task } from "../domain/model";
 import { addCalendarDays, type TodayResult, type UpcomingResult } from "../domain/queries";
-import type { TimedTaskHistoryState } from "../application/timed-task-history";
-import { timedTaskHistoryPresentation } from "./task-history";
+import type { TaskLifecycleHistoryState } from "../application/task-lifecycle-interaction";
+import { taskLifecycleHistoryTitle } from "./task-lifecycle";
 
 const MENU_BAR_TASK_LABEL_MAX_GRAPHEMES = 72;
 const MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES = 24;
@@ -35,18 +35,18 @@ export type MenuBarVisibility = {
 };
 
 export type MenuBarTaskHistoryItem = {
-  direction: TimedTaskHistoryState["direction"];
+  direction: TaskLifecycleHistoryState["direction"];
   title: string;
   subtitle: string;
 };
 
-export function buildMenuBarTaskHistoryItem(state: TimedTaskHistoryState): MenuBarTaskHistoryItem {
-  const presentation = timedTaskHistoryPresentation(state);
+export function buildMenuBarTaskHistoryItem(state: TaskLifecycleHistoryState): MenuBarTaskHistoryItem {
+  const title = taskLifecycleHistoryTitle(state);
   const subtitleMaximum =
-    MENU_BAR_TASK_LABEL_MAX_GRAPHEMES - graphemes(presentation.title).length - MENU_BAR_HISTORY_TITLE_GAP_GRAPHEMES;
+    MENU_BAR_TASK_LABEL_MAX_GRAPHEMES - graphemes(title).length - MENU_BAR_HISTORY_TITLE_GAP_GRAPHEMES;
   return {
     direction: state.direction,
-    title: presentation.title,
+    title,
     subtitle: truncateGraphemes(state.taskTitle, subtitleMaximum),
   };
 }
