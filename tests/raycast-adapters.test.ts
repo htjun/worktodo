@@ -99,10 +99,6 @@ describe("All Tasks entry points", () => {
     expect(menuBarSource).toContain('title="New Task"');
     expect(menuBarSource).not.toContain('title="New Task…"');
     expect(menuBarSource).toContain('title="Open All Tasks"');
-    expect(menuBarSource).toContain('title="Complete Task"');
-    expect(menuBarSource).toContain('title="Open Task"');
-    expect(menuBarSource).toContain('title="Edit Task"');
-    expect(menuBarSource).toContain('title="Move to Trash"');
     expect(menuBarSource).toContain('onAction={() => openMyTasks({ view: "all" })}');
   });
 });
@@ -135,6 +131,18 @@ describe("interface copy", () => {
     expect(taskForm).toContain('title={task ? "Save Task" : "Create Task"}');
     expect(quickAdd).toContain('title="Create Task"');
     expect(quickAdd).toContain('"Task created"');
+  });
+
+  it("omits Task when the parent menu already names it", () => {
+    const menuBar = readFileSync(join(process.cwd(), "src/menu-bar.tsx"), "utf8");
+
+    expect(menuBar).toContain('title="Complete"');
+    expect(menuBar).toContain('title="Open"');
+    expect(menuBar).toContain('title="Edit"');
+    expect(menuBar).toContain('title="Move to Trash"');
+    expect(menuBar).not.toContain('title="Complete Task"');
+    expect(menuBar).not.toContain('title="Open Task"');
+    expect(menuBar).not.toContain('title="Edit Task"');
   });
 });
 

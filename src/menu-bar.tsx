@@ -232,17 +232,17 @@ export default function Command(props: LaunchProps) {
             {section.tasks.map((task) => (
               <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={priorityIcon(task.priority)}>
                 <MenuBarExtra.Item
-                  title="Complete Task"
+                  title="Complete"
                   icon={menuIcon(Icon.CheckCircle)}
                   onAction={() => performLifecycleMutation("complete", task.id)}
                 />
                 <MenuBarExtra.Item
-                  title="Open Task"
+                  title="Open"
                   icon={menuIcon(Icon.AppWindowList)}
                   onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id })}
                 />
                 <MenuBarExtra.Item
-                  title="Edit Task"
+                  title="Edit"
                   icon={menuIcon(Icon.Pencil)}
                   onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id, editTask: true })}
                 />

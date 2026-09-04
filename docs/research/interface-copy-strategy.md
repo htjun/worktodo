@@ -11,6 +11,7 @@ Worktodo is direct, calm, and compact. Copy should describe the state or next ac
 - Use one main idea per sentence.
 - Prefer familiar verbs: create, open, edit, move, remove, restore, export.
 - Name the object when an action could be read out of context: `Edit Task`, not `Edit`.
+- Omit the object when a parent menu already names it and every child action applies to it: `Edit`, not `Edit Task`.
 - Explain a destructive consequence before confirmation.
 
 ## Interface patterns
@@ -18,6 +19,7 @@ Worktodo is direct, calm, and compact. Copy should describe the state or next ac
 | Context                                | Pattern                                      | Example                                     |
 | -------------------------------------- | -------------------------------------------- | ------------------------------------------- |
 | Command, navigation, and action titles | Title Case; no ending punctuation            | `New Task`, `Move to Trash`                 |
+| Action in an object submenu            | Verb without the repeated object             | `Complete`, `Open`, `Edit`                  |
 | Form-opening action                    | `New` + object                               | `New Project`                               |
 | Form submission                        | Concrete verb + object                       | `Create Project`, `Save Task`               |
 | Success feedback                       | Object + past-tense verb                     | `Task created`                              |
@@ -31,6 +33,7 @@ Worktodo is direct, calm, and compact. Copy should describe the state or next ac
 ## Terminology
 
 - `New Task` opens the creation form. `Create Task` commits it.
+- A menu under a named task uses `Complete`, `Open`, and `Edit`. A mixed action panel uses `Complete Task`, `Edit Task`, and `Move Task` to distinguish selected-task actions from app-level actions.
 - `Quick Add` remains the command name; its submission action is `Create Task`.
 - Tasks are moved to `Trash` because the operation is recoverable. Do not call this remove or delete.
 - Projects and labels are removed because their definitions are deleted. Confirmations explain what happens to their tasks or assignments.
