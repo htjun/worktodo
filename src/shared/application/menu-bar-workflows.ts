@@ -20,9 +20,8 @@ export function loadMenuBarModel(
   const session = openSession();
   try {
     const context = { evaluationInstantMs, viewerTimeZone };
-    const today = loadTaskView(session.service, { kind: "today" }, context);
-    const upcoming = loadTaskView(session.service, { kind: "upcoming" }, context);
-    return buildMenuBarModel(today.result, upcoming.result, session.service.listProjects());
+    const thisWeek = loadTaskView(session.service, { kind: "thisWeek" }, context);
+    return buildMenuBarModel(thisWeek.result, session.service.listProjects());
   } finally {
     session.close();
   }

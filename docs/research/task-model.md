@@ -67,8 +67,9 @@ viewer timezone. A timed value is `{ kind: "timed", instantMs, timeZone }` with 
 integer instant and canonical IANA timezone. `{ kind: "none" }` has no due value.
 
 Today includes active incomplete Tasks overdue before the viewer's local day and Tasks due during
-that day. Upcoming includes active incomplete Tasks due after that day. Completed excludes Trash;
-Trash includes trashed Tasks whether complete or incomplete.
+that day. This week includes the same overdue and Today Tasks plus active incomplete Tasks due
+through Sunday in the viewer's timezone. Completed excludes Trash; Trash includes trashed Tasks
+whether complete or incomplete.
 
 Ordinary Task order is Priority descending, then `position`, `createdAtMs`, and `id` ascending.
 All Tasks places dated Tasks first by effective due instant and undated Tasks last.

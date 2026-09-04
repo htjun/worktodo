@@ -147,8 +147,8 @@ describe("main task workflows", () => {
       expect(buildSections({ kind: "project", projectId: project.id })[0].items.map((item) => item.id)).toEqual([
         quickTask.id,
       ]);
-      expect(buildSections({ kind: "upcoming" })).toMatchObject([
-        { key: "upcoming:2026-09-01", title: "Tomorrow", items: [{ id: quickTask.id }] },
+      expect(buildSections({ kind: "thisWeek" })).toMatchObject([
+        { key: "thisWeek:2026-09-01", title: "Tomorrow", items: [{ id: quickTask.id }] },
       ]);
 
       const acknowledgementSizes: number[] = [];
@@ -229,7 +229,7 @@ describe("main task workflows", () => {
         labelIds: [label.id],
         due: { kind: "allDay", date: "2026-08-31" },
       });
-      const upcoming = session.service.createTask({
+      const laterThisWeek = session.service.createTask({
         title: "Tomorrow",
         projectId: project.id,
         labelIds: [label.id],
@@ -241,7 +241,7 @@ describe("main task workflows", () => {
       const views: TaskView[] = [
         { kind: "all" },
         { kind: "today" },
-        { kind: "upcoming" },
+        { kind: "thisWeek" },
         { kind: "completed" },
         { kind: "trash" },
         { kind: "project", projectId: project.id },
@@ -253,13 +253,13 @@ describe("main task workflows", () => {
         );
 
       expect(views.map((view) => [taskViewKey(view), idsFor(view)])).toEqual([
-        ["all", [upcoming.id]],
+        ["all", [laterThisWeek.id]],
         ["today", []],
-        ["upcoming", [upcoming.id]],
+        ["thisWeek", [laterThisWeek.id]],
         ["completed", [today.id]],
         ["trash", [noProject.id]],
-        [`project:${project.id}`, [upcoming.id]],
-        [`label:${label.id}`, [upcoming.id]],
+        [`project:${project.id}`, [laterThisWeek.id]],
+        [`label:${label.id}`, [laterThisWeek.id]],
       ]);
       expect(taskViewFromKey(`project:${project.id}`, [project], [label])).toEqual({
         kind: "project",
@@ -303,7 +303,7 @@ describe("main task workflows", () => {
         task: { projectId: null, labelIds: [label.id] },
       });
       session.service.removeLabel(label.id);
-      expect(session.service.getTask(upcoming.id).labelIds).toEqual([]);
+      expect(session.service.getTask(laterThisWeek.id).labelIds).toEqual([]);
       expect(
         normalizeTaskView(
           { kind: "label", labelId: label.id },
@@ -316,7 +316,7 @@ describe("main task workflows", () => {
     }
   });
 
-  it("preserves Today status, Upcoming local date, and canonical input validation", async () => {
+  it("preserves Today status, This week local date, and canonical input validation", async () => {
     const directory = await mkdtemp(join(tmpdir(), "worktodo-task-view-context-test-"));
     temporaryDirectories.push(directory);
     let nextId = 1;
@@ -337,7 +337,7 @@ describe("main task workflows", () => {
         projectId: project.id,
         due: { kind: "allDay", date: "2026-08-31" },
       });
-      const upcoming = session.service.createTask({
+      const laterThisWeek = session.service.createTask({
         title: "Tomorrow",
         projectId: project.id,
         due: { kind: "allDay", date: "2026-09-01" },
@@ -355,10 +355,16 @@ describe("main task workflows", () => {
           ],
         },
       });
-      const upcomingView = loadTaskView(session.service, { kind: "upcoming" }, context);
-      expect(upcomingView).toMatchObject({
+      const thisWeekView = loadTaskView(session.service, { kind: "thisWeek" }, context);
+      expect(thisWeekView).toMatchObject({
         viewerTimeZone,
-        result: { tasks: [{ task: { id: upcoming.id }, localDate: "2026-09-01" }] },
+        result: {
+          tasks: [
+            { task: { id: overdue.id }, status: "overdue", localDate: "2026-08-30" },
+            { task: { id: today.id }, status: "dueToday", localDate: "2026-08-31" },
+            { task: { id: laterThisWeek.id }, status: "laterThisWeek", localDate: "2026-09-01" },
+          ],
+        },
       });
 
       const boundaryInstantMs = Date.parse("2026-08-31T14:30:00.000Z");
@@ -380,7 +386,7 @@ describe("main task workflows", () => {
       );
       expect(utcToday.result.tasks.find((entry) => entry.task.id === today.id)?.status).toBe("dueToday");
       expect(melbourneToday.result.tasks.find((entry) => entry.task.id === today.id)?.status).toBe("overdue");
-      expect(melbourneToday.result.tasks.find((entry) => entry.task.id === upcoming.id)?.status).toBe("dueToday");
+      expect(melbourneToday.result.tasks.find((entry) => entry.task.id === laterThisWeek.id)?.status).toBe("dueToday");
 
       expect(resolveTaskView("project", project.id, undefined)).toEqual({
         kind: "project",

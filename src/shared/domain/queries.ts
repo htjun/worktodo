@@ -25,18 +25,21 @@ export type TodayResult = {
   startOfNextDayMs: number;
 };
 
-export type UpcomingTask = {
+export type ThisWeekTask = {
   task: Task;
+  status: TodayTask["status"] | "laterThisWeek";
   localDate: string;
   effectiveDueAtMs: number;
 };
 
-export type UpcomingResult = {
-  tasks: UpcomingTask[];
+export type ThisWeekResult = {
+  tasks: ThisWeekTask[];
   count: number;
   localDate: string;
   startOfDayMs: number;
   startOfNextDayMs: number;
+  endOfWeekDate: string;
+  startOfNextWeekMs: number;
 };
 
 function compareId(left: string, right: string): number {
@@ -237,33 +240,49 @@ export function queryToday(tasks: readonly Task[], evaluationInstantMs: number, 
   return { tasks: included, count: included.length, ...window };
 }
 
-export function queryUpcoming(
+export function queryThisWeek(
   tasks: readonly Task[],
   evaluationInstantMs: number,
   viewerTimeZone: string,
-): UpcomingResult {
+): ThisWeekResult {
   const window = todayWindow(evaluationInstantMs, viewerTimeZone);
   const canonicalTimeZone = canonicalizeTimeZone(viewerTimeZone);
-  const included: UpcomingTask[] = [];
+  const dayOfWeek = new Date(`${window.localDate}T00:00:00.000Z`).getUTCDay();
+  const endOfWeekDate = addCalendarDays(window.localDate, dayOfWeek === 0 ? 0 : 7 - dayOfWeek);
+  const startOfNextWeekMs = startOfCalendarDate(addCalendarDays(endOfWeekDate, 1), canonicalTimeZone);
+  const included: ThisWeekTask[] = [];
 
   for (const task of tasks) {
     if (task.completedAtMs !== null || task.trashedAtMs !== null || task.due.kind === "none") {
       continue;
     }
     if (task.due.kind === "allDay") {
-      if (task.due.date > window.localDate) {
+      if (task.due.date <= endOfWeekDate) {
         included.push({
           task,
+          status:
+            task.due.date < window.localDate
+              ? "overdue"
+              : task.due.date === window.localDate
+                ? "dueToday"
+                : "laterThisWeek",
           localDate: task.due.date,
           effectiveDueAtMs: startOfCalendarDate(task.due.date, canonicalTimeZone),
         });
       }
       continue;
     }
-    if (task.due.instantMs >= window.startOfNextDayMs) {
+    if (task.due.instantMs < startOfNextWeekMs) {
+      const localDate = calendarDateAtUnchecked(task.due.instantMs, canonicalTimeZone);
       included.push({
         task,
-        localDate: calendarDateAtUnchecked(task.due.instantMs, canonicalTimeZone),
+        status:
+          task.due.instantMs < window.startOfDayMs
+            ? "overdue"
+            : task.due.instantMs < window.startOfNextDayMs
+              ? "dueToday"
+              : "laterThisWeek",
+        localDate,
         effectiveDueAtMs: task.due.instantMs,
       });
     }
@@ -276,5 +295,5 @@ export function queryUpcoming(
       compareOrdinaryTasks(left.task, right.task),
   );
 
-  return { tasks: included, count: included.length, ...window };
+  return { tasks: included, count: included.length, ...window, endOfWeekDate, startOfNextWeekMs };
 }

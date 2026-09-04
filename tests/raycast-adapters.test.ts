@@ -57,12 +57,12 @@ describe("Raycast command launches", () => {
   });
 
   it("opens All Tasks as user-initiated", async () => {
-    await launchMyTasks({ view: "upcoming", selectedTaskId: "task-1" });
+    await launchMyTasks({ view: "thisWeek", selectedTaskId: "task-1" });
 
     expect(raycast.launchCommand).toHaveBeenCalledWith({
       name: "my-tasks",
       type: LaunchType.UserInitiated,
-      context: { view: "upcoming", selectedTaskId: "task-1" },
+      context: { view: "thisWeek", selectedTaskId: "task-1" },
     });
   });
 
@@ -187,13 +187,25 @@ describe("Label UI adapters", () => {
     expect(management).toContain("Tasks keep their content and projects. The label and its assignments are removed.");
   });
 
-  it("projects Label filtering, search keywords, default creation, and deleted-Label fallback", () => {
+  it("keeps Labels secondary to date, Project, and status navigation", () => {
     const tasks = readFileSync(join(process.cwd(), "src/my-tasks.tsx"), "utf8");
     const views = readFileSync(join(process.cwd(), "src/task-views.tsx"), "utf8");
     const presentation = readFileSync(join(process.cwd(), "src/shared/presentation/task-list.ts"), "utf8");
 
-    expect(views).toContain('<List.Dropdown.Section title="Labels">');
-    expect(views).toContain("value={`label:${label.id}`}");
+    const orderedMarkers = [
+      'value="all"',
+      'value="today"',
+      'value="thisWeek"',
+      'title="Projects"',
+      'title="Status"',
+      'value="completed"',
+      'value="trash"',
+    ];
+    const positions = orderedMarkers.map((marker) => views.indexOf(marker));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    expect(views).not.toContain('<List.Dropdown.Section title="Labels">');
+    expect(views).not.toContain("value={`label:${label.id}`}");
     expect(tasks).toContain("normalizeTaskView(view, projects, labels)");
     expect(tasks).toContain("initialProjectId={initialProjectIdForTaskView(view)}");
     expect(tasks).toContain("initialLabelIds={initialLabelIdsForTaskView(view)}");

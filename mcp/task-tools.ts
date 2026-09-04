@@ -306,7 +306,7 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
           view: taskViewSchema.optional(),
           projectId: z.string().optional(),
           labelId: z.string().optional(),
-          timeZone: z.string().optional().describe("IANA timezone for all-day and Today/Upcoming evaluation"),
+          timeZone: z.string().optional().describe("IANA timezone for all-day, Today, and This week evaluation"),
           ...pageInputSchema,
         })
         .strict(),

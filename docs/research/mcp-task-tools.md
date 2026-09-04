@@ -37,7 +37,7 @@ automating it would launch a separate model session rather than only testing the
 | `trash_task`    | No        | Yes         | Yes        | Move a task to recoverable Trash without deleting its content. |
 | `restore_task`  | No        | Yes         | Yes        | Restore a task while preserving its completion state.          |
 
-`list_tasks` supports `all`, `today`, `upcoming`, `completed`, `trash`, `project`, and `label`
+`list_tasks` supports `all`, `today`, `thisWeek`, `completed`, `trash`, `project`, and `label`
 views. Project and Label views require their matching stable ID. Search uses Unicode NFKC plus
 locale-independent lowercase normalization across title, notes, Project name, and assigned Label
 names, and runs before pagination. All list tools default to 50 results and reject limits above 100;

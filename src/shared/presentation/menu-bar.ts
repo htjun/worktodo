@@ -1,5 +1,5 @@
 import type { Priority, Project, Task } from "../domain/model";
-import { addCalendarDays, type TodayResult, type UpcomingResult } from "../domain/queries";
+import { addCalendarDays, type ThisWeekResult } from "../domain/queries";
 import type { TaskLifecycleHistoryState } from "../application/task-lifecycle-interaction";
 import { taskLifecycleHistoryTitle } from "./task-lifecycle";
 
@@ -14,7 +14,7 @@ export type MenuBarTask = {
   title: string;
   priority: Priority;
   projectName: string | null;
-  view: "today" | "upcoming";
+  view: "thisWeek";
 };
 
 export type MenuBarTaskSection = {
@@ -68,11 +68,6 @@ function menuBarTask(task: Task, projects: ReadonlyMap<string, Project>, view: M
   };
 }
 
-function endOfWeek(date: string): string {
-  const dayOfWeek = new Date(`${date}T00:00:00.000Z`).getUTCDay();
-  return addCalendarDays(date, dayOfWeek === 0 ? 0 : 7 - dayOfWeek);
-}
-
 function graphemes(value: string): string[] {
   return Array.from(graphemeSegmenter.segment(value), ({ segment }) => segment);
 }
@@ -96,34 +91,21 @@ export function menuBarTaskTitle(task: MenuBarTask): string {
   return `${truncateGraphemes(task.title, taskTitleMaximum)}${MENU_BAR_PROJECT_SEPARATOR}${projectName}`;
 }
 
-export function buildMenuBarModel(
-  todayResult: TodayResult,
-  upcomingResult: UpcomingResult,
-  projects: readonly Project[],
-): MenuBarModel {
+export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: readonly Project[]): MenuBarModel {
   const overdue: MenuBarTask[] = [];
   const today: MenuBarTask[] = [];
   const tomorrow: MenuBarTask[] = [];
   const laterThisWeek: MenuBarTask[] = [];
   const projectMap = new Map(projects.map((project) => [project.id, project]));
 
-  for (const { task, status } of todayResult.tasks) {
-    const item = menuBarTask(task, projectMap, "today");
+  const tomorrowDate = addCalendarDays(thisWeekResult.localDate, 1);
+  for (const { task, status, localDate } of thisWeekResult.tasks) {
+    const item = menuBarTask(task, projectMap, "thisWeek");
     if (status === "overdue") {
       overdue.push(item);
-    } else {
+    } else if (status === "dueToday") {
       today.push(item);
-    }
-  }
-
-  const tomorrowDate = addCalendarDays(todayResult.localDate, 1);
-  const endOfWeekDate = endOfWeek(todayResult.localDate);
-  for (const { task, localDate } of upcomingResult.tasks) {
-    if (localDate > endOfWeekDate) {
-      break;
-    }
-    const item = menuBarTask(task, projectMap, "upcoming");
-    if (localDate === tomorrowDate) {
+    } else if (localDate === tomorrowDate) {
       tomorrow.push(item);
     } else {
       laterThisWeek.push(item);
@@ -144,6 +126,6 @@ export function buildMenuBarModel(
     sections.push({ key: "laterThisWeek", title: "Later This Week", tasks: laterThisWeek });
   }
 
-  const count = todayResult.count;
+  const count = overdue.length + today.length;
   return { count, title: count === 0 ? undefined : String(count), sections };
 }

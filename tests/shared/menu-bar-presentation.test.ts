@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Priority, Project, Task } from "../../src/shared/domain/model";
-import type { TodayResult, UpcomingResult } from "../../src/shared/domain/queries";
+import type { ThisWeekResult } from "../../src/shared/domain/queries";
 import {
   buildMenuBarModel,
   buildMenuBarTaskHistoryItem,
@@ -17,7 +17,7 @@ function task(id: string, title: string, priority: Priority, projectId: string |
     priority,
     position: 1_024,
     projectId,
-    sectionId: null,
+    labelIds: [],
     due: { kind: "allDay", date: "2026-08-30" },
     createdAtMs: 1_000,
     updatedAtMs: 1_000,
@@ -26,23 +26,15 @@ function task(id: string, title: string, priority: Priority, projectId: string |
   };
 }
 
-function todayResult(tasks: TodayResult["tasks"], localDate = "2026-08-31"): TodayResult {
+function thisWeekResult(tasks: ThisWeekResult["tasks"], localDate = "2026-08-31"): ThisWeekResult {
   return {
     tasks,
     count: tasks.length,
     localDate,
     startOfDayMs: 1_000,
     startOfNextDayMs: 2_000,
-  };
-}
-
-function upcomingResult(tasks: UpcomingResult["tasks"], localDate = "2026-08-31"): UpcomingResult {
-  return {
-    tasks,
-    count: tasks.length,
-    localDate,
-    startOfDayMs: 1_000,
-    startOfNextDayMs: 2_000,
+    endOfWeekDate: "2026-09-06",
+    startOfNextWeekMs: 3_000,
   };
 }
 
@@ -58,19 +50,15 @@ describe("menu-bar presentation", () => {
     const dueToday = task("3", "Buy groceries", "none");
     const dueTomorrow = task("4", "Review proposal", "medium", work.id);
     const dueFriday = task("5", "Plan launch", "high", work.id);
-    const dueNextWeek = task("6", "Write follow-up", "none");
 
     expect(
       buildMenuBarModel(
-        todayResult([
-          { task: overdueHigh, status: "overdue", effectiveDueAtMs: 1_000 },
-          { task: overdueLow, status: "overdue", effectiveDueAtMs: 1_100 },
-          { task: dueToday, status: "dueToday", effectiveDueAtMs: 1_200 },
-        ]),
-        upcomingResult([
-          { task: dueTomorrow, localDate: "2026-09-01", effectiveDueAtMs: 2_000 },
-          { task: dueFriday, localDate: "2026-09-04", effectiveDueAtMs: 3_000 },
-          { task: dueNextWeek, localDate: "2026-09-07", effectiveDueAtMs: 4_000 },
+        thisWeekResult([
+          { task: overdueHigh, status: "overdue", localDate: "2026-08-30", effectiveDueAtMs: 1_000 },
+          { task: overdueLow, status: "overdue", localDate: "2026-08-30", effectiveDueAtMs: 1_100 },
+          { task: dueToday, status: "dueToday", localDate: "2026-08-31", effectiveDueAtMs: 1_200 },
+          { task: dueTomorrow, status: "laterThisWeek", localDate: "2026-09-01", effectiveDueAtMs: 2_000 },
+          { task: dueFriday, status: "laterThisWeek", localDate: "2026-09-04", effectiveDueAtMs: 3_000 },
         ]),
         [work],
       ),
@@ -87,14 +75,14 @@ describe("menu-bar presentation", () => {
               title: "Submit report",
               priority: "high",
               projectName: "Work",
-              view: "today",
+              view: "thisWeek",
             },
             {
               id: "2",
               title: "Book appointment",
               priority: "low",
               projectName: null,
-              view: "today",
+              view: "thisWeek",
             },
           ],
         },
@@ -107,7 +95,7 @@ describe("menu-bar presentation", () => {
               title: "Buy groceries",
               priority: "none",
               projectName: null,
-              view: "today",
+              view: "thisWeek",
             },
           ],
         },
@@ -120,7 +108,7 @@ describe("menu-bar presentation", () => {
               title: "Review proposal",
               priority: "medium",
               projectName: "Work",
-              view: "upcoming",
+              view: "thisWeek",
             },
           ],
         },
@@ -133,7 +121,7 @@ describe("menu-bar presentation", () => {
               title: "Plan launch",
               priority: "high",
               projectName: "Work",
-              view: "upcoming",
+              view: "thisWeek",
             },
           ],
         },
@@ -142,20 +130,19 @@ describe("menu-bar presentation", () => {
   });
 
   it("hides the menu title and task sections when nothing is due", () => {
-    expect(buildMenuBarModel(todayResult([]), upcomingResult([]), [])).toEqual({
+    expect(buildMenuBarModel(thisWeekResult([]), [])).toEqual({
       count: 0,
       title: undefined,
       sections: [],
     });
   });
 
-  it("does not include upcoming tasks in the menu title count", () => {
+  it("does not include later-this-week tasks in the menu title count", () => {
     const tomorrow = task("1", "Review proposal", "medium");
 
     expect(
       buildMenuBarModel(
-        todayResult([]),
-        upcomingResult([{ task: tomorrow, localDate: "2026-09-01", effectiveDueAtMs: 2_000 }]),
+        thisWeekResult([{ task: tomorrow, status: "laterThisWeek", localDate: "2026-09-01", effectiveDueAtMs: 2_000 }]),
         [],
       ),
     ).toEqual({
@@ -171,7 +158,7 @@ describe("menu-bar presentation", () => {
               title: "Review proposal",
               priority: "medium",
               projectName: null,
-              view: "upcoming",
+              view: "thisWeek",
             },
           ],
         },
@@ -184,7 +171,7 @@ describe("menu-bar presentation", () => {
       id: "task-1",
       title: "Submit report",
       priority: "high" as const,
-      view: "today" as const,
+      view: "thisWeek" as const,
     };
     expect(menuBarTaskTitle({ ...baseTask, projectName: "Work" })).toBe("Submit report · Work");
     expect(menuBarTaskTitle({ ...baseTask, projectName: null })).toBe("Submit report");
@@ -195,7 +182,7 @@ describe("menu-bar presentation", () => {
       id: "task-1",
       priority: "high" as const,
       projectName: null,
-      view: "today" as const,
+      view: "thisWeek" as const,
     };
     const exactTitle = "a".repeat(72);
 
@@ -210,7 +197,7 @@ describe("menu-bar presentation", () => {
         title: "a".repeat(100),
         priority: "high",
         projectName: "Work",
-        view: "today",
+        view: "thisWeek",
       }),
     ).toBe(`${"a".repeat(64)}… · Work`);
   });
@@ -222,7 +209,7 @@ describe("menu-bar presentation", () => {
         title: "a".repeat(100),
         priority: "high",
         projectName: "p".repeat(30),
-        view: "today",
+        view: "thisWeek",
       }),
     ).toBe(`${"a".repeat(44)}… · ${"p".repeat(23)}…`);
   });
@@ -236,7 +223,7 @@ describe("menu-bar presentation", () => {
         title: family.repeat(73),
         priority: "high",
         projectName: null,
-        view: "today",
+        view: "thisWeek",
       }),
     ).toBe(`${family.repeat(71)}…`);
   });
@@ -249,8 +236,8 @@ describe("menu-bar presentation", () => {
       editTask: false,
       isShowingDetail: false,
     });
-    expect(parseMyTasksLaunchContext({ view: "upcoming", selectedTaskId: "task-1", createTask: true })).toEqual({
-      view: "upcoming",
+    expect(parseMyTasksLaunchContext({ view: "thisWeek", selectedTaskId: "task-1", createTask: true })).toEqual({
+      view: "thisWeek",
       selectedTaskId: "task-1",
       createTask: true,
       editTask: false,

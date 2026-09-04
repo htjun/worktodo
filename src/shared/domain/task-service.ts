@@ -7,8 +7,8 @@ import {
   queryToday,
   queryTrash,
   type TodayResult,
-  queryUpcoming,
-  type UpcomingResult,
+  queryThisWeek,
+  type ThisWeekResult,
 } from "./queries";
 import type { TaskRepository } from "./repository";
 import {
@@ -513,7 +513,7 @@ export class TaskService {
     return queryToday(this.repository.listTasks(), evaluationInstantMs, viewerTimeZone);
   }
 
-  listUpcoming(evaluationInstantMs: number, viewerTimeZone: string): UpcomingResult {
-    return queryUpcoming(this.repository.listTasks(), evaluationInstantMs, viewerTimeZone);
+  listThisWeek(evaluationInstantMs: number, viewerTimeZone: string): ThisWeekResult {
+    return queryThisWeek(this.repository.listTasks(), evaluationInstantMs, viewerTimeZone);
   }
 }

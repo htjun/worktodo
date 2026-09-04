@@ -7,7 +7,7 @@ import {
   queryProject,
   queryToday,
   queryTrash,
-  queryUpcoming,
+  queryThisWeek,
   startOfCalendarDate,
   todayWindow,
 } from "../../src/shared/domain/queries";
@@ -149,7 +149,7 @@ describe("task queries", () => {
     expect(startOfCalendarDate("2026-10-04", "Australia/Melbourne")).toBe(Date.parse("2026-10-03T14:00:00.000Z"));
   });
 
-  it("returns future active tasks grouped and ordered by viewer calendar date", () => {
+  it("returns active tasks through Sunday with status and stable due ordering", () => {
     const tasks = [
       task(1, { kind: "none" }),
       task(2, { kind: "allDay", date: "2026-10-04" }),
@@ -158,36 +158,50 @@ describe("task queries", () => {
       task(5, { kind: "timed", instantMs: Date.parse("2026-10-04T12:59:59.999Z"), timeZone: "UTC" }),
       task(6, { kind: "timed", instantMs: Date.parse("2026-10-04T13:00:00.000Z"), timeZone: "UTC" }),
       task(7, { kind: "timed", instantMs: Date.parse("2026-10-04T15:00:00.000Z"), timeZone: "UTC" }),
-      task(8, { kind: "allDay", date: "2026-10-06" }),
+      task(8, { kind: "allDay", date: "2026-10-11" }),
       task(9, { kind: "allDay", date: "2026-10-05" }, { completedAtMs: 1_000 }),
       task(10, { kind: "allDay", date: "2026-10-05" }, { trashedAtMs: 1_000 }),
+      task(11, { kind: "allDay", date: "2026-10-12" }),
     ];
-    const result = queryUpcoming(tasks, Date.parse("2026-10-04T01:00:00.000Z"), "Australia/Melbourne");
+    const result = queryThisWeek(tasks, Date.parse("2026-10-04T13:00:00.000Z"), "Australia/Melbourne");
 
-    expect(result.count).toBe(5);
-    expect(result.tasks.map(({ task: value, localDate }) => [value.id, localDate])).toEqual([
-      [id(4), "2026-10-05"],
-      [id(3), "2026-10-05"],
-      [id(6), "2026-10-05"],
-      [id(7), "2026-10-05"],
-      [id(8), "2026-10-06"],
+    expect(result).toMatchObject({ count: 7, localDate: "2026-10-05", endOfWeekDate: "2026-10-11" });
+    expect(result.tasks.map(({ task: value, status, localDate }) => [value.id, status, localDate])).toEqual([
+      [id(2), "overdue", "2026-10-04"],
+      [id(5), "overdue", "2026-10-04"],
+      [id(4), "dueToday", "2026-10-05"],
+      [id(3), "dueToday", "2026-10-05"],
+      [id(6), "dueToday", "2026-10-05"],
+      [id(7), "dueToday", "2026-10-05"],
+      [id(8), "laterThisWeek", "2026-10-11"],
     ]);
   });
 
-  it("reclassifies timed Upcoming tasks from the viewer timezone without changing all-day dates", () => {
-    const allDay = task(1, { kind: "allDay", date: "2026-10-05" });
+  it("bounds This week in the viewer timezone without changing all-day dates", () => {
+    const allDay = task(1, { kind: "allDay", date: "2026-10-12" });
     const timed = task(2, {
       kind: "timed",
-      instantMs: Date.parse("2026-10-05T10:00:00.000Z"),
+      instantMs: Date.parse("2026-10-12T10:00:00.000Z"),
       timeZone: "Australia/Melbourne",
     });
-    const evaluation = Date.parse("2026-10-04T16:00:00.000Z");
+    const evaluation = Date.parse("2026-10-11T16:00:00.000Z");
 
-    expect(queryUpcoming([allDay, timed], evaluation, "Australia/Melbourne").tasks).toEqual([]);
-    expect(queryUpcoming([allDay, timed], evaluation, "America/Los_Angeles").tasks.map(({ task }) => task.id)).toEqual([
+    expect(queryThisWeek([allDay, timed], evaluation, "Australia/Melbourne").tasks.map(({ task }) => task.id)).toEqual([
       id(1),
       id(2),
     ]);
+    expect(queryThisWeek([allDay, timed], evaluation, "America/Los_Angeles").tasks).toEqual([]);
+  });
+
+  it("ends This week on the viewer's Sunday", () => {
+    const sunday = task(1, { kind: "allDay", date: "2026-10-11" });
+    const monday = task(2, { kind: "allDay", date: "2026-10-12" });
+
+    expect(
+      queryThisWeek([sunday, monday], Date.parse("2026-10-11T01:00:00.000Z"), "Australia/Melbourne").tasks.map(
+        ({ task }) => task.id,
+      ),
+    ).toEqual([id(1)]);
   });
 
   it("returns active incomplete project and label tasks in canonical ordinary order", () => {

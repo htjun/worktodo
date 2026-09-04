@@ -20,7 +20,7 @@ export type { TaskListSection } from "./shared/presentation/task-views";
 const VIEW_ICONS = {
   all: Icon.Folder,
   today: Icon.Calendar,
-  upcoming: Icon.Calendar,
+  thisWeek: Icon.Calendar,
   completed: Icon.CheckCircle,
   trash: Icon.Trash,
   project: Icon.Folder,
@@ -58,11 +58,9 @@ export function TaskViewDropdown({
       onChange={(value) => onChange(taskViewFromKey(value, projects, labels))}
     >
       <List.Dropdown.Section title="Views">
-        <List.Dropdown.Item value="all" title="All Tasks" icon={Icon.Folder} />
+        <List.Dropdown.Item value="all" title="All tasks" icon={Icon.Folder} />
         <List.Dropdown.Item value="today" title="Today" icon={Icon.Calendar} />
-        <List.Dropdown.Item value="upcoming" title="Upcoming" icon={Icon.Calendar} />
-        <List.Dropdown.Item value="completed" title="Completed" icon={Icon.CheckCircle} />
-        <List.Dropdown.Item value="trash" title="Trash" icon={Icon.Trash} />
+        <List.Dropdown.Item value="thisWeek" title="This week" icon={Icon.Calendar} />
       </List.Dropdown.Section>
       {projects.length > 0 ? (
         <List.Dropdown.Section title="Projects">
@@ -76,13 +74,10 @@ export function TaskViewDropdown({
           ))}
         </List.Dropdown.Section>
       ) : null}
-      {labels.length > 0 ? (
-        <List.Dropdown.Section title="Labels">
-          {labels.map((label) => (
-            <List.Dropdown.Item key={label.id} value={`label:${label.id}`} title={label.name} icon={Icon.Tag} />
-          ))}
-        </List.Dropdown.Section>
-      ) : null}
+      <List.Dropdown.Section title="Status">
+        <List.Dropdown.Item value="completed" title="Completed" icon={Icon.CheckCircle} />
+        <List.Dropdown.Item value="trash" title="Trash" icon={Icon.Trash} />
+      </List.Dropdown.Section>
     </List.Dropdown>
   );
 }

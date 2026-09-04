@@ -273,24 +273,27 @@ describe("shared domain operations", () => {
   it("exposes shared due-date queries through the task service", async () => {
     const { service, db } = await createContext();
     try {
-      const upcoming = service.createTask({
+      const laterThisWeek = service.createTask({
         title: "Tomorrow",
         projectId: null,
-        due: { kind: "allDay", date: "2026-10-05" },
+        due: { kind: "allDay", date: "2026-10-06" },
       });
       const today = service.createTask({
         title: "Today",
         projectId: null,
-        due: { kind: "allDay", date: "2026-10-04" },
+        due: { kind: "allDay", date: "2026-10-05" },
       });
 
-      expect(service.listAllTasks("Australia/Melbourne").map((task) => task.id)).toEqual([today.id, upcoming.id]);
+      expect(service.listAllTasks("Australia/Melbourne").map((task) => task.id)).toEqual([today.id, laterThisWeek.id]);
 
       expect(
         service
-          .listUpcoming(Date.parse("2026-10-04T01:00:00.000Z"), "Australia/Melbourne")
-          .tasks.map(({ task, localDate }) => [task.id, localDate]),
-      ).toEqual([[upcoming.id, "2026-10-05"]]);
+          .listThisWeek(Date.parse("2026-10-04T13:00:00.000Z"), "Australia/Melbourne")
+          .tasks.map(({ task, status, localDate }) => [task.id, status, localDate]),
+      ).toEqual([
+        [today.id, "dueToday", "2026-10-05"],
+        [laterThisWeek.id, "laterThisWeek", "2026-10-06"],
+      ]);
     } finally {
       db.close();
     }

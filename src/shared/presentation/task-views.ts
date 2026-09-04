@@ -23,11 +23,11 @@ const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project" | "label">
     emptyTitle: "Nothing due today",
     emptyDescription: "Overdue tasks also appear here.",
   },
-  upcoming: {
-    title: "Upcoming",
-    searchPlaceholder: "Search upcoming tasks",
-    emptyTitle: "No upcoming tasks",
-    emptyDescription: "Tasks due after today appear here.",
+  thisWeek: {
+    title: "This week",
+    searchPlaceholder: "Search this week's tasks",
+    emptyTitle: "Nothing due this week",
+    emptyDescription: "Overdue tasks also appear here.",
   },
   completed: {
     title: "Completed",
@@ -107,7 +107,7 @@ export function initialLabelIdsForTaskView(view: TaskView): string[] {
   return view.kind === "label" ? [view.labelId] : [];
 }
 
-function upcomingSectionTitle(date: string, localDate: string, viewerTimeZone: string): string {
+function laterThisWeekSectionTitle(date: string, localDate: string, viewerTimeZone: string): string {
   if (date === addCalendarDays(localDate, 1)) {
     return "Tomorrow";
   }
@@ -143,17 +143,26 @@ export function buildTaskViewSections(
     ];
   }
 
-  if (taskView.kind === "upcoming") {
-    const groups = new Map<string, TaskListEntry[]>();
-    for (const { task, localDate } of taskView.result.tasks) {
-      const group = groups.get(localDate) ?? [];
-      group.push({ task });
-      groups.set(localDate, group);
+  if (taskView.kind === "thisWeek") {
+    const groups = new Map<string, { title: string; entries: TaskListEntry[] }>();
+    for (const { task, status, localDate } of taskView.result.tasks) {
+      const groupKey = status === "overdue" ? "overdue" : status === "dueToday" ? "today" : localDate;
+      const group = groups.get(groupKey) ?? {
+        title:
+          status === "overdue"
+            ? "Overdue"
+            : status === "dueToday"
+              ? "Today"
+              : laterThisWeekSectionTitle(localDate, taskView.result.localDate, taskView.viewerTimeZone),
+        entries: [],
+      };
+      group.entries.push(status === "laterThisWeek" ? { task } : { task, todayStatus: status });
+      groups.set(groupKey, group);
     }
-    return [...groups].map(([date, group]) => ({
-      key: `upcoming:${date}`,
-      title: upcomingSectionTitle(date, taskView.result.localDate, taskView.viewerTimeZone),
-      items: buildTaskListItems(group, projects, labels, taskView.viewerTimeZone),
+    return [...groups].map(([key, group]) => ({
+      key: `thisWeek:${key}`,
+      title: group.title,
+      items: buildTaskListItems(group.entries, projects, labels, taskView.viewerTimeZone),
     }));
   }
 

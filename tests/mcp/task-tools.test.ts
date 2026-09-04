@@ -323,7 +323,7 @@ describe("Worktodo MCP task tools", () => {
         projectId: project.id,
         due: { kind: "allDay", date: "2026-08-31" },
       });
-      const upcoming = context.service.createTask({
+      const laterThisWeek = context.service.createTask({
         title: "Tomorrow",
         projectId: project.id,
         labelIds: [label.id],
@@ -333,13 +333,13 @@ describe("Worktodo MCP task tools", () => {
       context.service.trashTask(noProject.id);
 
       const views: Array<[Record<string, unknown>, string[]]> = [
-        [{ view: "all" }, [upcoming.id]],
+        [{ view: "all" }, [laterThisWeek.id]],
         [{ view: "today" }, []],
-        [{ view: "upcoming" }, [upcoming.id]],
+        [{ view: "thisWeek" }, [laterThisWeek.id]],
         [{ view: "completed" }, [today.id]],
         [{ view: "trash" }, [noProject.id]],
-        [{ view: "project", projectId: project.id }, [upcoming.id]],
-        [{ view: "label", labelId: label.id }, [upcoming.id]],
+        [{ view: "project", projectId: project.id }, [laterThisWeek.id]],
+        [{ view: "label", labelId: label.id }, [laterThisWeek.id]],
       ];
 
       for (const [args, expectedIds] of views) {
@@ -363,6 +363,9 @@ describe("Worktodo MCP task tools", () => {
   it("returns bounded domain errors and suppresses unexpected infrastructure details", async () => {
     const context = await createContext();
     try {
+      expect(await callTool(context.client, "list_tasks", { view: "inbox" })).toMatchObject({ isError: true });
+      expect(await callTool(context.client, "list_tasks", { view: "upcoming" })).toMatchObject({ isError: true });
+
       const invalidView = await callTool(context.client, "list_tasks", { view: "project" });
       expect(invalidView).toMatchObject({ isError: true });
       expect(invalidView.content).toEqual([

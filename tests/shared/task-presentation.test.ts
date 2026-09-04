@@ -9,7 +9,7 @@ import {
   taskListRowPresentation,
   taskNotesMarkdown,
 } from "../../src/shared/presentation/task-list";
-import { taskViewContent } from "../../src/shared/presentation/task-views";
+import { buildTaskViewSections, taskViewContent } from "../../src/shared/presentation/task-views";
 
 const project: Project = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -56,6 +56,46 @@ describe("task presentation mapping", () => {
       emptyTitle: "Nothing due today",
       emptyDescription: "Overdue tasks also appear here.",
     });
+    expect(taskViewContent({ kind: "thisWeek" }, [], [])).toMatchObject({
+      title: "This week",
+      searchPlaceholder: "Search this week's tasks",
+      emptyTitle: "Nothing due this week",
+    });
+  });
+
+  it("groups This week into overdue, today, and later dates", () => {
+    const overdue = task({ id: "overdue", due: { kind: "allDay", date: "2026-08-30" } });
+    const today = task({ id: "today", due: { kind: "allDay", date: "2026-08-31" } });
+    const tomorrow = task({ id: "tomorrow", due: { kind: "allDay", date: "2026-09-01" } });
+    const sections = buildTaskViewSections(
+      {
+        kind: "thisWeek",
+        view: { kind: "thisWeek" },
+        evaluatedAtMs: 1_000,
+        viewerTimeZone: "Australia/Melbourne",
+        result: {
+          tasks: [
+            { task: overdue, status: "overdue", localDate: "2026-08-30", effectiveDueAtMs: 1_000 },
+            { task: today, status: "dueToday", localDate: "2026-08-31", effectiveDueAtMs: 2_000 },
+            { task: tomorrow, status: "laterThisWeek", localDate: "2026-09-01", effectiveDueAtMs: 3_000 },
+          ],
+          count: 3,
+          localDate: "2026-08-31",
+          startOfDayMs: 1_000,
+          startOfNextDayMs: 2_000,
+          endOfWeekDate: "2026-09-06",
+          startOfNextWeekMs: 4_000,
+        },
+      },
+      [project],
+      [],
+    );
+
+    expect(sections.map((section) => [section.key, section.title, section.items.map((item) => item.id)])).toEqual([
+      ["thisWeek:overdue", "Overdue", [overdue.id]],
+      ["thisWeek:today", "Today", [today.id]],
+      ["thisWeek:2026-09-01", "Tomorrow", [tomorrow.id]],
+    ]);
   });
 
   it("groups All Tasks under No project and non-empty projects in project order", () => {
@@ -223,7 +263,7 @@ describe("task presentation mapping", () => {
   });
 
   it("maps lifecycle actions for safe secondary views", () => {
-    for (const viewKind of ["all", "today", "upcoming", "project"]) {
+    for (const viewKind of ["all", "today", "thisWeek", "project"]) {
       const kind = taskLifecycleActionKindForViewKind(viewKind);
       expect({ kind, ...taskLifecycleMutationPresentation(kind) }).toEqual({
         kind: "complete",

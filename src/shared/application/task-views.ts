@@ -1,9 +1,9 @@
 import { DomainError, type Label, type Project, type Task } from "../domain/model";
-import type { TodayResult, UpcomingResult } from "../domain/queries";
+import type { ThisWeekResult, TodayResult } from "../domain/queries";
 import type { TaskService } from "../domain/task-service";
 import { canonicalizeTimeZone, validateId, validateNonNegativeInteger } from "../domain/validation";
 
-export const STATIC_TASK_VIEW_KINDS = ["all", "today", "upcoming", "completed", "trash"] as const;
+export const STATIC_TASK_VIEW_KINDS = ["all", "today", "thisWeek", "completed", "trash"] as const;
 export const TASK_VIEW_KINDS = [...STATIC_TASK_VIEW_KINDS, "project", "label"] as const;
 
 export type StaticTaskViewKind = (typeof STATIC_TASK_VIEW_KINDS)[number];
@@ -21,8 +21,8 @@ export type TaskViewContext = {
 };
 
 type TodayTaskView = Extract<TaskView, { kind: "today" }>;
-type UpcomingTaskView = Extract<TaskView, { kind: "upcoming" }>;
-type OrdinaryTaskView = Exclude<TaskView, TodayTaskView | UpcomingTaskView>;
+type ThisWeekTaskView = Extract<TaskView, { kind: "thisWeek" }>;
+type OrdinaryTaskView = Exclude<TaskView, TodayTaskView | ThisWeekTaskView>;
 
 type TaskViewResultContext = {
   evaluatedAtMs: number;
@@ -35,10 +35,10 @@ export type TodayTaskViewResult = TaskViewResultContext & {
   result: TodayResult;
 };
 
-export type UpcomingTaskViewResult = TaskViewResultContext & {
-  kind: "upcoming";
-  view: UpcomingTaskView;
-  result: UpcomingResult;
+export type ThisWeekTaskViewResult = TaskViewResultContext & {
+  kind: "thisWeek";
+  view: ThisWeekTaskView;
+  result: ThisWeekResult;
 };
 
 export type OrdinaryTaskViewResult = TaskViewResultContext & {
@@ -47,7 +47,7 @@ export type OrdinaryTaskViewResult = TaskViewResultContext & {
   result: Task[];
 };
 
-export type TaskViewResult = TodayTaskViewResult | UpcomingTaskViewResult | OrdinaryTaskViewResult;
+export type TaskViewResult = TodayTaskViewResult | ThisWeekTaskViewResult | OrdinaryTaskViewResult;
 
 export function isStaticTaskViewKind(value: unknown): value is StaticTaskViewKind {
   return typeof value === "string" && STATIC_TASK_VIEW_KINDS.some((kind) => kind === value);
@@ -98,9 +98,9 @@ export function normalizeTaskView(view: TaskView, projects: readonly Project[], 
 export function loadTaskView(source: TaskService, view: TodayTaskView, context: TaskViewContext): TodayTaskViewResult;
 export function loadTaskView(
   source: TaskService,
-  view: UpcomingTaskView,
+  view: ThisWeekTaskView,
   context: TaskViewContext,
-): UpcomingTaskViewResult;
+): ThisWeekTaskViewResult;
 export function loadTaskView(source: TaskService, view: TaskView, context: TaskViewContext): TaskViewResult;
 export function loadTaskView(source: TaskService, view: TaskView, context: TaskViewContext): TaskViewResult {
   const evaluatedAtMs = validateNonNegativeInteger(context.evaluationInstantMs, "Evaluation instant");
@@ -110,8 +110,8 @@ export function loadTaskView(source: TaskService, view: TaskView, context: TaskV
   switch (view.kind) {
     case "today":
       return { kind: "today", view, result: source.listToday(evaluatedAtMs, viewerTimeZone), ...resultContext };
-    case "upcoming":
-      return { kind: "upcoming", view, result: source.listUpcoming(evaluatedAtMs, viewerTimeZone), ...resultContext };
+    case "thisWeek":
+      return { kind: "thisWeek", view, result: source.listThisWeek(evaluatedAtMs, viewerTimeZone), ...resultContext };
     case "all":
       return { kind: "tasks", view, result: source.listAllTasks(viewerTimeZone), ...resultContext };
     case "project":
