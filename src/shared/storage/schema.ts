@@ -105,6 +105,32 @@ CREATE INDEX tasks_trashed_idx
   WHERE trashed_at_ms IS NOT NULL;
 `;
 
+const VERSION_1_INDEXES_SQL = `
+CREATE INDEX projects_order_idx
+  ON projects (position, created_at_ms, id);
+CREATE INDEX sections_project_order_idx
+  ON sections (project_id, position, created_at_ms, id);
+CREATE INDEX tasks_project_fk_idx
+  ON tasks (project_id);
+CREATE INDEX tasks_section_project_fk_idx
+  ON tasks (section_id, project_id);
+CREATE INDEX tasks_inbox_order_idx
+  ON tasks (position, created_at_ms, id)
+  WHERE project_id IS NULL AND section_id IS NULL AND trashed_at_ms IS NULL;
+CREATE INDEX tasks_all_day_today_idx
+  ON tasks (due_date, position, created_at_ms, id)
+  WHERE due_kind = 'all_day' AND completed_at_ms IS NULL AND trashed_at_ms IS NULL;
+CREATE INDEX tasks_timed_today_idx
+  ON tasks (due_at_ms, position, created_at_ms, id)
+  WHERE due_kind = 'timed' AND completed_at_ms IS NULL AND trashed_at_ms IS NULL;
+CREATE INDEX tasks_completed_idx
+  ON tasks (completed_at_ms DESC, id)
+  WHERE completed_at_ms IS NOT NULL AND trashed_at_ms IS NULL;
+CREATE INDEX tasks_trashed_idx
+  ON tasks (trashed_at_ms DESC, id)
+  WHERE trashed_at_ms IS NOT NULL;
+`;
+
 const VERSION_2_BODY = `${PROJECTS_SQL}${LABELS_SQL}
 CREATE TABLE tasks (${TASK_COLUMNS_SQL}) STRICT;
 ${TASK_LABELS_SQL}${INDEXES_SQL}`;
@@ -157,6 +183,8 @@ CREATE TABLE tasks (
   FOREIGN KEY (section_id, project_id)
     REFERENCES sections (id, project_id) ON UPDATE RESTRICT ON DELETE RESTRICT
 ) STRICT;
+
+${VERSION_1_INDEXES_SQL}
 
 PRAGMA user_version = 1;
 COMMIT;
@@ -280,6 +308,7 @@ CREATE TABLE tasks_v2 (${TASK_COLUMNS_SQL}) STRICT;`);
   `);
   const insertAssociation = db.prepare("INSERT INTO task_labels(task_id, label_id) VALUES (?, ?)");
   associations.forEach(([taskId, labelId]) => insertAssociation.run(taskId, labelId));
+  db.exec("DROP INDEX IF EXISTS projects_order_idx");
   db.exec(INDEXES_SQL);
 }
 

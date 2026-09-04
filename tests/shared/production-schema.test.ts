@@ -81,6 +81,12 @@ describe("production schema", () => {
     const db = openWorktodoDatabase(await temporaryDatabasePath());
     try {
       db.exec(WORKTODO_SCHEMA_VERSION_1_SQL);
+      expect(
+        db
+          .prepare("SELECT name FROM sqlite_schema WHERE type = 'index' AND name NOT LIKE 'sqlite_autoindex_%'")
+          .all()
+          .map((row) => row.name),
+      ).toContain("projects_order_idx");
       const insertProject = db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?, ?)");
       insertProject.run(id(1), "Work", 10, 100, 150);
       insertProject.run(id(2), "Home", 20, 110, 160);
@@ -160,6 +166,24 @@ describe("production schema", () => {
         completed_at_ms: 400,
       });
       expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      expect(
+        db
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'index' AND name NOT LIKE 'sqlite_autoindex_%' ORDER BY name",
+          )
+          .all()
+          .map((row) => row.name),
+      ).toEqual([
+        "labels_order_idx",
+        "projects_order_idx",
+        "task_labels_label_idx",
+        "tasks_all_day_today_idx",
+        "tasks_completed_idx",
+        "tasks_inbox_order_idx",
+        "tasks_project_fk_idx",
+        "tasks_timed_today_idx",
+        "tasks_trashed_idx",
+      ]);
       expect(applyMigrations(db)).toEqual({ applied: false, previousVersion: 2, currentVersion: 2 });
     } finally {
       db.close();
