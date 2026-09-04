@@ -6,6 +6,7 @@ import { timedTaskHistoryPresentation } from "./task-history";
 const MENU_BAR_TASK_LABEL_MAX_GRAPHEMES = 72;
 const MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES = 24;
 const MENU_BAR_PROJECT_SEPARATOR = " · ";
+const MENU_BAR_HISTORY_TITLE_GAP_GRAPHEMES = 1;
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 export type MenuBarTask = {
@@ -40,10 +41,13 @@ export type MenuBarTaskHistoryItem = {
 };
 
 export function buildMenuBarTaskHistoryItem(state: TimedTaskHistoryState): MenuBarTaskHistoryItem {
+  const presentation = timedTaskHistoryPresentation(state);
+  const subtitleMaximum =
+    MENU_BAR_TASK_LABEL_MAX_GRAPHEMES - graphemes(presentation.title).length - MENU_BAR_HISTORY_TITLE_GAP_GRAPHEMES;
   return {
     direction: state.direction,
-    title: timedTaskHistoryPresentation(state).title,
-    subtitle: state.taskTitle,
+    title: presentation.title,
+    subtitle: truncateGraphemes(state.taskTitle, subtitleMaximum),
   };
 }
 
