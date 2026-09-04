@@ -3,6 +3,11 @@ import { addCalendarDays, type TodayResult, type UpcomingResult } from "../domai
 import type { TimedTaskHistoryState } from "../application/timed-task-history";
 import { timedTaskHistoryPresentation } from "./task-history";
 
+const MENU_BAR_TASK_LABEL_MAX_GRAPHEMES = 72;
+const MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES = 24;
+const MENU_BAR_PROJECT_SEPARATOR = " · ";
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
 export type MenuBarTask = {
   id: string;
   title: string;
@@ -64,8 +69,27 @@ function endOfWeek(date: string): string {
   return addCalendarDays(date, dayOfWeek === 0 ? 0 : 7 - dayOfWeek);
 }
 
+function graphemes(value: string): string[] {
+  return Array.from(graphemeSegmenter.segment(value), ({ segment }) => segment);
+}
+
+function truncateGraphemes(value: string, maximum: number): string {
+  const segments = graphemes(value);
+  if (segments.length <= maximum) {
+    return value;
+  }
+  return `${segments.slice(0, maximum - 1).join("")}…`;
+}
+
 export function menuBarTaskTitle(task: MenuBarTask): string {
-  return task.projectName === null ? task.title : `${task.title} · ${task.projectName}`;
+  if (task.projectName === null) {
+    return truncateGraphemes(task.title, MENU_BAR_TASK_LABEL_MAX_GRAPHEMES);
+  }
+
+  const projectName = truncateGraphemes(task.projectName, MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES);
+  const taskTitleMaximum =
+    MENU_BAR_TASK_LABEL_MAX_GRAPHEMES - graphemes(MENU_BAR_PROJECT_SEPARATOR).length - graphemes(projectName).length;
+  return `${truncateGraphemes(task.title, taskTitleMaximum)}${MENU_BAR_PROJECT_SEPARATOR}${projectName}`;
 }
 
 export function buildMenuBarModel(

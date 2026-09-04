@@ -190,6 +190,57 @@ describe("menu-bar presentation", () => {
     expect(menuBarTaskTitle({ ...baseTask, projectName: null })).toBe("Submit report");
   });
 
+  it("keeps task labels at the limit and truncates labels that exceed it", () => {
+    const baseTask = {
+      id: "task-1",
+      priority: "high" as const,
+      projectName: null,
+      view: "today" as const,
+    };
+    const exactTitle = "a".repeat(72);
+
+    expect(menuBarTaskTitle({ ...baseTask, title: exactTitle })).toBe(exactTitle);
+    expect(menuBarTaskTitle({ ...baseTask, title: `${exactTitle}a` })).toBe(`${"a".repeat(71)}…`);
+  });
+
+  it("truncates a long task title while preserving its project suffix", () => {
+    expect(
+      menuBarTaskTitle({
+        id: "task-1",
+        title: "a".repeat(100),
+        priority: "high",
+        projectName: "Work",
+        view: "today",
+      }),
+    ).toBe(`${"a".repeat(64)}… · Work`);
+  });
+
+  it("caps long task and project names within the combined label limit", () => {
+    expect(
+      menuBarTaskTitle({
+        id: "task-1",
+        title: "a".repeat(100),
+        priority: "high",
+        projectName: "p".repeat(30),
+        view: "today",
+      }),
+    ).toBe(`${"a".repeat(44)}… · ${"p".repeat(23)}…`);
+  });
+
+  it("does not split composed emoji when truncating task labels", () => {
+    const family = "👨‍👩‍👧‍👦";
+
+    expect(
+      menuBarTaskTitle({
+        id: "task-1",
+        title: family.repeat(73),
+        priority: "high",
+        projectName: null,
+        view: "today",
+      }),
+    ).toBe(`${family.repeat(71)}…`);
+  });
+
   it("accepts only supported My Tasks launch context values", () => {
     expect(parseMyTasksLaunchContext({ view: "all" })).toEqual({
       view: "all",
