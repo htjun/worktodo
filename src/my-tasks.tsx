@@ -488,7 +488,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                               }
                             />
                           ) : null}
-                          {item.task.completedAtMs === null && item.task.trashedAtMs === null ? (
+                          {item.task.trashedAtMs === null ? (
                             <Action.Push
                               title="Edit Labels"
                               icon={Icon.Tag}

@@ -134,7 +134,8 @@ describe("Label UI adapters", () => {
     expect(tasks).toContain("lifecycle.current?.refreshAfterExternalMutation()");
     expect(tasks).toContain('<List.Item.Detail.Metadata.TagList title="Labels">');
     expect(tasks).toContain('title="Edit Labels"');
-    expect(tasks).toContain("item.task.completedAtMs === null && item.task.trashedAtMs === null");
+    expect(tasks).toContain("item.task.trashedAtMs === null");
+    expect(tasks).not.toContain("item.task.completedAtMs === null && item.task.trashedAtMs === null");
     expect(management).toContain('navigationTitle="Labels"');
     expect(management).toContain("const confirmed = await confirmAlert(");
     expect(management).toContain("if (!confirmed)");
