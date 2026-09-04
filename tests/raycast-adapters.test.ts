@@ -221,7 +221,7 @@ describe("Label UI adapters", () => {
     expect(views).not.toContain("value={`label:${label.id}`}");
     expect(tasks).toContain("normalizeTaskView(view, projects, labels)");
     expect(tasks).toContain("initialProjectId={initialProjectIdForTaskView(view)}");
-    expect(tasks).toContain("initialLabelIds={initialLabelIdsForTaskView(view)}");
+    expect(tasks).not.toContain("initialLabelIdsForTaskView");
     expect(presentation).toContain("keywords: [project, entry.task.notes, ...labelNames]");
   });
 });

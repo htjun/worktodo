@@ -103,10 +103,6 @@ export function initialProjectIdForTaskView(view: TaskView): string | null {
   return view.kind === "project" ? view.projectId : null;
 }
 
-export function initialLabelIdsForTaskView(view: TaskView): string[] {
-  return view.kind === "label" ? [view.labelId] : [];
-}
-
 function laterThisWeekSectionTitle(date: string, localDate: string, viewerTimeZone: string): string {
   if (date === addCalendarDays(localDate, 1)) {
     return "Tomorrow";

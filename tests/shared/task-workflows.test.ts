@@ -9,7 +9,6 @@ import {
 import {
   createOperationScopedTaskEditingMutations,
   TaskEditingInteraction,
-  taskEditingDefaults,
   taskEditingProjectKey,
 } from "../../src/shared/application/task-editing";
 import {
@@ -22,7 +21,6 @@ import {
 import { openWorktodoAtPath } from "../../src/shared/application/worktodo";
 import {
   buildTaskViewSections,
-  initialLabelIdsForTaskView,
   initialProjectIdForTaskView,
   taskViewContent,
   taskViewFromKey,
@@ -270,7 +268,6 @@ describe("main task workflows", () => {
       expect(normalizeTaskView({ kind: "label", labelId: label.id }, [project], [])).toEqual({ kind: "all" });
       expect(initialProjectIdForTaskView({ kind: "project", projectId: project.id })).toBe(project.id);
       expect(initialProjectIdForTaskView({ kind: "label", labelId: label.id })).toBeNull();
-      expect(initialLabelIdsForTaskView({ kind: "label", labelId: label.id })).toEqual([label.id]);
       expect(taskViewContent({ kind: "project", projectId: project.id }, [project], [label])).toMatchObject({
         title: "Work",
         searchPlaceholder: "Search Work",
@@ -279,28 +276,6 @@ describe("main task workflows", () => {
         title: "Waiting",
         searchPlaceholder: "Search Waiting",
         emptyTitle: "No tasks with this label",
-      });
-      const labelView: TaskView = { kind: "label", labelId: label.id };
-      const defaults = taskEditingDefaults(
-        undefined,
-        initialProjectIdForTaskView(labelView),
-        evaluationInstantMs,
-        viewerTimeZone,
-        initialLabelIdsForTaskView(labelView),
-      );
-      const createdFromLabelView = new TaskEditingInteraction(session.service).save(
-        undefined,
-        { ...defaults, title: "Created from Label view" },
-        {
-          referenceInstantMs: evaluationInstantMs,
-          viewerTimeZone,
-          projects: session.service.listProjects(),
-          labels: session.service.listLabels(),
-        },
-      );
-      expect(createdFromLabelView).toMatchObject({
-        status: "succeeded",
-        task: { projectId: null, labelIds: [label.id] },
       });
       session.service.removeLabel(label.id);
       expect(session.service.getTask(laterThisWeek.id).labelIds).toEqual([]);

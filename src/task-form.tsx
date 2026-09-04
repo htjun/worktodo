@@ -21,7 +21,6 @@ export function TaskForm({
   projects,
   labels,
   initialProjectId,
-  initialLabelIds = [],
   viewerTimeZone,
   onSaved,
 }: {
@@ -30,7 +29,6 @@ export function TaskForm({
   projects: readonly Project[];
   labels: readonly Label[];
   initialProjectId: string | null;
-  initialLabelIds?: readonly string[];
   viewerTimeZone: string;
   onSaved: () => void;
 }) {
@@ -38,8 +36,8 @@ export function TaskForm({
   const [referenceInstantMs] = useState(Date.now);
   const editing = useMemo(() => new TaskEditingInteraction(service), [service]);
   const defaults = useMemo(
-    () => taskEditingDefaults(task, initialProjectId, referenceInstantMs, viewerTimeZone, initialLabelIds),
-    [initialLabelIds, initialProjectId, referenceInstantMs, task, viewerTimeZone],
+    () => taskEditingDefaults(task, initialProjectId, referenceInstantMs, viewerTimeZone),
+    [initialProjectId, referenceInstantMs, task, viewerTimeZone],
   );
   const [priority, setPriority] = useState<Priority>(defaults.priority);
   const [dueDatePreset, setDueDatePreset] = useState(defaults.dueDatePreset);

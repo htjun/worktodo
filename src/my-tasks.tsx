@@ -27,7 +27,6 @@ import { taskListRowPresentation } from "./shared/presentation/task-list";
 import { EditLabelsForm, MoveTaskForm, TaskForm } from "./task-form";
 import {
   buildTaskViewSections,
-  initialLabelIdsForTaskView,
   initialProjectIdForTaskView,
   lifecycleActionForTaskView,
   TaskViewDropdown,
@@ -334,7 +333,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       projects={state.projects}
       labels={state.labels}
       initialProjectId={initialProjectIdForTaskView(view)}
-      initialLabelIds={initialLabelIdsForTaskView(view)}
       viewerTimeZone={viewerTimeZone}
       onSaved={refreshAfterUnrelatedMutation}
     />

@@ -9,12 +9,7 @@ import {
 } from "./shared/presentation/task-views";
 import { taskLifecycleMutationActionPresentation } from "./task-lifecycle-raycast";
 
-export {
-  buildTaskViewSections,
-  initialLabelIdsForTaskView,
-  initialProjectIdForTaskView,
-  taskViewKey,
-} from "./shared/presentation/task-views";
+export { buildTaskViewSections, initialProjectIdForTaskView, taskViewKey } from "./shared/presentation/task-views";
 export type { TaskListSection } from "./shared/presentation/task-views";
 
 const VIEW_ICONS = {

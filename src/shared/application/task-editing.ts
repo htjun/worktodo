@@ -168,7 +168,6 @@ export function taskEditingDefaults(
   initialProjectId: string | null,
   referenceInstantMs: number,
   viewerTimeZone: string,
-  initialLabelIds: readonly string[] = [],
 ): TaskEditingDefaults {
   if (!task) {
     return {
@@ -178,7 +177,7 @@ export function taskEditingDefaults(
       dueDatePreset: "none",
       customDueAtMs: null,
       selectedProject: taskEditingProjectKey(initialProjectId),
-      selectedLabelIds: [...initialLabelIds],
+      selectedLabelIds: [],
     };
   }
   return {
