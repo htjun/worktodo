@@ -8,6 +8,7 @@ import {
   initialMenuBarHidden,
   loadMenuBarModel,
   performMenuBarTaskHistory,
+  trashMenuBarTask,
 } from "./shared/application/menu-bar-workflows";
 import {
   TimedTaskHistoryController,
@@ -166,6 +167,34 @@ export default function Command(props: LaunchProps) {
     [refresh, showFeedback, showHistoryToast],
   );
 
+  const removeTask = useCallback(
+    async (taskId: string) => {
+      let trashed: Task;
+      try {
+        trashed = trashMenuBarTask(openProductionWorktodo, taskId);
+      } catch (error) {
+        await showFeedback({
+          style: Toast.Style.Failure,
+          title: "Unable to remove task",
+          message: messageFrom(error),
+        });
+        return;
+      }
+
+      const historyState = taskHistory.current?.record({
+        kind: "trash",
+        taskId: trashed.id,
+        taskTitle: trashed.title,
+      });
+      if (!historyState) {
+        return;
+      }
+      refresh();
+      await showHistoryToast("Task moved to Trash", trashed.title, historyState);
+    },
+    [refresh, showFeedback, showHistoryToast],
+  );
+
   const hideMenuBar = useCallback(async () => {
     try {
       persistMenuBarHidden(menuBarVisibilityCache);
@@ -225,15 +254,21 @@ export default function Command(props: LaunchProps) {
             {section.tasks.map((task) => (
               <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={priorityIcon(task.priority)}>
                 <MenuBarExtra.Item
-                  title="Complete Task"
+                  title="Complete"
                   icon={menuIcon(Icon.CheckCircle)}
                   onAction={() => completeTask(task.id)}
                 />
                 <MenuBarExtra.Item
-                  title="Open in My Tasks"
+                  title="Open"
                   icon={menuIcon(Icon.AppWindowList)}
                   onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id })}
                 />
+                <MenuBarExtra.Item
+                  title="Edit"
+                  icon={menuIcon(Icon.Pencil)}
+                  onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id, editTask: true })}
+                />
+                <MenuBarExtra.Item title="Remove" icon={menuIcon(Icon.Trash)} onAction={() => removeTask(task.id)} />
               </MenuBarExtra.Submenu>
             ))}
           </MenuBarExtra.Section>

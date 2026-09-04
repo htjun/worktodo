@@ -39,6 +39,15 @@ export function completeMenuBarTask(openSession: () => MenuBarSession, taskId: s
   }
 }
 
+export function trashMenuBarTask(openSession: () => MenuBarSession, taskId: string): Task {
+  const session = openSession();
+  try {
+    return session.service.trashTask(taskId);
+  } finally {
+    session.close();
+  }
+}
+
 export function performMenuBarTaskHistory(openSession: () => MenuBarSession, state: TimedTaskHistoryState): void {
   const session = openSession();
   try {

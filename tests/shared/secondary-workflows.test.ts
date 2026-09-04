@@ -9,6 +9,7 @@ import {
   initialMenuBarHidden,
   loadMenuBarModel,
   performMenuBarTaskHistory,
+  trashMenuBarTask,
 } from "../../src/shared/application/menu-bar-workflows";
 import {
   createProject,
@@ -122,7 +123,18 @@ describe("secondary human workflows", () => {
       taskTitle: task.title,
     });
     expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(1);
-    expect(closeCount).toBe(5);
+    now = 4_000;
+    expect(trashMenuBarTask(openSession, task.id)).toMatchObject({ id: task.id, trashedAtMs: 4_000 });
+    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(0);
+    now = 5_000;
+    performMenuBarTaskHistory(openSession, {
+      direction: "undo",
+      kind: "trash",
+      taskId: task.id,
+      taskTitle: task.title,
+    });
+    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(1);
+    expect(closeCount).toBe(9);
 
     const values = new Map<string, string>();
     const store = {

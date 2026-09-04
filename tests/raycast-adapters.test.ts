@@ -51,6 +51,16 @@ describe("Raycast command launches", () => {
       context: { view: "upcoming", selectedTaskId: "task-1" },
     });
   });
+
+  it("opens a selected My Tasks item for editing", async () => {
+    await launchMyTasks({ view: "today", selectedTaskId: "task-1", editTask: true });
+
+    expect(raycast.launchCommand).toHaveBeenCalledWith({
+      name: "my-tasks",
+      type: LaunchType.UserInitiated,
+      context: { view: "today", selectedTaskId: "task-1", editTask: true },
+    });
+  });
 });
 
 describe("menu bar feedback", () => {

@@ -91,6 +91,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   }
   const performTaskHistoryRef = useRef<(state: TimedTaskHistoryState) => Promise<void>>(async () => undefined);
   const didOpenCreateTask = useRef(false);
+  const didOpenEditTask = useRef(false);
   const { push } = useNavigation();
   const [state, setState] = useState<ListState>({
     isLoading: true,
@@ -338,6 +339,45 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     );
   }, [
     launchContext.createTask,
+    push,
+    refreshAfterUnrelatedMutation,
+    session,
+    state.error,
+    state.isLoading,
+    state.projects,
+    state.sections,
+    viewerTimeZone,
+  ]);
+
+  useEffect(() => {
+    const taskId = launchContext.selectedTaskId;
+    if (!launchContext.editTask || !taskId || didOpenEditTask.current || !session || state.isLoading || state.error) {
+      return;
+    }
+
+    didOpenEditTask.current = true;
+    try {
+      const task = session.service.getTask(taskId);
+      if (task.trashedAtMs !== null) {
+        throw new Error("Task is in Trash");
+      }
+      push(
+        <TaskForm
+          service={session.service}
+          task={task}
+          projects={state.projects}
+          sections={state.sections}
+          initialPlacement={placementOf(task)}
+          viewerTimeZone={viewerTimeZone}
+          onSaved={refreshAfterUnrelatedMutation}
+        />,
+      );
+    } catch (error) {
+      void showToast(Toast.Style.Failure, "Unable to edit task", messageFrom(error));
+    }
+  }, [
+    launchContext.editTask,
+    launchContext.selectedTaskId,
     push,
     refreshAfterUnrelatedMutation,
     session,

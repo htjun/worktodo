@@ -195,25 +195,46 @@ describe("menu-bar presentation", () => {
       view: "all",
       selectedTaskId: undefined,
       createTask: false,
+      editTask: false,
       isShowingDetail: false,
     });
     expect(parseMyTasksLaunchContext({ view: "upcoming", selectedTaskId: "task-1", createTask: true })).toEqual({
       view: "upcoming",
       selectedTaskId: "task-1",
       createTask: true,
+      editTask: false,
       isShowingDetail: true,
     });
-    expect(parseMyTasksLaunchContext({ view: "project", selectedTaskId: "", createTask: "yes" })).toEqual({
+    expect(
+      parseMyTasksLaunchContext({ view: "project", selectedTaskId: "", createTask: "yes", editTask: "yes" }),
+    ).toEqual({
       view: "all",
       selectedTaskId: undefined,
       createTask: false,
+      editTask: false,
       isShowingDetail: false,
     });
     expect(parseMyTasksLaunchContext(null)).toEqual({
       view: "all",
       selectedTaskId: undefined,
       createTask: false,
+      editTask: false,
       isShowingDetail: false,
+    });
+  });
+
+  it("accepts edit intent only with a selected task and without create intent", () => {
+    expect(parseMyTasksLaunchContext({ view: "today", selectedTaskId: "task-1", editTask: true })).toEqual({
+      view: "today",
+      selectedTaskId: "task-1",
+      createTask: false,
+      editTask: true,
+      isShowingDetail: true,
+    });
+    expect(parseMyTasksLaunchContext({ view: "today", editTask: true })).toMatchObject({ editTask: false });
+    expect(parseMyTasksLaunchContext({ selectedTaskId: "task-1", createTask: true, editTask: true })).toMatchObject({
+      createTask: true,
+      editTask: false,
     });
   });
 
