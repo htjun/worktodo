@@ -1,10 +1,15 @@
 import { Action, ActionPanel, closeMainWindow, Form, Icon, PopToRootType, showToast, Toast } from "@raycast/api";
 import { useState } from "react";
 import { requestMenuBarRefresh } from "./raycast-commands";
-import { createQuickTask } from "./shared/application/task-workflows";
+import {
+  createOperationScopedTaskEditingMutations,
+  TaskEditingInteraction,
+  taskEditingPlacementKey,
+  type DueDatePreset,
+  type TaskEditingFailureField,
+} from "./shared/application/task-editing";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import { DomainError, type Project, type Section } from "./shared/domain/model";
-import type { DueDatePreset } from "./shared/presentation/due-date";
+import type { Project, Section } from "./shared/domain/model";
 import { DueDateFields, ProjectDropdown } from "./task-form-controls";
 
 type QuickAddFormValues = {
@@ -40,48 +45,54 @@ export default function QuickAdd() {
       session?.close();
     }
   });
-  const [selectedPlacement, setSelectedPlacement] = useState("inbox");
+  const [editing] = useState(
+    () => new TaskEditingInteraction(createOperationScopedTaskEditingMutations(openProductionWorktodo)),
+  );
+  const [selectedPlacement, setSelectedPlacement] = useState(() => taskEditingPlacementKey({ kind: "inbox" }));
   const [dueDatePreset, setDueDatePreset] = useState<DueDatePreset>("none");
   const [customDueDate, setCustomDueDate] = useState<Date | null>(null);
   const [titleError, setTitleError] = useState<string>();
   const [dueError, setDueError] = useState<string>();
+  const [placementError, setPlacementError] = useState<string>();
+  const [formError, setFormError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit(values: QuickAddFormValues): Promise<boolean> {
     setTitleError(undefined);
     setDueError(undefined);
-    if (values.title.trim().length === 0) {
-      setTitleError("Title cannot be empty");
-      return false;
-    }
+    setPlacementError(undefined);
+    setFormError(undefined);
     if (state.error) {
       return false;
     }
 
     setIsSubmitting(true);
-    try {
-      createQuickTask(
-        openProductionWorktodo,
-        {
-          title: values.title,
-          notes: values.notes,
-          dueDatePreset,
-          customDueAtMs: customDueDate?.getTime() ?? null,
-          referenceInstantMs,
-          viewerTimeZone,
-        },
-        { selectedPlacement, projects: state.projects, sections: state.sections },
-        requestMenuBarRefresh,
-      );
-    } catch (error) {
+    const outcome = editing.save(
+      undefined,
+      {
+        title: values.title,
+        notes: values.notes,
+        priority: "none",
+        dueDatePreset,
+        customDueAtMs: customDueDate?.getTime() ?? null,
+        selectedPlacement,
+      },
+      { referenceInstantMs, viewerTimeZone, projects: state.projects, sections: state.sections },
+    );
+    if (outcome.status === "failed") {
       setIsSubmitting(false);
-      if (error instanceof DomainError && error.code === "INVALID_DUE_VALUE") {
-        setDueError(error.message);
-      }
-      await showToast(Toast.Style.Failure, "Unable to add task", messageFrom(error));
+      const setFieldError: Record<TaskEditingFailureField, (message: string) => void> = {
+        title: setTitleError,
+        due: setDueError,
+        placement: setPlacementError,
+        form: setFormError,
+      };
+      setFieldError[outcome.field](outcome.message);
+      await showToast(Toast.Style.Failure, "Unable to add task", outcome.message);
       return false;
     }
 
+    requestMenuBarRefresh();
     await showToast(Toast.Style.Success, "Task added");
     await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     return true;
@@ -104,7 +115,11 @@ export default function QuickAdd() {
         projects={state.projects}
         sections={state.sections}
         value={selectedPlacement}
-        onChange={setSelectedPlacement}
+        error={placementError}
+        onChange={(placement) => {
+          setSelectedPlacement(placement);
+          setPlacementError(undefined);
+        }}
       />
       <DueDateFields
         preset={dueDatePreset}
@@ -120,6 +135,7 @@ export default function QuickAdd() {
         }}
       />
       <Form.TextArea id="notes" title="Notes" />
+      {formError ? <Form.Description title="Error" text={formError} /> : null}
       {state.error ? <Form.Description title="Unable to open Worktodo" text={state.error} /> : null}
     </Form>
   );

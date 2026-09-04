@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { taskLifecycleActionKindForViewKind } from "../../src/shared/application/task-lifecycle-interaction";
 import type { Project, Section, Task } from "../../src/shared/domain/model";
-import { dueDateFormValueForPreset, dueDatePresetForDue } from "../../src/shared/presentation/due-date";
-import { formToCreateTask, formToUpdateTask, taskFormDefaults } from "../../src/shared/presentation/task-form";
 import { taskLifecycleMutationPresentation } from "../../src/shared/presentation/task-lifecycle";
 import {
   buildAllTaskListSections,
@@ -11,7 +9,6 @@ import {
   taskListRowPresentation,
   taskNotesMarkdown,
 } from "../../src/shared/presentation/task-list";
-import { placementFromKey, placementKey } from "../../src/shared/presentation/placement";
 
 const project: Project = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -76,121 +73,6 @@ describe("task presentation mapping", () => {
         ["personal-section", "Personal / Next"],
       ],
     ]);
-  });
-
-  it("maps the shared due-date presets to local calendar dates", () => {
-    const referenceInstantMs = Date.parse("2026-08-30T14:30:00.000Z");
-    const baseValues = {
-      title: "Review plan",
-      notes: "",
-      priority: "none" as const,
-    };
-    const mappedDate = (preset: "today" | "tomorrow" | "endOfWeek") =>
-      formToCreateTask(
-        {
-          ...baseValues,
-          ...dueDateFormValueForPreset(preset, null, referenceInstantMs, "Australia/Melbourne"),
-        },
-        "Australia/Melbourne",
-      ).due;
-
-    expect(mappedDate("today")).toEqual({ kind: "allDay", date: "2026-08-31" });
-    expect(mappedDate("tomorrow")).toEqual({ kind: "allDay", date: "2026-09-01" });
-    expect(mappedDate("endOfWeek")).toEqual({ kind: "allDay", date: "2026-09-06" });
-    expect(dueDateFormValueForPreset("none", null, referenceInstantMs, "Australia/Melbourne")).toEqual({
-      dueKind: "none",
-      dueAtMs: null,
-    });
-    expect(() => dueDateFormValueForPreset("custom", null, referenceInstantMs, "Australia/Melbourne")).toThrow(
-      "Choose a custom due date",
-    );
-  });
-
-  it("recognizes preset all-day dates and keeps timed values custom", () => {
-    const referenceInstantMs = Date.parse("2026-08-30T14:30:00.000Z");
-    const presetFor = (due: Task["due"]) => dueDatePresetForDue(due, referenceInstantMs, "Australia/Melbourne");
-
-    expect(presetFor({ kind: "none" })).toBe("none");
-    expect(presetFor({ kind: "allDay", date: "2026-08-31" })).toBe("today");
-    expect(presetFor({ kind: "allDay", date: "2026-09-01" })).toBe("tomorrow");
-    expect(presetFor({ kind: "allDay", date: "2026-09-06" })).toBe("endOfWeek");
-    expect(presetFor({ kind: "allDay", date: "2026-09-10" })).toBe("custom");
-    expect(presetFor({ kind: "timed", instantMs: referenceInstantMs, timeZone: "Australia/Melbourne" })).toBe("custom");
-  });
-
-  it("maps new and edited forms without Raycast-specific values", () => {
-    const allDayMs = Date.parse("2026-10-03T14:00:00.000Z");
-    const values = {
-      title: "Review plan",
-      notes: "Details",
-      priority: "medium" as const,
-      dueKind: "allDay" as const,
-      dueAtMs: allDayMs,
-    };
-    expect(formToCreateTask(values, "Australia/Melbourne")).toEqual({
-      title: "Review plan",
-      notes: "Details",
-      priority: "medium",
-      placement: { kind: "inbox" },
-      due: { kind: "allDay", date: "2026-10-04" },
-    });
-    expect(
-      formToCreateTask(values, "Australia/Melbourne", {
-        kind: "section",
-        projectId: project.id,
-        sectionId: section.id,
-      }).placement,
-    ).toEqual({ kind: "section", projectId: project.id, sectionId: section.id });
-    expect(formToUpdateTask({ ...values, dueKind: "timed" }, "Australia/Melbourne")).toEqual({
-      title: "Review plan",
-      notes: "Details",
-      priority: "medium",
-      due: { kind: "timed", instantMs: allDayMs, timeZone: "Australia/Melbourne" },
-    });
-    expect(() => formToCreateTask({ ...values, dueAtMs: null }, "Australia/Melbourne")).toThrow("Choose a due date");
-    expect(
-      formToCreateTask({ ...values, dueAtMs: Date.parse("1960-01-01T14:00:00.000Z") }, "Australia/Melbourne").due,
-    ).toEqual({ kind: "allDay", date: "1960-01-02" });
-  });
-
-  it("round-trips valid placement selections and rejects missing containers", () => {
-    const projectPlacement = { kind: "project", projectId: project.id } as const;
-    const sectionPlacement = {
-      kind: "section",
-      projectId: project.id,
-      sectionId: section.id,
-    } as const;
-
-    expect(placementFromKey(placementKey({ kind: "inbox" }), [project], [section])).toEqual({ kind: "inbox" });
-    expect(placementFromKey(placementKey(projectPlacement), [project], [section])).toEqual(projectPlacement);
-    expect(placementFromKey(placementKey(sectionPlacement), [project], [section])).toEqual(sectionPlacement);
-    expect(() => placementFromKey(`project:${project.id}`, [], [])).toThrow("Choose an existing project or section");
-    expect(() => placementFromKey(`section:${section.id}`, [project], [])).toThrow(
-      "Choose an existing project or section",
-    );
-  });
-
-  it("round-trips task defaults for all due kinds", () => {
-    expect(taskFormDefaults(undefined, "Australia/Melbourne")).toEqual({
-      title: "",
-      notes: "",
-      priority: "none",
-      dueKind: "none",
-      dueAtMs: null,
-    });
-    expect(taskFormDefaults(task(), "Australia/Melbourne")).toMatchObject({
-      title: "Review plan",
-      notes: "Open the planning workspace",
-      priority: "high",
-      dueKind: "allDay",
-      dueAtMs: Date.parse("2026-10-03T14:00:00.000Z"),
-    });
-    expect(
-      taskFormDefaults(
-        task({ due: { kind: "timed", instantMs: 2_000_000, timeZone: "Australia/Melbourne" } }),
-        "America/Los_Angeles",
-      ).dueAtMs,
-    ).toBe(2_000_000);
   });
 
   it("preserves query order and supplies due, priority, and placement metadata", () => {

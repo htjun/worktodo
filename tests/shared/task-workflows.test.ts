@@ -7,13 +7,17 @@ import {
   TaskLifecycleInteraction,
 } from "../../src/shared/application/task-lifecycle-interaction";
 import {
+  createOperationScopedTaskEditingMutations,
+  TaskEditingInteraction,
+  taskEditingPlacementKey,
+} from "../../src/shared/application/task-editing";
+import {
   loadTaskView,
   normalizeTaskView,
   resolveTaskView,
   tasksInTaskView,
   type TaskView,
 } from "../../src/shared/application/task-views";
-import { createQuickTask, moveTaskFromForm, saveTaskFromForm } from "../../src/shared/application/task-workflows";
 import { openWorktodoAtPath } from "../../src/shared/application/worktodo";
 import {
   buildTaskViewSections,
@@ -62,8 +66,8 @@ describe("main task workflows", () => {
         );
       const events: string[] = [];
       let quickSessionCloseCount = 0;
-      const quickTask = createQuickTask(
-        () => {
+      const quickEditing = new TaskEditingInteraction(
+        createOperationScopedTaskEditingMutations(() => {
           const quickSession = openWorktodoAtPath(databasePath, options);
           return {
             service: quickSession.service,
@@ -73,18 +77,25 @@ describe("main task workflows", () => {
               events.push("quick session closed");
             },
           };
-        },
+        }),
+      );
+      const quickOutcome = quickEditing.save(
+        undefined,
         {
           title: "Refactor safely",
           notes: "Protect the user workflow",
+          priority: "none",
           dueDatePreset: "today",
           customDueAtMs: null,
-          referenceInstantMs: evaluationInstantMs,
-          viewerTimeZone,
+          selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
         },
-        { selectedPlacement: "inbox", projects: [project], sections: [section] },
-        () => events.push("menu refreshed"),
+        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], sections: [section] },
       );
+      if (quickOutcome.status !== "succeeded") {
+        throw new Error(quickOutcome.message);
+      }
+      events.push("menu refreshed");
+      const quickTask = quickOutcome.task;
 
       expect(events).toEqual(["quick session closed", "menu refreshed"]);
       expect(quickSessionCloseCount).toBe(1);
@@ -97,8 +108,8 @@ describe("main task workflows", () => {
       expect(buildSections({ kind: "today" })[0].items).toEqual([expect.objectContaining({ id: quickTask.id })]);
 
       now = 2_000;
-      const saved = saveTaskFromForm(
-        session.service,
+      const editing = new TaskEditingInteraction(session.service);
+      const savedOutcome = editing.save(
         quickTask,
         {
           title: "Refactor Worktodo safely",
@@ -106,19 +117,27 @@ describe("main task workflows", () => {
           priority: "high",
           dueDatePreset: "tomorrow",
           customDueAtMs: null,
-          referenceInstantMs: evaluationInstantMs,
-          viewerTimeZone,
+          selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
         },
-        { selectedPlacement: "inbox", projects: [project], sections: [section] },
-        () => events.push("task saved"),
+        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], sections: [section] },
       );
+      if (savedOutcome.status !== "succeeded") {
+        throw new Error(savedOutcome.message);
+      }
+      events.push("task saved");
+      const saved = savedOutcome.task;
       now = 3_000;
-      const moved = moveTaskFromForm(
-        session.service,
+      const movedOutcome = editing.move(
         saved.id,
-        { selectedPlacement: `section:${section.id}`, projects: [project], sections: [section] },
-        () => events.push("task moved"),
+        taskEditingPlacementKey({ kind: "section", projectId: project.id, sectionId: section.id }),
+        [project],
+        [section],
       );
+      if (movedOutcome.status !== "succeeded") {
+        throw new Error(movedOutcome.message);
+      }
+      events.push("task moved");
+      const moved = movedOutcome.task;
       expect(moved).toMatchObject({
         title: "Refactor Worktodo safely",
         notes: "Keep behavior stable",

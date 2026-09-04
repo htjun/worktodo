@@ -1,8 +1,12 @@
 import { Action, ActionPanel, Form, Icon, showToast, Toast, useNavigation } from "@raycast/api";
 import { useMemo, useState } from "react";
-import { moveTaskFromForm, saveTaskFromForm } from "./shared/application/task-workflows";
 import {
-  DomainError,
+  TaskEditingInteraction,
+  taskEditingDefaults,
+  taskEditingPlacementKey,
+  type TaskEditingFailureField,
+} from "./shared/application/task-editing";
+import {
   placementOf,
   type Placement,
   type Priority,
@@ -11,19 +15,12 @@ import {
   type Task,
 } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
-import { taskFormDefaults } from "./shared/presentation/task-form";
-import { placementKey } from "./shared/presentation/placement";
-import { dueDatePresetForDue } from "./shared/presentation/due-date";
 import { DueDateFields, ProjectDropdown } from "./task-form-controls";
 
 type FormValues = {
   title: string;
   notes: string;
 };
-
-function messageFrom(error: unknown): string {
-  return error instanceof Error ? error.message : "An unexpected error occurred";
-}
 
 export function TaskForm({
   service,
@@ -44,56 +41,55 @@ export function TaskForm({
 }) {
   const { pop } = useNavigation();
   const [referenceInstantMs] = useState(Date.now);
-  const defaults = useMemo(() => taskFormDefaults(task, viewerTimeZone), [task, viewerTimeZone]);
+  const editing = useMemo(() => new TaskEditingInteraction(service), [service]);
+  const defaults = useMemo(
+    () => taskEditingDefaults(task, initialPlacement, referenceInstantMs, viewerTimeZone),
+    [initialPlacement, referenceInstantMs, task, viewerTimeZone],
+  );
   const [priority, setPriority] = useState<Priority>(defaults.priority);
-  const [dueDatePreset, setDueDatePreset] = useState(() =>
-    dueDatePresetForDue(task?.due ?? { kind: "none" }, referenceInstantMs, viewerTimeZone),
-  );
+  const [dueDatePreset, setDueDatePreset] = useState(defaults.dueDatePreset);
   const [customDueDate, setCustomDueDate] = useState<Date | null>(() =>
-    defaults.dueAtMs === null ? null : new Date(defaults.dueAtMs),
+    defaults.customDueAtMs === null ? null : new Date(defaults.customDueAtMs),
   );
-  const [selectedPlacement, setSelectedPlacement] = useState(() => placementKey(initialPlacement));
+  const [selectedPlacement, setSelectedPlacement] = useState(defaults.selectedPlacement);
   const [titleError, setTitleError] = useState<string>();
   const [dueError, setDueError] = useState<string>();
+  const [placementError, setPlacementError] = useState<string>();
   const [formError, setFormError] = useState<string>();
 
   async function submit(values: FormValues): Promise<boolean> {
     setTitleError(undefined);
     setDueError(undefined);
+    setPlacementError(undefined);
     setFormError(undefined);
-    if (values.title.trim().length === 0) {
-      setTitleError("Title cannot be empty");
+    const outcome = editing.save(
+      task,
+      {
+        title: values.title,
+        notes: values.notes,
+        priority,
+        dueDatePreset,
+        customDueAtMs: customDueDate?.getTime() ?? null,
+        selectedPlacement,
+      },
+      { referenceInstantMs, viewerTimeZone, projects, sections },
+    );
+    if (outcome.status === "failed") {
+      const setFieldError: Record<TaskEditingFailureField, (message: string) => void> = {
+        title: setTitleError,
+        due: setDueError,
+        placement: setPlacementError,
+        form: setFormError,
+      };
+      setFieldError[outcome.field](outcome.message);
+      await showToast(Toast.Style.Failure, task ? "Unable to update task" : "Unable to create task", outcome.message);
       return false;
     }
-    try {
-      saveTaskFromForm(
-        service,
-        task,
-        {
-          title: values.title,
-          notes: values.notes,
-          priority,
-          dueDatePreset,
-          customDueAtMs: customDueDate?.getTime() ?? null,
-          referenceInstantMs,
-          viewerTimeZone,
-        },
-        { selectedPlacement, projects, sections },
-        onSaved,
-      );
-      await showToast(Toast.Style.Success, task ? "Task updated" : "Task created");
-      pop();
-      return true;
-    } catch (error) {
-      const message = messageFrom(error);
-      if (error instanceof DomainError && error.code === "INVALID_DUE_VALUE") {
-        setDueError(message);
-      } else {
-        setFormError(message);
-      }
-      await showToast(Toast.Style.Failure, task ? "Unable to update task" : "Unable to create task", message);
-      return false;
-    }
+
+    onSaved();
+    await showToast(Toast.Style.Success, task ? "Task updated" : "Task created");
+    pop();
+    return true;
   }
 
   return (
@@ -118,7 +114,11 @@ export function TaskForm({
           projects={projects}
           sections={sections}
           value={selectedPlacement}
-          onChange={setSelectedPlacement}
+          error={placementError}
+          onChange={(placement) => {
+            setSelectedPlacement(placement);
+            setPlacementError(undefined);
+          }}
         />
       ) : null}
       <DueDateFields
@@ -165,22 +165,29 @@ export function MoveTaskForm({
   onSaved: () => void;
 }) {
   const { pop } = useNavigation();
-  const [selectedPlacement, setSelectedPlacement] = useState(() => placementKey(placementOf(task)));
+  const editing = useMemo(() => new TaskEditingInteraction(service), [service]);
+  const [selectedPlacement, setSelectedPlacement] = useState(() => taskEditingPlacementKey(placementOf(task)));
+  const [placementError, setPlacementError] = useState<string>();
   const [formError, setFormError] = useState<string>();
 
   async function submit(): Promise<boolean> {
     setFormError(undefined);
-    try {
-      moveTaskFromForm(service, task.id, { selectedPlacement, projects, sections }, onSaved);
-      await showToast(Toast.Style.Success, "Task moved");
-      pop();
-      return true;
-    } catch (error) {
-      const message = messageFrom(error);
-      setFormError(message);
-      await showToast(Toast.Style.Failure, "Unable to move task", message);
+    setPlacementError(undefined);
+    const outcome = editing.move(task.id, selectedPlacement, projects, sections);
+    if (outcome.status === "failed") {
+      if (outcome.field === "placement") {
+        setPlacementError(outcome.message);
+      } else {
+        setFormError(outcome.message);
+      }
+      await showToast(Toast.Style.Failure, "Unable to move task", outcome.message);
       return false;
     }
+
+    onSaved();
+    await showToast(Toast.Style.Success, "Task moved");
+    pop();
+    return true;
   }
 
   return (
@@ -197,7 +204,11 @@ export function MoveTaskForm({
         projects={projects}
         sections={sections}
         value={selectedPlacement}
-        onChange={setSelectedPlacement}
+        error={placementError}
+        onChange={(placement) => {
+          setSelectedPlacement(placement);
+          setPlacementError(undefined);
+        }}
       />
       {formError ? <Form.Description title="Error" text={formError} /> : null}
     </Form>
