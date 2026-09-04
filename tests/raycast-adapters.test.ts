@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const raycast = vi.hoisted(() => ({
@@ -72,6 +74,17 @@ describe("Raycast command launches", () => {
       type: LaunchType.UserInitiated,
       context: { view: "today", selectedTaskId: "task-1", editTask: true },
     });
+  });
+});
+
+describe("Backup & Restore adapter boundary", () => {
+  it("uses only the Portability service for backup workflows", () => {
+    const source = readFileSync(join(process.cwd(), "src/backup-restore.tsx"), "utf8");
+
+    expect(source).toContain("portability.exportTo(");
+    expect(source).toContain("portability.prepare(");
+    expect(source).toContain("portability.replace(");
+    expect(source).not.toMatch(/from ["'].+\/(?:export-backup|import-preview|replace-backup|backup-workflows)["']/);
   });
 });
 

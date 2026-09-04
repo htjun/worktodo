@@ -1,11 +1,5 @@
 import type { TaskRepository } from "../domain/repository";
-import {
-  createBackupDocument,
-  serializeBackupDocument,
-  type WorktodoBackupDocument,
-  type WorktodoSnapshot,
-} from "./backup-contract";
-import { publishBackupFile } from "./backup-file";
+import type { WorktodoBackupDocument, WorktodoSnapshot } from "./backup-contract";
 
 export type ExportBackupResult = {
   document: WorktodoBackupDocument;
@@ -20,24 +14,10 @@ export function backupFilename(exportedAtMs: number): string {
   return `worktodo-backup-${date.toISOString().replace(/[-:.]/g, "")}.json`;
 }
 
-export function captureBackupDocument(repository: TaskRepository, exportedAtMs: number): WorktodoBackupDocument {
-  return repository.transaction(() => createBackupDocument(exportedAtMs, readSnapshot(repository)));
-}
-
 export function readSnapshot(repository: TaskRepository): WorktodoSnapshot {
   return {
     projects: repository.listProjects(),
     sections: repository.listSections(),
     tasks: repository.listTasks(),
   };
-}
-
-export function exportBackup(
-  repository: TaskRepository,
-  directory: string,
-  exportedAtMs = Date.now(),
-): ExportBackupResult {
-  const document = captureBackupDocument(repository, exportedAtMs);
-  const path = publishBackupFile(directory, backupFilename(exportedAtMs), serializeBackupDocument(document));
-  return { document, path };
 }

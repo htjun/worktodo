@@ -131,27 +131,3 @@ export function buildImportPreview(incoming: WorktodoBackupDocument, current: Wo
     warning: "This will replace all current Worktodo data. Cancelling changes nothing.",
   };
 }
-
-function unchangedError(error: unknown): PortabilityError {
-  if (error instanceof PortabilityError) {
-    return new PortabilityError(error.code, `${error.message} Worktodo data was not changed.`, error);
-  }
-  return new PortabilityError(
-    "INVALID_IMPORT_FILE",
-    "Worktodo could not prepare this import. Worktodo data was not changed.",
-    error,
-  );
-}
-
-export function prepareImport(path: string, readCurrentSnapshot: () => WorktodoSnapshot): PreparedImport {
-  try {
-    const document = readBackupFile(path);
-    return {
-      path,
-      document,
-      preview: buildImportPreview(document, readCurrentSnapshot()),
-    };
-  } catch (error) {
-    throw unchangedError(error);
-  }
-}

@@ -6,9 +6,12 @@ import {
   createBackupDocument,
   PortabilityError,
   serializeBackupDocument,
+  type WorktodoBackupDocument,
   type WorktodoSnapshot,
 } from "../../src/shared/portability/backup-contract";
-import { buildImportPreview, prepareImport, readBackupFile } from "../../src/shared/portability/import-preview";
+import { readBackupFile } from "../../src/shared/portability/import-preview";
+import { PortabilityService } from "../../src/shared/portability/portability-service";
+import type { ReplaceableTaskRepository } from "../../src/shared/portability/replace-backup";
 
 const temporaryDirectories: string[] = [];
 
@@ -67,6 +70,16 @@ function expectCode(operation: () => unknown, code: PortabilityError["code"]): P
   }
 }
 
+function serviceFor(current: WorktodoSnapshot, transaction = vi.fn(<Result>(operation: () => Result) => operation())) {
+  const repository = {
+    transaction,
+    listProjects: () => current.projects,
+    listSections: () => current.sections,
+    listTasks: () => current.tasks,
+  } as unknown as ReplaceableTaskRepository;
+  return { service: new PortabilityService(repository, "/tmp/recovery", () => 10_000), transaction };
+}
+
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
@@ -77,8 +90,9 @@ describe("Worktodo import validation and preview", () => {
     const document = createBackupDocument(9_000, populatedSnapshot());
     await writeFile(path, serializeBackupDocument(document), "utf8");
 
-    expect(readBackupFile(path)).toEqual(document);
-    expect(buildImportPreview(document, { projects: [], sections: [], tasks: [] })).toEqual({
+    const prepared = serviceFor({ projects: [], sections: [], tasks: [] }).service.prepare(path);
+    expect(prepared.document).toEqual(document);
+    expect(prepared.preview).toEqual({
       formatVersion: 1,
       exportedAtMs: 9_000,
       incoming: {
@@ -111,27 +125,27 @@ describe("Worktodo import validation and preview", () => {
   it("validates the selected file before reading current production state", async () => {
     const path = await temporaryPath("invalid.json");
     await writeFile(path, "{", "utf8");
-    const readCurrent = vi.fn(() => populatedSnapshot());
+    const { service, transaction } = serviceFor(populatedSnapshot());
 
-    const error = expectCode(() => prepareImport(path, readCurrent), "INVALID_DOCUMENT");
+    const error = expectCode(() => service.prepare(path), "INVALID_DOCUMENT");
     expect(error.message).toContain("Worktodo data was not changed.");
-    expect(readCurrent).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["relative paths", () => readBackupFile("backup.json"), "INVALID_IMPORT_FILE"],
-    ["wrong extensions", () => readBackupFile("/tmp/backup.txt"), "INVALID_IMPORT_FILE"],
-  ])("rejects %s", (_label, operation, code) => {
-    expectCode(operation, code as PortabilityError["code"]);
+    ["relative paths", "backup.json", "INVALID_IMPORT_FILE"],
+    ["wrong extensions", "/tmp/backup.txt", "INVALID_IMPORT_FILE"],
+  ])("rejects %s", (_label, path, code) => {
+    expectCode(() => serviceFor(populatedSnapshot()).service.prepare(path), code as PortabilityError["code"]);
   });
 
   it("rejects missing files, directories, oversized files, and invalid UTF-8", async () => {
     const missing = await temporaryPath("missing.json");
-    expectCode(() => readBackupFile(missing), "INVALID_IMPORT_FILE");
+    expectCode(() => serviceFor(populatedSnapshot()).service.prepare(missing), "INVALID_IMPORT_FILE");
 
     const directoryPath = await temporaryPath("directory.json");
     await import("node:fs/promises").then(({ mkdir }) => mkdir(directoryPath));
-    expectCode(() => readBackupFile(directoryPath), "INVALID_IMPORT_FILE");
+    expectCode(() => serviceFor(populatedSnapshot()).service.prepare(directoryPath), "INVALID_IMPORT_FILE");
 
     const oversized = await temporaryPath("oversized.json");
     await writeFile(oversized, "12345", "utf8");
@@ -139,17 +153,43 @@ describe("Worktodo import validation and preview", () => {
 
     const invalidUtf8 = await temporaryPath("invalid-utf8.json");
     await writeFile(invalidUtf8, Buffer.from([0xff]));
-    expectCode(() => readBackupFile(invalidUtf8), "INVALID_DOCUMENT");
+    expectCode(() => serviceFor(populatedSnapshot()).service.prepare(invalidUtf8), "INVALID_DOCUMENT");
+  });
+
+  it.each([
+    [
+      "unsupported versions",
+      (document: WorktodoBackupDocument) => ({ ...document, version: 2 }),
+      "UNSUPPORTED_VERSION",
+    ],
+    [
+      "broken relationships",
+      (document: WorktodoBackupDocument) => ({
+        ...document,
+        sections: [{ ...document.sections[0], projectId: id(999) }],
+      }),
+      "BROKEN_RELATIONSHIP",
+    ],
+    [
+      "duplicate IDs",
+      (document: WorktodoBackupDocument) => ({ ...document, tasks: [...document.tasks, document.tasks[0]] }),
+      "DUPLICATE_ID",
+    ],
+  ])("rejects %s through prepare", async (_label, mutate, code) => {
+    const path = await temporaryPath("invalid-backup.json");
+    await writeFile(path, JSON.stringify(mutate(createBackupDocument(9_000, populatedSnapshot()))), "utf8");
+
+    expectCode(() => serviceFor(populatedSnapshot()).service.prepare(path), code as PortabilityError["code"]);
   });
 
   it("calls the current snapshot reader only after a valid document", async () => {
     const path = await temporaryPath("backup.json");
     await writeFile(path, serializeBackupDocument(createBackupDocument(9_000, populatedSnapshot())), "utf8");
     const current = { projects: [], sections: [], tasks: [] };
-    const readCurrent = vi.fn(() => current);
+    const { service, transaction } = serviceFor(current);
 
-    const prepared = prepareImport(path, readCurrent);
-    expect(readCurrent).toHaveBeenCalledOnce();
+    const prepared = service.prepare(path);
+    expect(transaction).toHaveBeenCalledOnce();
     expect(prepared.preview.current.tasks).toBe(0);
     expect(prepared.document.tasks).toHaveLength(4);
   });

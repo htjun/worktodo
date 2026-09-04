@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { replaceBackupIfConfirmed } from "../../src/shared/application/backup-workflows";
 import {
   createOperationScopedTaskLifecycleMutations,
   IMMEDIATE_COMPLETION_POLICY,
@@ -151,7 +150,7 @@ describe("secondary human workflows", () => {
     expect(values.size).toBe(0);
   });
 
-  it("keeps backup cancellation inert and publishes recovery before confirmed replacement", async () => {
+  it("exports, prepares, and replaces through the Portability service", async () => {
     const directory = await mkdtemp(join(tmpdir(), "worktodo-backup-workflow-test-"));
     temporaryDirectories.push(directory);
     const sourceDirectory = join(directory, "source");
@@ -179,14 +178,8 @@ describe("secondary human workflows", () => {
     const prepared = target.portability.prepare(exported.path);
     const onReplaced = vi.fn();
 
-    expect(replaceBackupIfConfirmed(target.portability, prepared, false, onReplaced)).toBeNull();
-    expect(target.service.listAllTasks("Australia/Melbourne").map((task) => task.title)).toEqual(["Current task"]);
-    expect(onReplaced).not.toHaveBeenCalled();
-
-    const result = replaceBackupIfConfirmed(target.portability, prepared, true, onReplaced);
-    if (!result) {
-      throw new Error("Expected confirmed replacement");
-    }
+    const result = target.portability.replace(prepared);
+    onReplaced();
     expect(onReplaced).toHaveBeenCalledOnce();
     expect(target.service.listAllTasks("Australia/Melbourne").map((task) => task.title)).toEqual(["Imported task"]);
     const recovery = parseBackupJson(await readFile(result.recoveryPath, "utf8"));

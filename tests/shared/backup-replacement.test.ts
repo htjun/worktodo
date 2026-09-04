@@ -10,9 +10,10 @@ import {
   type WorktodoSnapshot,
 } from "../../src/shared/portability/backup-contract";
 import { backupFilename, readSnapshot } from "../../src/shared/portability/export-backup";
+import { buildImportPreview } from "../../src/shared/portability/import-preview";
+import { PortabilityService, type PreparedImport } from "../../src/shared/portability/portability-service";
 import {
   ImportReplacementError,
-  replaceFromBackup,
   resolveRecoveryDirectory,
   type ReplaceableTaskRepository,
 } from "../../src/shared/portability/replace-backup";
@@ -141,6 +142,22 @@ function storedDocument(repository: TaskRepository, exportedAtMs: number): Workt
   return createBackupDocument(exportedAtMs, readSnapshot(repository));
 }
 
+function prepared(document: WorktodoBackupDocument): PreparedImport {
+  return {
+    path: "/tmp/incoming.json",
+    document,
+    preview: buildImportPreview(document, { projects: [], sections: [], tasks: [] }),
+  };
+}
+
+function portability(
+  repository: ReplaceableTaskRepository,
+  recoveryDirectory: string,
+  replacementAtMs: number,
+): PortabilityService {
+  return new PortabilityService(repository, recoveryDirectory, () => replacementAtMs);
+}
+
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
@@ -151,7 +168,7 @@ describe("Worktodo backup replacement", () => {
     const incoming = createBackupDocument(8_000, snapshot(100));
     const { db, repository, recoveryDirectory } = await createContext(initial);
     try {
-      const result = replaceFromBackup(repository, incoming, recoveryDirectory, 9_000);
+      const result = portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming));
 
       expect(storedDocument(repository, incoming.exportedAtMs)).toEqual(incoming);
       expect(result.replaced).toEqual({
@@ -190,12 +207,15 @@ describe("Worktodo backup replacement", () => {
     try {
       let error: unknown;
       try {
-        replaceFromBackup(failAfter(repository, method), incoming, recoveryDirectory, 9_000);
+        portability(failAfter(repository, method), recoveryDirectory, 9_000).replace(prepared(incoming));
       } catch (caught) {
         error = caught;
       }
       expect(error).toBeInstanceOf(ImportReplacementError);
       expect((error as ImportReplacementError).recoveryPath).toBe(join(recoveryDirectory, backupFilename(9_000)));
+      expect((error as ImportReplacementError).message).toBe(
+        "Worktodo could not replace its data. Worktodo data was not changed.",
+      );
       expect(storedDocument(repository, 9_000)).toEqual(createBackupDocument(9_000, initial));
     } finally {
       db.close();
@@ -211,7 +231,9 @@ describe("Worktodo backup replacement", () => {
       const collision = join(recoveryDirectory, backupFilename(9_000));
       await writeFile(collision, "existing", "utf8");
 
-      expect(() => replaceFromBackup(repository, incoming, recoveryDirectory, 9_000)).toThrow(ImportReplacementError);
+      expect(() => portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming))).toThrow(
+        ImportReplacementError,
+      );
       expect(storedDocument(repository, 9_000)).toEqual(createBackupDocument(9_000, initial));
       await expect(readFile(collision, "utf8")).resolves.toBe("existing");
     } finally {
@@ -224,11 +246,11 @@ describe("Worktodo backup replacement", () => {
     const incoming = createBackupDocument(8_000, snapshot(100));
     const { db, directory, repository, recoveryDirectory } = await createContext(initial);
     try {
-      const replacement = replaceFromBackup(repository, incoming, recoveryDirectory, 9_000);
+      const replacement = portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming));
       const recovery = parseBackupJson(await readFile(replacement.recoveryPath, "utf8"));
       const secondRecoveryDirectory = join(directory, "Restore Backups");
 
-      replaceFromBackup(repository, recovery, secondRecoveryDirectory, 10_000);
+      portability(repository, secondRecoveryDirectory, 10_000).replace(prepared(recovery));
       expect(storedDocument(repository, recovery.exportedAtMs)).toEqual(recovery);
     } finally {
       db.close();

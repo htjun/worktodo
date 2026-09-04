@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { TaskService } from "../../src/shared/domain/task-service";
 import { assertBackupSize, publishBackupFile } from "../../src/shared/portability/backup-file";
 import { parseBackupJson, PortabilityError } from "../../src/shared/portability/backup-contract";
-import { backupFilename, exportBackup } from "../../src/shared/portability/export-backup";
+import { backupFilename } from "../../src/shared/portability/export-backup";
+import { PortabilityService } from "../../src/shared/portability/portability-service";
 import { openWorktodoDatabase } from "../../src/shared/storage/database";
 import { applyMigrations } from "../../src/shared/storage/schema";
 import { SqliteTaskRepository } from "../../src/shared/storage/sqlite-task-repository";
@@ -16,7 +17,7 @@ function id(index: number): string {
   return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 }
 
-async function createContext() {
+async function createContext(now = Date.parse("2026-08-30T06:25:30.123Z")) {
   const directory = await mkdtemp(join(tmpdir(), "worktodo-export-test-"));
   temporaryDirectories.push(directory);
   const db = openWorktodoDatabase(join(directory, "worktodo.sqlite"));
@@ -33,7 +34,7 @@ async function createContext() {
     placement: { kind: "section", projectId: project.id, sectionId: section.id },
     due: { kind: "allDay", date: "2026-08-31" },
   });
-  return { db, directory, repository };
+  return { db, directory, portability: new PortabilityService(repository, join(directory, "recovery"), () => now) };
 }
 
 function expectCode(operation: () => unknown, code: PortabilityError["code"]): void {
@@ -52,11 +53,11 @@ afterEach(async () => {
 
 describe("Worktodo backup export", () => {
   it("publishes a complete parseable snapshot with owner-only permissions", async () => {
-    const { db, directory, repository } = await createContext();
+    const { db, directory, portability } = await createContext();
     try {
       const output = join(directory, "exports");
       await mkdir(output);
-      const result = exportBackup(repository, output, Date.parse("2026-08-30T06:25:30.123Z"));
+      const result = portability.exportTo(output);
       const serialized = await readFile(result.path, "utf8");
 
       expect(result.path).toBe(join(output, "worktodo-backup-20260830T062530123Z.json"));
@@ -71,13 +72,13 @@ describe("Worktodo backup export", () => {
   });
 
   it("never replaces an existing destination and cleans its candidate", async () => {
-    const { db, directory, repository } = await createContext();
+    const timestamp = 1_000;
+    const { db, directory, portability } = await createContext(timestamp);
     try {
-      const timestamp = 1_000;
       const destination = join(directory, backupFilename(timestamp));
       await writeFile(destination, "existing", "utf8");
 
-      expectCode(() => exportBackup(repository, directory, timestamp), "DESTINATION_EXISTS");
+      expectCode(() => portability.exportTo(directory), "DESTINATION_EXISTS");
       await expect(readFile(destination, "utf8")).resolves.toBe("existing");
       expect((await readdir(directory)).filter((name) => name.startsWith(".worktodo-backup"))).toEqual([]);
     } finally {
@@ -86,9 +87,9 @@ describe("Worktodo backup export", () => {
   });
 
   it("rejects invalid destinations without publishing a file", async () => {
-    const { db, directory, repository } = await createContext();
+    const { db, directory, portability } = await createContext(1_000);
     try {
-      expectCode(() => exportBackup(repository, join(directory, "missing"), 1_000), "INVALID_DESTINATION");
+      expectCode(() => portability.exportTo(join(directory, "missing")), "INVALID_DESTINATION");
       expectCode(() => publishBackupFile("relative", "backup.json", "{}\n"), "INVALID_DESTINATION");
     } finally {
       db.close();
