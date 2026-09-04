@@ -89,15 +89,52 @@ describe("Backup & Restore adapter boundary", () => {
 });
 
 describe("All Tasks entry points", () => {
-  it("uses All Tasks wording and opens the full list from the menu bar", () => {
+  it("uses consistent task actions and opens the full list from the menu bar", () => {
     const manifest = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
       commands: { name: string; title: string }[];
     };
     const menuBarSource = readFileSync(join(process.cwd(), "src/menu-bar.tsx"), "utf8");
 
     expect(manifest.commands.find((command) => command.name === "my-tasks")?.title).toBe("All Tasks");
-    expect(menuBarSource).toContain('title="See All Tasks"');
+    expect(menuBarSource).toContain('title="New Task"');
+    expect(menuBarSource).not.toContain('title="New Task…"');
+    expect(menuBarSource).toContain('title="Open All Tasks"');
+    expect(menuBarSource).toContain('title="Complete Task"');
+    expect(menuBarSource).toContain('title="Open Task"');
+    expect(menuBarSource).toContain('title="Edit Task"');
+    expect(menuBarSource).toContain('title="Move to Trash"');
     expect(menuBarSource).toContain('onAction={() => openMyTasks({ view: "all" })}');
+  });
+});
+
+describe("interface copy", () => {
+  it("reserves ellipses for truncated content", () => {
+    const files = [
+      "backup-restore.tsx",
+      "menu-bar.tsx",
+      "my-tasks.tsx",
+      "project-management.tsx",
+      "quick-add.tsx",
+      "task-form.tsx",
+      "task-form-controls.tsx",
+      "task-views.tsx",
+    ];
+
+    for (const file of files) {
+      const source = readFileSync(join(process.cwd(), "src", file), "utf8");
+      expect(source, file).not.toMatch(/title="[^"]*(?:…|\.\.\.)[^"]*"/u);
+    }
+  });
+
+  it("distinguishes opening a new-task form from creating the task", () => {
+    const tasks = readFileSync(join(process.cwd(), "src/my-tasks.tsx"), "utf8");
+    const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
+    const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
+
+    expect(tasks).toContain('title="New Task"');
+    expect(taskForm).toContain('title={task ? "Save Task" : "Create Task"}');
+    expect(quickAdd).toContain('title="Create Task"');
+    expect(quickAdd).toContain('"Task created"');
   });
 });
 
@@ -139,7 +176,7 @@ describe("Label UI adapters", () => {
     expect(management).toContain('navigationTitle="Labels"');
     expect(management).toContain("const confirmed = await confirmAlert(");
     expect(management).toContain("if (!confirmed)");
-    expect(management).toContain("Only this Label and its assignments are removed.");
+    expect(management).toContain("Tasks keep their content and projects. The label and its assignments are removed.");
   });
 
   it("projects Label filtering, search keywords, default creation, and deleted-Label fallback", () => {
@@ -168,11 +205,11 @@ describe("menu bar feedback", () => {
 
   it("uses a HUD instead of a Toast for background launches", async () => {
     await showMenuBarFeedback(LaunchType.Background, {
-      title: "Unable to open All Tasks",
+      title: "Unable to open tasks",
       message: "Command unavailable",
     });
 
-    expect(raycast.showHUD).toHaveBeenCalledWith("Unable to open All Tasks: Command unavailable");
+    expect(raycast.showHUD).toHaveBeenCalledWith("Unable to open tasks: Command unavailable");
     expect(raycast.showToast).not.toHaveBeenCalled();
   });
 
@@ -199,8 +236,8 @@ describe("menu bar feedback", () => {
 
 describe("task lifecycle actions", () => {
   it.each([
-    ["undo", "complete", "Undo Complete Task", "undo", ["cmd"]],
-    ["redo", "complete", "Redo Complete Task", "redo", ["cmd", "shift"]],
+    ["undo", "complete", "Undo Completion", "undo", ["cmd"]],
+    ["redo", "complete", "Redo Completion", "redo", ["cmd", "shift"]],
     ["undo", "trash", "Undo Move to Trash", "undo", ["cmd"]],
     ["redo", "trash", "Redo Move to Trash", "redo", ["cmd", "shift"]],
   ] as const)("projects %s %s labels, icons, and shortcuts for Raycast", (direction, kind, title, icon, modifiers) => {
@@ -222,6 +259,7 @@ describe("task lifecycle actions", () => {
     expect(taskLifecycleMutationActionPresentation("complete")).toEqual({
       title: "Complete Task",
       successTitle: "Task completed",
+      failureTitle: "Unable to complete task",
       icon: "check-circle",
     });
     expect(taskLifecycleMutationActionPresentation("reopen")).toMatchObject({

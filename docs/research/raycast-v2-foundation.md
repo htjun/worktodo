@@ -131,7 +131,7 @@ The agreed product scope maps cleanly onto current primitives:
 
 - title is required;
 - Project is a dynamic dropdown that defaults to Inbox and includes nested sections;
-- Due Date offers No Due Date, Today, Tomorrow, End of This Week, and Custom presets;
+- Due Date offers None, Today, Tomorrow, End of Week, and Custom presets;
 - the custom date picker appears only when Custom is selected;
 - notes use an optional text area.
 

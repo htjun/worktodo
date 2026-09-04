@@ -69,10 +69,10 @@ export function DueDateFields({
         value={preset}
         onChange={(value) => onPresetChange(value as DueDatePreset)}
       >
-        <Form.Dropdown.Item value="none" title="No Due Date" />
+        <Form.Dropdown.Item value="none" title="None" />
         <Form.Dropdown.Item value="today" title="Today" />
         <Form.Dropdown.Item value="tomorrow" title="Tomorrow" />
-        <Form.Dropdown.Item value="endOfWeek" title="End of This Week" />
+        <Form.Dropdown.Item value="endOfWeek" title="End of Week" />
         <Form.Dropdown.Item value="custom" title="Custom" />
       </Form.Dropdown>
       {preset === "custom" ? (

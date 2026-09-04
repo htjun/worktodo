@@ -177,10 +177,10 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     lifecycle.current?.refreshAfterExternalMutation();
   }, []);
 
-  const reportMutationFailure = useCallback(async (error: unknown) => {
+  const reportMutationFailure = useCallback(async (title: string, error: unknown) => {
     const message = messageFrom(error);
     setState((current) => ({ ...current, isLoading: false, mutationError: message }));
-    await showToast(Toast.Style.Failure, "Worktodo could not complete the action", message);
+    await showToast(Toast.Style.Failure, title, message);
   }, []);
 
   const showHistoryToast = useCallback(async (title: string, message: string, nextState: TaskLifecycleHistoryState) => {
@@ -212,7 +212,10 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         return;
       }
       if (result.status === "failed") {
-        await reportMutationFailure(result.error);
+        await reportMutationFailure(
+          expected.direction === "undo" ? "Unable to undo task" : "Unable to redo task",
+          result.error,
+        );
         return;
       }
       if (result.status === "duplicate") {
@@ -239,7 +242,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
 
       const result = interaction.runMutation(operation, taskId);
       if (result.status === "failed") {
-        await reportMutationFailure(result.error);
+        await reportMutationFailure(taskLifecycleMutationPresentation(operation).failureTitle, result.error);
         return;
       }
       if (result.status === "duplicate") {
@@ -376,7 +379,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
             actions={
               createTarget || projectsTarget || labelsTarget || taskHistoryState ? (
                 <ActionPanel>
-                  {createTarget ? <Action.Push title="Create Task" icon={Icon.Plus} target={createTarget} /> : null}
+                  {createTarget ? <Action.Push title="New Task" icon={Icon.Plus} target={createTarget} /> : null}
                   {projectsTarget ? (
                     <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
                   ) : null}
@@ -518,7 +521,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                           ) : null}
                           {createTarget ? (
                             <Action.Push
-                              title="Create Task"
+                              title="New Task"
                               icon={Icon.Plus}
                               shortcut={Keyboard.Shortcut.Common.New}
                               target={createTarget}

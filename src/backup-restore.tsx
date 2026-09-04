@@ -67,10 +67,10 @@ function ExportForm({ portability }: { portability: PortabilityService }) {
 
   return (
     <Form
-      navigationTitle="Export Data"
+      navigationTitle="Export Backup"
       actions={
         <ActionPanel>
-          <Action.SubmitForm title="Export Data" icon={Icon.Download} onSubmit={submit} />
+          <Action.SubmitForm title="Export Backup" icon={Icon.Download} onSubmit={submit} />
         </ActionPanel>
       }
     >
@@ -103,7 +103,7 @@ function ImportResult({ recoveryPath }: { recoveryPath: string }) {
 function ImportFailure({ message, recoveryPath }: { message: string; recoveryPath: string }) {
   return (
     <Detail
-      markdown={`# Backup import failed\n\n${message}\n\nA recovery backup is available at:\n\n${recoveryPath}`}
+      markdown={`# Backup restore failed\n\n${message}\n\nA recovery backup is available at:\n\n${recoveryPath}`}
       actions={
         <ActionPanel>
           <Action.ShowInFinder path={recoveryPath} title="Show Recovery Backup in Finder" />
@@ -128,7 +128,7 @@ function ImportPreviewView({ portability, prepared }: { portability: Portability
     try {
       const result = portability.replace(prepared);
       requestMenuBarRefresh();
-      await showToast(Toast.Style.Success, "Worktodo data replaced", result.recoveryPath);
+      await showToast(Toast.Style.Success, "Backup restored", result.recoveryPath);
       push(<ImportResult recoveryPath={result.recoveryPath} />);
     } catch (error) {
       const failure = failurePresentation(error, "import");
@@ -175,15 +175,15 @@ function ImportForm({ portability }: { portability: PortabilityService }) {
 
   return (
     <Form
-      navigationTitle="Import Data"
+      navigationTitle="Restore Backup"
       actions={
         <ActionPanel>
-          <Action.SubmitForm title="Preview Import" icon={Icon.Upload} onSubmit={submit} />
+          <Action.SubmitForm title="Preview Backup" icon={Icon.Upload} onSubmit={submit} />
         </ActionPanel>
       }
     >
-      <Form.FilePicker id="selection" title="Backup" allowMultipleSelection={false} />
-      <Form.Description text="Worktodo validates the complete JSON backup before showing a replacement preview." />
+      <Form.FilePicker id="selection" title="Backup File" allowMultipleSelection={false} />
+      <Form.Description text="Worktodo validates the entire backup before showing what will be replaced." />
     </Form>
   );
 }
@@ -204,19 +204,19 @@ export default function Command() {
   }, []);
 
   return (
-    <List isLoading={!session && !error} searchBarPlaceholder="Backup or restore Worktodo data">
+    <List isLoading={!session && !error} searchBarPlaceholder="Export or restore Worktodo data">
       {error ? (
         <List.EmptyView icon={Icon.Warning} title="Unable to open Worktodo" description={error} />
       ) : session ? (
         <>
           <List.Item
-            title="Export Data"
+            title="Export Backup"
             subtitle="Create a complete JSON backup"
             icon={Icon.Download}
             actions={
               <ActionPanel>
                 <Action.Push
-                  title="Export Data"
+                  title="Export Backup"
                   icon={Icon.Download}
                   target={<ExportForm portability={session.portability} />}
                 />
@@ -224,13 +224,13 @@ export default function Command() {
             }
           />
           <List.Item
-            title="Import Data"
-            subtitle="Preview and replace all current data"
+            title="Restore Backup"
+            subtitle="Preview a backup, then replace current data"
             icon={Icon.Upload}
             actions={
               <ActionPanel>
                 <Action.Push
-                  title="Import Data"
+                  title="Restore Backup"
                   icon={Icon.Upload}
                   target={<ImportForm portability={session.portability} />}
                 />

@@ -9,6 +9,7 @@ import {
   taskListRowPresentation,
   taskNotesMarkdown,
 } from "../../src/shared/presentation/task-list";
+import { taskViewContent } from "../../src/shared/presentation/task-views";
 
 const project: Project = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -43,6 +44,25 @@ function task(overrides: Partial<Task> = {}): Task {
 }
 
 describe("task presentation mapping", () => {
+  it("uses concise search and empty-state copy", () => {
+    expect(taskViewContent({ kind: "all" }, [], [])).toEqual({
+      title: "All Tasks",
+      searchPlaceholder: "Search tasks",
+      emptyTitle: "No tasks yet",
+      emptyDescription: "Create a task to get started.",
+    });
+    expect(taskViewContent({ kind: "today" }, [], [])).toMatchObject({
+      searchPlaceholder: "Search today's tasks",
+      emptyTitle: "Nothing due today",
+      emptyDescription: "Overdue tasks also appear here.",
+    });
+    expect(taskViewContent({ kind: "inbox" }, [], [])).toMatchObject({
+      searchPlaceholder: "Search Inbox",
+      emptyTitle: "Inbox is empty",
+      emptyDescription: "Create a task or move one here.",
+    });
+  });
+
   it("groups All Tasks under Inbox and non-empty projects in project order", () => {
     const work: Project = { ...project, id: "work", name: "Work", position: 2_048 };
     const empty: Project = { ...project, id: "empty", name: "Empty", position: 3_072 };
@@ -214,6 +234,7 @@ describe("task presentation mapping", () => {
         kind: "complete",
         title: "Complete Task",
         successTitle: "Task completed",
+        failureTitle: "Unable to complete task",
       });
     }
     const reopen = taskLifecycleActionKindForViewKind("completed");
@@ -221,12 +242,14 @@ describe("task presentation mapping", () => {
       kind: "reopen",
       title: "Reopen Task",
       successTitle: "Task reopened",
+      failureTitle: "Unable to reopen task",
     });
     const restore = taskLifecycleActionKindForViewKind("trash");
     expect({ kind: restore, ...taskLifecycleMutationPresentation(restore) }).toEqual({
       kind: "restore",
       title: "Restore Task",
       successTitle: "Task restored",
+      failureTitle: "Unable to restore task",
     });
   });
 

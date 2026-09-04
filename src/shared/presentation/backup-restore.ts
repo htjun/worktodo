@@ -12,10 +12,10 @@ function countRows(counts: BackupCounts): Array<[string, number]> {
     ["Projects", counts.projects],
     ["Labels", counts.labels],
     ["Tasks", counts.tasks],
-    ["Active incomplete", counts.lifecycle.activeIncomplete],
-    ["Active completed", counts.lifecycle.activeCompleted],
-    ["Trashed incomplete", counts.lifecycle.trashedIncomplete],
-    ["Trashed completed", counts.lifecycle.trashedCompleted],
+    ["Incomplete", counts.lifecycle.activeIncomplete],
+    ["Completed", counts.lifecycle.activeCompleted],
+    ["Incomplete in Trash", counts.lifecycle.trashedIncomplete],
+    ["Completed in Trash", counts.lifecycle.trashedCompleted],
   ];
 }
 
@@ -48,7 +48,7 @@ export function exportSuccessMarkdown(path: string): string {
 }
 
 export function importSuccessMarkdown(recoveryPath: string): string {
-  return `# Worktodo data replaced\n\nThe selected backup is now active. The previous data remains available at:\n\n${recoveryPath}`;
+  return `# Backup restored\n\nThe selected backup is now active. The previous data remains available at:\n\n${recoveryPath}`;
 }
 
 export function failurePresentation(error: unknown, operation: "export" | "import"): FailurePresentation {
@@ -59,7 +59,7 @@ export function failurePresentation(error: unknown, operation: "export" | "impor
   const recoveryPath =
     error instanceof Error && "recoveryPath" in error ? (error as ImportReplacementError).recoveryPath : undefined;
   return {
-    title: operation === "export" ? "Backup export failed" : "Backup import failed",
+    title: operation === "export" ? "Backup export failed" : "Backup restore failed",
     message: unchanged,
     ...(recoveryPath ? { recoveryPath } : {}),
   };

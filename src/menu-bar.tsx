@@ -145,17 +145,18 @@ export default function Command(props: LaunchProps) {
   performTaskHistoryRef.current = performTaskHistory;
 
   const performLifecycleMutation = useCallback(
-    async (operation: TaskLifecycleMutationKind, taskId: string, failureTitle: string) => {
+    async (operation: TaskLifecycleMutationKind, taskId: string) => {
       const interaction = lifecycle.current;
       if (!interaction) {
         return;
       }
 
+      const presentation = taskLifecycleMutationPresentation(operation);
       const result = interaction.runMutation(operation, taskId);
       if (result.status === "failed") {
         await showFeedback({
           style: Toast.Style.Failure,
-          title: failureTitle,
+          title: presentation.failureTitle,
           message: messageFrom(result.error),
         });
         return;
@@ -164,7 +165,6 @@ export default function Command(props: LaunchProps) {
         return;
       }
 
-      const presentation = taskLifecycleMutationPresentation(result.operation);
       if (result.history) {
         await showHistoryToast(presentation.successTitle, result.task.title, result.history);
       }
@@ -187,8 +187,8 @@ export default function Command(props: LaunchProps) {
     lifecycle.current?.clearHistory();
     await showFeedback({
       style: Toast.Style.Success,
-      title: "Worktodo hidden from menu bar",
-      message: "Run Worktodo Menu Bar to restore it.",
+      title: "Worktodo hidden from the menu bar",
+      message: "Run Worktodo Menu Bar to show it again.",
     });
     setHidden(true);
   }, [showFeedback]);
@@ -199,7 +199,7 @@ export default function Command(props: LaunchProps) {
     } catch (error) {
       await showFeedback({
         style: Toast.Style.Failure,
-        title: "Unable to open All Tasks",
+        title: "Unable to open tasks",
         message: messageFrom(error),
       });
     }
@@ -232,24 +232,24 @@ export default function Command(props: LaunchProps) {
             {section.tasks.map((task) => (
               <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={priorityIcon(task.priority)}>
                 <MenuBarExtra.Item
-                  title="Complete"
+                  title="Complete Task"
                   icon={menuIcon(Icon.CheckCircle)}
-                  onAction={() => performLifecycleMutation("complete", task.id, "Unable to complete task")}
+                  onAction={() => performLifecycleMutation("complete", task.id)}
                 />
                 <MenuBarExtra.Item
-                  title="Open"
+                  title="Open Task"
                   icon={menuIcon(Icon.AppWindowList)}
                   onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id })}
                 />
                 <MenuBarExtra.Item
-                  title="Edit"
+                  title="Edit Task"
                   icon={menuIcon(Icon.Pencil)}
                   onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id, editTask: true })}
                 />
                 <MenuBarExtra.Item
-                  title="Remove"
+                  title="Move to Trash"
                   icon={menuIcon(Icon.Trash)}
-                  onAction={() => performLifecycleMutation("trash", task.id, "Unable to remove task")}
+                  onAction={() => performLifecycleMutation("trash", task.id)}
                 />
               </MenuBarExtra.Submenu>
             ))}
@@ -271,12 +271,12 @@ export default function Command(props: LaunchProps) {
 
       <MenuBarExtra.Section>
         <MenuBarExtra.Item
-          title="New Task…"
+          title="New Task"
           icon={menuIcon(Icon.Plus)}
           onAction={() => openMyTasks({ view: "inbox", createTask: true })}
         />
         <MenuBarExtra.Item
-          title="See All Tasks"
+          title="Open All Tasks"
           icon={menuIcon(Icon.AppWindowList)}
           onAction={() => openMyTasks({ view: "all" })}
         />

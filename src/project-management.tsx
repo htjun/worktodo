@@ -38,6 +38,7 @@ function NameForm({
   fieldTitle,
   submitTitle,
   successTitle,
+  failureTitle,
   initialName = "",
   save,
 }: {
@@ -45,6 +46,7 @@ function NameForm({
   fieldTitle: string;
   submitTitle: string;
   successTitle: string;
+  failureTitle: string;
   initialName?: string;
   save: (name: string) => void;
 }) {
@@ -65,7 +67,7 @@ function NameForm({
     } catch (error) {
       const message = messageFrom(error);
       setNameError(message);
-      await showToast(Toast.Style.Failure, `Unable to save ${fieldTitle.toLowerCase()}`, message);
+      await showToast(Toast.Style.Failure, failureTitle, message);
       return false;
     }
   }
@@ -115,6 +117,7 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
       fieldTitle="Label Name"
       submitTitle="Create Label"
       successTitle="Label created"
+      failureTitle="Unable to create label"
       save={(name) => createLabel(service, name, changed)}
     />
   );
@@ -122,7 +125,7 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
   async function remove(label: Label) {
     const confirmed = await confirmAlert({
       title: `Remove “${label.name}”?`,
-      message: "Tasks keep their placement and content. Only this Label and its assignments are removed.",
+      message: "Tasks keep their content and projects. The label and its assignments are removed.",
       primaryAction: { title: "Remove Label", style: Alert.ActionStyle.Destructive },
     });
     if (!confirmed) {
@@ -130,24 +133,24 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
     }
     try {
       removeLabel(service, label.id, changed);
-      await showToast(Toast.Style.Success, "Label removed", "Tasks kept their placement and content.");
+      await showToast(Toast.Style.Success, "Label removed");
     } catch (error) {
       await showToast(Toast.Style.Failure, "Unable to remove label", messageFrom(error));
     }
   }
 
   return (
-    <List navigationTitle="Labels" isLoading={state.isLoading} searchBarPlaceholder="Search Labels">
+    <List navigationTitle="Labels" isLoading={state.isLoading} searchBarPlaceholder="Search labels">
       {state.error ? (
         <List.EmptyView icon={Icon.Warning} title="Unable to load labels" description={state.error} />
       ) : state.items.length === 0 ? (
         <List.EmptyView
           icon={Icon.Tag}
           title="No labels"
-          description="Create a global label to organize tasks across projects."
+          description="Create a label to organize tasks across projects."
           actions={
             <ActionPanel>
-              <Action.Push title="Create Label" icon={Icon.Plus} target={createTarget} />
+              <Action.Push title="New Label" icon={Icon.Plus} target={createTarget} />
             </ActionPanel>
           }
         />
@@ -169,13 +172,14 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
                       fieldTitle="Label Name"
                       submitTitle="Save Label"
                       successTitle="Label renamed"
+                      failureTitle="Unable to rename label"
                       initialName={label.name}
                       save={(name) => renameLabel(service, label.id, name, changed)}
                     />
                   }
                 />
                 <Action.Push
-                  title="Create Label"
+                  title="New Label"
                   icon={Icon.Plus}
                   shortcut={Keyboard.Shortcut.Common.New}
                   target={createTarget}
@@ -220,6 +224,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
       fieldTitle="Project Name"
       submitTitle="Create Project"
       successTitle="Project created"
+      failureTitle="Unable to create project"
       save={(name) => createProject(service, name, changed)}
     />
   );
@@ -227,7 +232,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
   async function remove(project: Project) {
     const confirmed = await confirmAlert({
       title: `Remove “${project.name}”?`,
-      message: "All of its tasks will move to Inbox.",
+      message: "Tasks in this project will move to Inbox.",
       primaryAction: { title: "Remove Project", style: Alert.ActionStyle.Destructive },
     });
     if (!confirmed) {
@@ -235,14 +240,14 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
     }
     try {
       removeProject(service, project.id, changed);
-      await showToast(Toast.Style.Success, "Project removed", "Its tasks moved to Inbox.");
+      await showToast(Toast.Style.Success, "Project removed", "Tasks moved to Inbox.");
     } catch (error) {
       await showToast(Toast.Style.Failure, "Unable to remove project", messageFrom(error));
     }
   }
 
   return (
-    <List navigationTitle="Projects" isLoading={state.isLoading} searchBarPlaceholder="Search Projects">
+    <List navigationTitle="Projects" isLoading={state.isLoading} searchBarPlaceholder="Search projects">
       {state.error ? (
         <List.EmptyView icon={Icon.Warning} title="Unable to load projects" description={state.error} />
       ) : state.items.length === 0 ? (
@@ -252,7 +257,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
           description="Create a project to organize tasks."
           actions={
             <ActionPanel>
-              <Action.Push title="Create Project" icon={Icon.Plus} target={createTarget} />
+              <Action.Push title="New Project" icon={Icon.Plus} target={createTarget} />
             </ActionPanel>
           }
         />
@@ -275,13 +280,14 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
                         fieldTitle="Project Name"
                         submitTitle="Save Project"
                         successTitle="Project renamed"
+                        failureTitle="Unable to rename project"
                         initialName={project.name}
                         save={(name) => renameProject(service, project.id, name, changed)}
                       />
                     }
                   />
                   <Action.Push
-                    title="Create Project"
+                    title="New Project"
                     icon={Icon.Plus}
                     shortcut={Keyboard.Shortcut.Common.New}
                     target={createTarget}

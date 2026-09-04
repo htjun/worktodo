@@ -13,19 +13,19 @@ export type TaskViewContent = {
 const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project" | "label">, TaskViewContent> = {
   all: {
     title: "All Tasks",
-    searchPlaceholder: "Search All Tasks",
-    emptyTitle: "No tasks",
+    searchPlaceholder: "Search tasks",
+    emptyTitle: "No tasks yet",
     emptyDescription: "Create a task to get started.",
   },
   today: {
     title: "Today",
-    searchPlaceholder: "Search Today",
+    searchPlaceholder: "Search today's tasks",
     emptyTitle: "Nothing due today",
-    emptyDescription: "Overdue and due-today tasks appear here.",
+    emptyDescription: "Overdue tasks also appear here.",
   },
   upcoming: {
     title: "Upcoming",
-    searchPlaceholder: "Search Upcoming",
+    searchPlaceholder: "Search upcoming tasks",
     emptyTitle: "No upcoming tasks",
     emptyDescription: "Tasks due after today appear here.",
   },
@@ -33,11 +33,11 @@ const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project" | "label">
     title: "Inbox",
     searchPlaceholder: "Search Inbox",
     emptyTitle: "Inbox is empty",
-    emptyDescription: "Create a task to capture it.",
+    emptyDescription: "Create a task or move one here.",
   },
   completed: {
     title: "Completed",
-    searchPlaceholder: "Search Completed",
+    searchPlaceholder: "Search completed tasks",
     emptyTitle: "No completed tasks",
     emptyDescription: "Completed tasks appear here.",
   },
@@ -98,8 +98,8 @@ export function taskViewContent(
     return {
       title,
       searchPlaceholder: `Search ${title}`,
-      emptyTitle: `No tasks labelled ${title}`,
-      emptyDescription: "Create a task with this label.",
+      emptyTitle: "No tasks with this label",
+      emptyDescription: "Create a task or add this label to one.",
     };
   }
   return STATIC_VIEW_CONTENT[view.kind];

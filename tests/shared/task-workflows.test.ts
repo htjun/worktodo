@@ -285,7 +285,7 @@ describe("main task workflows", () => {
       expect(taskViewContent({ kind: "label", labelId: label.id }, [project], [label])).toMatchObject({
         title: "Waiting",
         searchPlaceholder: "Search Waiting",
-        emptyTitle: "No tasks labelled Waiting",
+        emptyTitle: "No tasks with this label",
       });
       const labelView: TaskView = { kind: "label", labelId: label.id };
       const defaults = taskEditingDefaults(

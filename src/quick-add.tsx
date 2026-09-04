@@ -93,12 +93,12 @@ export default function QuickAdd() {
         form: setFormError,
       };
       setFieldError[outcome.field](outcome.message);
-      await showToast(Toast.Style.Failure, "Unable to add task", outcome.message);
+      await showToast(Toast.Style.Failure, "Unable to create task", outcome.message);
       return false;
     }
 
     requestMenuBarRefresh();
-    await showToast(Toast.Style.Success, "Task added");
+    await showToast(Toast.Style.Success, "Task created");
     await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     return true;
   }
@@ -110,7 +110,7 @@ export default function QuickAdd() {
       actions={
         state.error === null ? (
           <ActionPanel>
-            <Action.SubmitForm title="Add Task" icon={Icon.Plus} onSubmit={submit} />
+            <Action.SubmitForm title="Create Task" icon={Icon.Plus} onSubmit={submit} />
           </ActionPanel>
         ) : undefined
       }

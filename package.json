@@ -43,13 +43,13 @@
     {
       "name": "quick-add",
       "title": "Quick Add",
-      "description": "Add a task with optional details",
+      "description": "Create a task with optional details",
       "mode": "view"
     },
     {
       "name": "backup-restore",
       "title": "Backup & Restore",
-      "description": "Export or replace Worktodo data from JSON backups",
+      "description": "Export and restore Worktodo JSON backups",
       "mode": "view"
     },
     {

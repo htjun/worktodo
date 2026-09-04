@@ -35,8 +35,8 @@ describe("backup and restore presentation", () => {
     expect(markdown).toContain("Exported: 2026-08-30T06:25:30.123Z");
     expect(markdown).toContain("| Tasks | 4 | 10 |");
     expect(markdown).toContain("| Labels | 1 | 3 |");
-    expect(markdown).toContain("| Active incomplete | 1 | 4 |");
-    expect(markdown).toContain("| Trashed completed | 1 | 1 |");
+    expect(markdown).toContain("| Incomplete | 1 | 4 |");
+    expect(markdown).toContain("| Completed in Trash | 1 | 1 |");
   });
 
   it("renders an allowed timestamp outside the JavaScript Date range without crashing", () => {
@@ -53,7 +53,7 @@ describe("backup and restore presentation", () => {
   it("states that import failures did not change production and preserves recovery actions", () => {
     const error = new ImportReplacementError(new Error("injected"), "/tmp/recovery.json");
     expect(failurePresentation(error, "import")).toEqual({
-      title: "Backup import failed",
+      title: "Backup restore failed",
       message: "Worktodo could not replace its data. Worktodo data was not changed.",
       recoveryPath: "/tmp/recovery.json",
     });
