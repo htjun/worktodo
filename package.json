@@ -25,7 +25,7 @@
     "build:raycast": "ray build",
     "build:mcp": "tsc -p tsconfig.mcp.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.mcp.json",
-    "lint": "ray lint && eslint mcp tests",
+    "lint": "CI=false ray lint && eslint mcp tests",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "test": "pnpm run build:mcp && vitest run",

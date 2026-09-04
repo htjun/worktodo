@@ -10,6 +10,8 @@ This note records local evidence used to choose the initial repository shape. It
 
 **Menu-bar feedback update (2026-09-01):** Raycast 2.1.2 retains the background launch type on action callbacks registered by a background-rendered menu. Its installed backend rejects `showToast` for those callbacks with `Toast API is not available when command is launched in background`. An initial workaround relaunched the active menu command as user-initiated so it could show a Toast. That self-relaunch unloaded the worker while the original menu callback was still executing, producing `Worker unloaded` and replacing the menu item with an error icon even though the task mutation had committed six milliseconds earlier. Worktodo now executes Complete and Hide in the active callback, uses HUD feedback for background launches, and reserves Toast feedback for user-initiated launches.
 
+**CI package-manager update (2026-09-04):** The API 2.0.5 `ray lint` implementation validates only npm's `package-lock.json` when `CI=true` and explicitly rejects `pnpm-lock.yaml`. Worktodo therefore sets `CI=false` only for the `ray lint` subprocess. Manifest, icon, ESLint, and Prettier validation remain enabled, while the enclosing verification process and GitHub Actions job retain CI mode. This avoids introducing an unsupported second lockfile into the pnpm-only repository.
+
 ## Confirmed locally
 
 - Installed Raycast host: `2.1.2.0`, bundle ID `com.raycast.macos`.
