@@ -9,7 +9,7 @@ export type TaskListEntry = {
 export type TaskListItem = {
   id: string;
   title: string;
-  subtitle: string;
+  subtitle: string | undefined;
   keywords: string[];
   accessories: TaskListAccessory[];
   detail: TaskDetailPresentation;
@@ -203,7 +203,7 @@ export function buildTaskListItems(
     return {
       id: entry.task.id,
       title: entry.task.title,
-      subtitle: project,
+      subtitle: entry.task.projectId === null ? undefined : project,
       keywords: [project, entry.task.notes, ...labelNames],
       accessories: [
         ...labelAccessories,

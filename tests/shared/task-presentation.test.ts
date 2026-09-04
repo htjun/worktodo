@@ -119,7 +119,7 @@ describe("task presentation mapping", () => {
       { key: `all:project:${project.id}`, title: "Personal" },
     ]);
     expect(groups.map((group) => group.items.map((item) => [item.id, item.subtitle]))).toEqual([
-      [["no-project", "No project"]],
+      [["no-project", undefined]],
       [["work-task", "Work"]],
       [
         ["personal-direct", "Personal"],
@@ -152,7 +152,7 @@ describe("task presentation mapping", () => {
       ],
       keywords: ["Personal", "Open the planning workspace"],
     });
-    expect(items[1]).toMatchObject({ subtitle: "No project", accessories: [] });
+    expect(items[1]).toMatchObject({ subtitle: undefined, accessories: [] });
   });
 
   it("builds deterministic detail metadata for every project and due kind", () => {
