@@ -36,8 +36,8 @@
   "commands": [
     {
       "name": "my-tasks",
-      "title": "My Tasks",
-      "description": "View Worktodo tasks",
+      "title": "All Tasks",
+      "description": "View all Worktodo tasks",
       "mode": "view"
     },
     {

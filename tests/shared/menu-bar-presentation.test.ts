@@ -241,7 +241,7 @@ describe("menu-bar presentation", () => {
     ).toBe(`${family.repeat(71)}…`);
   });
 
-  it("accepts only supported My Tasks launch context values", () => {
+  it("accepts only supported All Tasks launch context values", () => {
     expect(parseMyTasksLaunchContext({ view: "all" })).toEqual({
       view: "all",
       selectedTaskId: undefined,

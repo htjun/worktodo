@@ -199,7 +199,7 @@ export default function Command(props: LaunchProps) {
     } catch (error) {
       await showFeedback({
         style: Toast.Style.Failure,
-        title: "Unable to open My Tasks",
+        title: "Unable to open All Tasks",
         message: messageFrom(error),
       });
     }
@@ -274,6 +274,11 @@ export default function Command(props: LaunchProps) {
           title="New Task…"
           icon={menuIcon(Icon.Plus)}
           onAction={() => openMyTasks({ view: "inbox", createTask: true })}
+        />
+        <MenuBarExtra.Item
+          title="See All Tasks"
+          icon={menuIcon(Icon.AppWindowList)}
+          onAction={() => openMyTasks({ view: "all" })}
         />
       </MenuBarExtra.Section>
 

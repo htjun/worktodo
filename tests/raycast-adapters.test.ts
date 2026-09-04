@@ -56,7 +56,7 @@ describe("Raycast command launches", () => {
     });
   });
 
-  it("opens My Tasks as user-initiated", async () => {
+  it("opens All Tasks as user-initiated", async () => {
     await launchMyTasks({ view: "upcoming", selectedTaskId: "task-1" });
 
     expect(raycast.launchCommand).toHaveBeenCalledWith({
@@ -66,7 +66,7 @@ describe("Raycast command launches", () => {
     });
   });
 
-  it("opens a selected My Tasks item for editing", async () => {
+  it("opens a selected All Tasks item for editing", async () => {
     await launchMyTasks({ view: "today", selectedTaskId: "task-1", editTask: true });
 
     expect(raycast.launchCommand).toHaveBeenCalledWith({
@@ -88,6 +88,19 @@ describe("Backup & Restore adapter boundary", () => {
   });
 });
 
+describe("All Tasks entry points", () => {
+  it("uses All Tasks wording and opens the full list from the menu bar", () => {
+    const manifest = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+      commands: { name: string; title: string }[];
+    };
+    const menuBarSource = readFileSync(join(process.cwd(), "src/menu-bar.tsx"), "utf8");
+
+    expect(manifest.commands.find((command) => command.name === "my-tasks")?.title).toBe("All Tasks");
+    expect(menuBarSource).toContain('title="See All Tasks"');
+    expect(menuBarSource).toContain('onAction={() => openMyTasks({ view: "all" })}');
+  });
+});
+
 describe("menu bar feedback", () => {
   it("shows a Toast for user-initiated launches", async () => {
     const options = { title: "Task completed", message: "Submit report" };
@@ -100,11 +113,11 @@ describe("menu bar feedback", () => {
 
   it("uses a HUD instead of a Toast for background launches", async () => {
     await showMenuBarFeedback(LaunchType.Background, {
-      title: "Unable to open My Tasks",
+      title: "Unable to open All Tasks",
       message: "Command unavailable",
     });
 
-    expect(raycast.showHUD).toHaveBeenCalledWith("Unable to open My Tasks: Command unavailable");
+    expect(raycast.showHUD).toHaveBeenCalledWith("Unable to open All Tasks: Command unavailable");
     expect(raycast.showToast).not.toHaveBeenCalled();
   });
 
