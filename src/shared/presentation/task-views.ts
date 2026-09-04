@@ -10,7 +10,7 @@ export type TaskViewContent = {
   emptyDescription: string;
 };
 
-const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project">, TaskViewContent> = {
+const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project" | "label">, TaskViewContent> = {
   all: {
     title: "All Tasks",
     searchPlaceholder: "Search All Tasks",
@@ -53,12 +53,14 @@ export function taskViewKey(view: TaskView): string {
   switch (view.kind) {
     case "project":
       return `project:${view.projectId}`;
+    case "label":
+      return `label:${view.labelId}`;
     default:
       return view.kind;
   }
 }
 
-export function taskViewFromKey(value: string, projects: readonly Project[]): TaskView {
+export function taskViewFromKey(value: string, projects: readonly Project[], labels: readonly Label[]): TaskView {
   if (isStaticTaskViewKind(value)) {
     return { kind: value };
   }
@@ -68,10 +70,20 @@ export function taskViewFromKey(value: string, projects: readonly Project[]): Ta
       return { kind: "project", projectId };
     }
   }
+  if (value.startsWith("label:")) {
+    const labelId = value.slice("label:".length);
+    if (labels.some((label) => label.id === labelId)) {
+      return { kind: "label", labelId };
+    }
+  }
   return { kind: "all" };
 }
 
-export function taskViewContent(view: TaskView, projects: readonly Project[]): TaskViewContent {
+export function taskViewContent(
+  view: TaskView,
+  projects: readonly Project[],
+  labels: readonly Label[],
+): TaskViewContent {
   if (view.kind === "project") {
     const title = projects.find((project) => project.id === view.projectId)?.name ?? "Project";
     return {
@@ -79,6 +91,15 @@ export function taskViewContent(view: TaskView, projects: readonly Project[]): T
       searchPlaceholder: `Search ${title}`,
       emptyTitle: `${title} is empty`,
       emptyDescription: "Create a task in this project.",
+    };
+  }
+  if (view.kind === "label") {
+    const title = labels.find((label) => label.id === view.labelId)?.name ?? "Label";
+    return {
+      title,
+      searchPlaceholder: `Search ${title}`,
+      emptyTitle: `No tasks labelled ${title}`,
+      emptyDescription: "Create a task with this label.",
     };
   }
   return STATIC_VIEW_CONTENT[view.kind];
@@ -91,6 +112,10 @@ export function initialPlacementForTaskView(view: TaskView): Placement {
     default:
       return { kind: "inbox" };
   }
+}
+
+export function initialLabelIdsForTaskView(view: TaskView): string[] {
+  return view.kind === "label" ? [view.labelId] : [];
 }
 
 function upcomingSectionTitle(date: string, localDate: string, viewerTimeZone: string): string {
@@ -118,7 +143,7 @@ export function buildTaskViewSections(
     return [
       {
         key: "today",
-        title: taskViewContent(taskView.view, projects).title,
+        title: taskViewContent(taskView.view, projects, labels).title,
         items: buildTaskListItems(
           taskView.result.tasks.map(({ task, status }) => ({ task, todayStatus: status })),
           projects,
@@ -150,7 +175,7 @@ export function buildTaskViewSections(
   return [
     {
       key: taskViewKey(taskView.view),
-      title: taskViewContent(taskView.view, projects).title,
+      title: taskViewContent(taskView.view, projects, labels).title,
       items: buildTaskListItems(
         taskView.result.map((task) => ({ task })),
         projects,

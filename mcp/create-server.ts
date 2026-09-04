@@ -22,7 +22,7 @@ export function createServer(options: CreateServerOptions = {}) {
     { name: "worktodo", version: runtimeInfo.version },
     {
       instructions:
-        "Use list_projects and list_tasks to resolve stable IDs before writing. Worktodo stores tasks locally. Write tools change the shared task database; trash is recoverable and permanent deletion is unavailable. Use allDay dates as YYYY-MM-DD and timed due values as an exact Unix-millisecond instant plus IANA timezone. External writes appear in Raycast on its next supported refresh.",
+        "Use list_projects, list_labels, and list_tasks to resolve stable IDs before writing. Worktodo stores tasks locally. Write tools change the shared task database; trash is recoverable and permanent deletion is unavailable. Label definitions are read-only through MCP, while task labelIds replace the complete assignment set. Use allDay dates as YYYY-MM-DD and timed due values as an exact Unix-millisecond instant plus IANA timezone. External writes appear in Raycast on its next supported refresh.",
     },
   );
 

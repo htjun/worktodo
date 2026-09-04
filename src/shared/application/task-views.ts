@@ -1,10 +1,10 @@
-import { DomainError, type Project, type Task } from "../domain/model";
+import { DomainError, type Label, type Project, type Task } from "../domain/model";
 import type { TodayResult, UpcomingResult } from "../domain/queries";
 import type { TaskService } from "../domain/task-service";
 import { canonicalizeTimeZone, validateId, validateNonNegativeInteger } from "../domain/validation";
 
 export const STATIC_TASK_VIEW_KINDS = ["all", "today", "upcoming", "inbox", "completed", "trash"] as const;
-export const TASK_VIEW_KINDS = [...STATIC_TASK_VIEW_KINDS, "project"] as const;
+export const TASK_VIEW_KINDS = [...STATIC_TASK_VIEW_KINDS, "project", "label"] as const;
 
 export type StaticTaskViewKind = (typeof STATIC_TASK_VIEW_KINDS)[number];
 export type TaskViewKind = (typeof TASK_VIEW_KINDS)[number];
@@ -13,7 +13,7 @@ type StaticTaskView = {
   [Kind in StaticTaskViewKind]: { kind: Kind };
 }[StaticTaskViewKind];
 
-export type TaskView = StaticTaskView | { kind: "project"; projectId: string };
+export type TaskView = StaticTaskView | { kind: "project"; projectId: string } | { kind: "label"; labelId: string };
 
 export type TaskViewContext = {
   evaluationInstantMs: number;
@@ -53,22 +53,44 @@ export function isStaticTaskViewKind(value: unknown): value is StaticTaskViewKin
   return typeof value === "string" && STATIC_TASK_VIEW_KINDS.some((kind) => kind === value);
 }
 
-export function resolveTaskView(kind: TaskViewKind, projectId: string | undefined): TaskView {
+export function resolveTaskView(
+  kind: TaskViewKind,
+  projectId: string | undefined,
+  labelId: string | undefined,
+): TaskView {
   if (kind === "project") {
     if (!projectId) {
       throw new DomainError("INVALID_ARGUMENT", "The project view requires projectId");
     }
+    if (labelId) {
+      throw new DomainError("INVALID_ARGUMENT", "labelId is valid only for the label view");
+    }
     return { kind, projectId: validateId(projectId) };
+  }
+  if (kind === "label") {
+    if (!labelId) {
+      throw new DomainError("INVALID_ARGUMENT", "The label view requires labelId");
+    }
+    if (projectId) {
+      throw new DomainError("INVALID_ARGUMENT", "projectId is valid only for the project view");
+    }
+    return { kind, labelId: validateId(labelId) };
   }
   if (projectId) {
     throw new DomainError("INVALID_ARGUMENT", "projectId is valid only for the project view");
   }
+  if (labelId) {
+    throw new DomainError("INVALID_ARGUMENT", "labelId is valid only for the label view");
+  }
   return { kind };
 }
 
-export function normalizeTaskView(view: TaskView, projects: readonly Project[]): TaskView {
+export function normalizeTaskView(view: TaskView, projects: readonly Project[], labels: readonly Label[]): TaskView {
   if (view.kind === "project") {
     return projects.some((project) => project.id === view.projectId) ? view : { kind: "all" };
+  }
+  if (view.kind === "label") {
+    return labels.some((label) => label.id === view.labelId) ? view : { kind: "all" };
   }
   return view;
 }
@@ -96,6 +118,8 @@ export function loadTaskView(source: TaskService, view: TaskView, context: TaskV
       return { kind: "tasks", view, result: source.listInbox(), ...resultContext };
     case "project":
       return { kind: "tasks", view, result: source.listProjectTasks(view.projectId), ...resultContext };
+    case "label":
+      return { kind: "tasks", view, result: source.listLabelTasks(view.labelId), ...resultContext };
     case "completed":
       return { kind: "tasks", view, result: source.listCompleted(), ...resultContext };
     case "trash":

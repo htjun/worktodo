@@ -1,6 +1,6 @@
 # Worktodo MCP Task Tools
 
-**Status:** Implemented and locally validated on 2026-08-31.
+**Status:** Implemented and locally validated on 2026-09-04.
 
 Worktodo exposes its shared task domain through a local STDIO MCP server. The adapter calls the same
 `TaskService` used by Raycast and never receives direct SQL access or alternate task rules. Each tool
@@ -26,30 +26,34 @@ automating it would launch a separate model session rather than only testing the
 | --------------- | --------- | ----------- | ---------- | -------------------------------------------------------------- |
 | `ping`          | Yes       | No          | Yes        | Report server and runtime readiness.                           |
 | `list_projects` | Yes       | No          | Yes        | Page and search projects with stable IDs.                      |
+| `list_labels`   | Yes       | No          | Yes        | Page and search global Labels with stable IDs.                 |
 | `list_tasks`    | Yes       | No          | Yes        | Page and search tasks in one supported task view.              |
 | `get_task`      | Yes       | No          | Yes        | Return one task by stable ID, including Trash and Completed.   |
 | `create_task`   | No        | No          | No         | Create an active task, defaulting to Inbox.                    |
-| `update_task`   | No        | Yes         | Yes        | Replace selected content fields on an active task.             |
+| `update_task`   | No        | Yes         | Yes        | Replace selected content fields or Label assignments.          |
 | `move_task`     | No        | Yes         | Yes        | Move an active task to Inbox or a project.                     |
 | `complete_task` | No        | Yes         | Yes        | Complete an active task.                                       |
 | `reopen_task`   | No        | Yes         | Yes        | Reopen an active completed task.                               |
 | `trash_task`    | No        | Yes         | Yes        | Move a task to recoverable Trash without deleting its content. |
 | `restore_task`  | No        | Yes         | Yes        | Restore a task while preserving its completion state.          |
 
-`list_tasks` supports `all`, `today`, `upcoming`, `inbox`, `completed`, `trash`, and `project`
-views. Project views require their matching stable ID. Search is a case-insensitive substring match
-across title, notes, and Project name. Search runs
-before pagination. Both list tools default to 50 results and reject limits above 100; results report
-the offset, total, and whether another page exists.
+`list_tasks` supports `all`, `today`, `upcoming`, `inbox`, `completed`, `trash`, `project`, and `label`
+views. Project and Label views require their matching stable ID. Search uses Unicode NFKC plus
+locale-independent lowercase normalization across title, notes, Project name, and assigned Label
+names, and runs before pagination. All list tools default to 50 results and reject limits above 100;
+results report the offset, total, and whether another page exists.
 
 Task inputs use the approved closed placement, priority, and due-value unions. An all-day due value is
 a Gregorian `YYYY-MM-DD` string. A timed value is an exact non-negative Unix-millisecond instant plus
 an IANA timezone. Every task-list view validates and canonicalizes its timezone. The timezone defaults
 to the MCP process's current system timezone, but callers can provide another timezone explicitly.
+Every Task document also includes canonical `labelIds`. `create_task` can set the complete assignment
+set. For `update_task`, omitting `labelIds` preserves assignments and passing an empty list clears them.
+`move_task` changes only Inbox or Project placement.
 
 ## Safety and failure behavior
 
-- No tool exposes arbitrary SQL, shell access, permanent task deletion, or Project and Label writes.
+- No tool exposes arbitrary SQL, shell access, permanent task deletion, or Project and Label-definition writes.
 - MCP marks every state-replacing operation as destructive; only task creation is an additive write.
 - Domain failures return bounded error codes and messages as MCP tool errors.
 - Unexpected infrastructure failures are logged to stderr and returned as a generic internal error;
@@ -63,11 +67,14 @@ to the MCP process's current system timezone, but callers can provide another ti
 
 The protocol tests prove:
 
-- discovery of all eleven tools and the server instructions;
+- discovery of all twelve tools and the server instructions;
 - exact read-only, destructive, idempotent, and closed-world annotations;
-- Project ID discovery;
-- create, search, get, update, move, complete, reopen, Trash, and restore behavior;
-- Today evaluation in an explicit timezone and filtering before pagination;
+- Project and Label ID discovery;
+- create, search, get, update, move, complete, reopen, Trash, and restore behavior, including complete
+  Label assignment replacement;
+- Today evaluation in an explicit timezone, Label views, normalized Label-name search, and filtering
+  before pagination;
 - production-session closure after both successful and failed calls;
 - bounded domain errors and suppression of unexpected infrastructure details; and
-- compiled STDIO discovery plus a structured `ping` call through the official TypeScript client.
+- compiled STDIO discovery, a structured `ping` call, and a labelled Task round trip through the
+  official TypeScript client.

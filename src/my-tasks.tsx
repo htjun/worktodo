@@ -27,6 +27,7 @@ import { taskListRowPresentation } from "./shared/presentation/task-list";
 import { EditLabelsForm, MoveTaskForm, TaskForm } from "./task-form";
 import {
   buildTaskViewSections,
+  initialLabelIdsForTaskView,
   initialPlacementForTaskView,
   lifecycleActionForTaskView,
   TaskViewDropdown,
@@ -117,7 +118,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     try {
       const projects = session.service.listProjects();
       const labels = session.service.listLabels();
-      const nextView = normalizeTaskView(view, projects);
+      const nextView = normalizeTaskView(view, projects, labels);
       if (taskViewKey(nextView) !== taskViewKey(view)) {
         lifecycle.current?.clearAcknowledgements();
         setIsShowingDetail(false);
@@ -322,7 +323,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     viewerTimeZone,
   ]);
 
-  const content = taskViewContent(view, state.projects);
+  const content = taskViewContent(view, state.projects, state.labels);
   const taskCount = state.taskSections.reduce((count, section) => count + section.items.length, 0);
   const createTarget = session ? (
     <TaskForm
@@ -330,6 +331,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       projects={state.projects}
       labels={state.labels}
       initialPlacement={initialPlacementForTaskView(view)}
+      initialLabelIds={initialLabelIdsForTaskView(view)}
       viewerTimeZone={viewerTimeZone}
       onSaved={refreshAfterUnrelatedMutation}
     />
@@ -359,7 +361,9 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         }
       }}
       searchBarPlaceholder={content.searchPlaceholder}
-      searchBarAccessory={<TaskViewDropdown view={view} projects={state.projects} onChange={changeView} />}
+      searchBarAccessory={
+        <TaskViewDropdown view={view} projects={state.projects} labels={state.labels} onChange={changeView} />
+      }
     >
       {state.error ? (
         <List.EmptyView icon={Icon.Warning} title="Unable to open Worktodo" description={state.error} />

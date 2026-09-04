@@ -140,6 +140,19 @@ describe("Label UI adapters", () => {
     expect(management).toContain("if (!confirmed)");
     expect(management).toContain("Only this Label and its assignments are removed.");
   });
+
+  it("projects Label filtering, search keywords, default creation, and deleted-Label fallback", () => {
+    const tasks = readFileSync(join(process.cwd(), "src/my-tasks.tsx"), "utf8");
+    const views = readFileSync(join(process.cwd(), "src/task-views.tsx"), "utf8");
+    const presentation = readFileSync(join(process.cwd(), "src/shared/presentation/task-list.ts"), "utf8");
+
+    expect(views).toContain('<List.Dropdown.Section title="Labels">');
+    expect(views).toContain("value={`label:${label.id}`}");
+    expect(tasks).toContain("normalizeTaskView(view, projects, labels)");
+    expect(tasks).toContain("initialPlacement={initialPlacementForTaskView(view)}");
+    expect(tasks).toContain("initialLabelIds={initialLabelIdsForTaskView(view)}");
+    expect(presentation).toContain("keywords: [placement, entry.task.notes, ...labelNames]");
+  });
 });
 
 describe("menu bar feedback", () => {

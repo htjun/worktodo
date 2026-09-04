@@ -5,6 +5,7 @@ import { Client, type CallToolResult } from "@modelcontextprotocol/client";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterEach, describe, expect, it } from "vitest";
 import { WORKTODO_DATABASE_PATH_ENV } from "../../mcp/runtime-options";
+import { openWorktodoAtPath } from "../../src/shared/application/worktodo";
 
 const temporaryDirectories: string[] = [];
 
@@ -45,7 +46,7 @@ describe("Worktodo MCP stdio server", () => {
     try {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name)).toEqual(
-        expect.arrayContaining(["ping", "list_projects", "list_tasks", "create_task", "trash_task"]),
+        expect.arrayContaining(["ping", "list_projects", "list_labels", "list_tasks", "create_task", "trash_task"]),
       );
       expect(tools.find((tool) => tool.name === "ping")).toMatchObject({
         name: "ping",
@@ -75,16 +76,23 @@ describe("Worktodo MCP stdio server", () => {
     const directory = await mkdtemp(path.join(tmpdir(), "worktodo-mcp-stdio-test-"));
     temporaryDirectories.push(directory);
     const databasePath = path.join(directory, "store", "worktodo.sqlite");
+    const setup = openWorktodoAtPath(databasePath);
+    const waiting = setup.service.createLabel("Waiting");
+    setup.close();
 
     const first = await connect(databasePath);
     let taskId: string;
     try {
+      const labels = await first.client.callTool({ name: "list_labels", arguments: {} });
+      expect(labels.structuredContent).toMatchObject({ labels: [{ id: waiting.id, name: "Waiting" }] });
+      const discoveredLabelId = (labels.structuredContent?.labels as Array<{ id: string }>)[0].id;
       const created = await first.client.callTool({
         name: "create_task",
         arguments: {
           title: "Persist through stdio",
           notes: "Use the compiled server",
           priority: "high",
+          labelIds: [discoveredLabelId],
           due: { kind: "allDay", date: "2026-08-31" },
         },
       });
@@ -95,12 +103,13 @@ describe("Worktodo MCP stdio server", () => {
           notes: "Use the compiled server",
           priority: "high",
           placement: { kind: "inbox" },
+          labelIds: [discoveredLabelId],
           due: { kind: "allDay", date: "2026-08-31" },
         },
       });
       taskId = (created.structuredContent?.task as { id: string }).id;
       expect(tasksFrom(await first.client.callTool({ name: "list_tasks", arguments: { view: "inbox" } }))).toEqual([
-        expect.objectContaining({ id: taskId, title: "Persist through stdio" }),
+        expect.objectContaining({ id: taskId, title: "Persist through stdio", labelIds: [waiting.id] }),
       ]);
     } finally {
       await first.client.close();
@@ -109,7 +118,7 @@ describe("Worktodo MCP stdio server", () => {
     const second = await connect(databasePath);
     try {
       expect(tasksFrom(await second.client.callTool({ name: "list_tasks", arguments: { view: "inbox" } }))).toEqual([
-        expect.objectContaining({ id: taskId, title: "Persist through stdio" }),
+        expect.objectContaining({ id: taskId, title: "Persist through stdio", labelIds: [waiting.id] }),
       ]);
     } finally {
       await second.client.close();

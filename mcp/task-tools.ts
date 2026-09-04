@@ -2,6 +2,7 @@ import { type CallToolResult, McpServer, type ToolAnnotations } from "@modelcont
 import { z } from "zod";
 import { DomainError, placementOf, type Task } from "../src/shared/domain/model";
 import type { TaskService } from "../src/shared/domain/task-service";
+import { normalizeLabelName } from "../src/shared/domain/validation";
 import {
   loadTaskView,
   resolveTaskView,
@@ -38,6 +39,7 @@ const taskSchema = z
     priority: prioritySchema,
     position: nonNegativeSafeIntegerSchema,
     placement: placementSchema,
+    labelIds: z.array(z.string()),
     due: dueSchema,
     createdAtMs: nonNegativeSafeIntegerSchema,
     updatedAtMs: nonNegativeSafeIntegerSchema,
@@ -54,9 +56,18 @@ const projectSchema = z
     updatedAtMs: nonNegativeSafeIntegerSchema,
   })
   .strict();
+const labelSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    position: nonNegativeSafeIntegerSchema,
+    createdAtMs: nonNegativeSafeIntegerSchema,
+    updatedAtMs: nonNegativeSafeIntegerSchema,
+  })
+  .strict();
 const taskViewSchema = z.enum(TASK_VIEW_KINDS);
 const pageInputSchema = {
-  query: z.string().optional().describe("Case-insensitive title, notes, or project substring"),
+  query: z.string().optional().describe("Case-insensitive search substring"),
   offset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
 };
@@ -96,6 +107,7 @@ function taskDocument(task: Task): TaskDocument {
     priority: task.priority,
     position: task.position,
     placement: placementOf(task),
+    labelIds: task.labelIds,
     due: task.due,
     createdAtMs: task.createdAtMs,
     updatedAtMs: task.updatedAtMs,
@@ -155,7 +167,7 @@ function withSession(
 }
 
 function normalizedSearch(value: string): string {
-  return value.normalize("NFKC").toLocaleLowerCase();
+  return normalizeLabelName(value);
 }
 
 function filterTasks(service: TaskService, tasks: Task[], query: string | undefined): Task[] {
@@ -166,11 +178,16 @@ function filterTasks(service: TaskService, tasks: Task[], query: string | undefi
 
   const search = normalizedSearch(trimmed);
   const projectNames = new Map(service.listProjects().map((project) => [project.id, project.name]));
+  const labelNames = new Map(service.listLabels().map((label) => [label.id, label.name]));
   return tasks.filter((task) => {
     const values = [
       task.title,
       task.notes,
       task.projectId === null ? "Inbox" : (projectNames.get(task.projectId) ?? ""),
+      ...task.labelIds.flatMap((labelId) => {
+        const name = labelNames.get(labelId);
+        return name ? [name] : [];
+      }),
     ];
     return values.some((value) => normalizedSearch(value).includes(search));
   });
@@ -190,6 +207,14 @@ function projectListText(projects: Array<{ id: string; name: string }>, total: n
   }
   const lines = projects.map((project) => `- ${singleLine(project.name)} (${project.id})`);
   return [`Returned ${projects.length} of ${total} matching projects from offset ${offset}.`, ...lines].join("\n");
+}
+
+function labelListText(labels: Array<{ id: string; name: string }>, total: number, offset: number): string {
+  if (total === 0) {
+    return "No labels matched.";
+  }
+  const lines = labels.map((label) => `- ${singleLine(label.name)} (${label.id})`);
+  return [`Returned ${labels.length} of ${total} matching labels from offset ${offset}.`, ...lines].join("\n");
 }
 
 export function registerTaskTools(server: McpServer, dependencies: TaskToolDependencies): void {
@@ -235,14 +260,56 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
   );
 
   server.registerTool(
+    "list_labels",
+    {
+      title: "List Worktodo Labels",
+      description: "List and search a bounded page of global Worktodo labels, including stable assignment IDs.",
+      inputSchema: z.object(pageInputSchema).strict(),
+      outputSchema: z
+        .object({
+          query: z.string().nullable(),
+          ...pageSchema,
+          labels: z.array(labelSchema),
+        })
+        .strict(),
+      annotations: READ_ANNOTATIONS,
+    },
+    async ({ query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
+      withSession("list_labels", dependencies, (service) => {
+        const search = query?.trim();
+        const labels = service.listLabels().filter((label) => {
+          if (!search) {
+            return true;
+          }
+          return normalizedSearch(label.name).includes(normalizedSearch(search));
+        });
+        const page = labels.slice(offset, offset + limit);
+        const output = {
+          query: search || null,
+          offset,
+          limit,
+          total: labels.length,
+          hasMore: offset + page.length < labels.length,
+          labels: page,
+        };
+        return {
+          content: [{ type: "text", text: labelListText(page, labels.length, offset) }],
+          structuredContent: output,
+        };
+      }),
+  );
+
+  server.registerTool(
     "list_tasks",
     {
       title: "List Worktodo Tasks",
-      description: "List and search a bounded page of local tasks by view. Use projectId only with view=project.",
+      description:
+        "List and search a bounded page of local tasks by view. Use projectId only with view=project and labelId only with view=label.",
       inputSchema: z
         .object({
           view: taskViewSchema.optional(),
           projectId: z.string().optional(),
+          labelId: z.string().optional(),
           timeZone: z.string().optional().describe("IANA timezone for all-day and Today/Upcoming evaluation"),
           ...pageInputSchema,
         })
@@ -259,9 +326,9 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
         .strict(),
       annotations: READ_ANNOTATIONS,
     },
-    async ({ view = "all", projectId, timeZone, query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
+    async ({ view = "all", projectId, labelId, timeZone, query, offset = 0, limit = DEFAULT_PAGE_SIZE }) =>
       withSession("list_tasks", dependencies, (service) => {
-        const taskView = loadTaskView(service, resolveTaskView(view, projectId), {
+        const taskView = loadTaskView(service, resolveTaskView(view, projectId, labelId), {
           evaluationInstantMs: dependencies.now(),
           viewerTimeZone: timeZone ?? dependencies.viewerTimeZone(),
         });
@@ -304,13 +371,14 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     {
       title: "Create Worktodo Task",
       description:
-        "Create a local task. Placement defaults to Inbox; notes, priority, and due value use the shared Worktodo task model.",
+        "Create a local task. Placement defaults to Inbox; labelIds replace the complete Label assignment set.",
       inputSchema: z
         .object({
           title: z.string(),
           notes: z.string().optional(),
           priority: prioritySchema.optional(),
           placement: placementSchema.optional(),
+          labelIds: z.array(z.string()).optional(),
           due: dueSchema.optional(),
         })
         .strict(),
@@ -322,9 +390,9 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
         openWorldHint: false,
       },
     },
-    async ({ title, notes, priority, placement = { kind: "inbox" }, due }) =>
+    async ({ title, notes, priority, placement = { kind: "inbox" }, labelIds, due }) =>
       withSession("create_task", dependencies, (service) =>
-        successTaskResult("Created", service.createTask({ title, notes, priority, placement, due })),
+        successTaskResult("Created", service.createTask({ title, notes, priority, placement, labelIds, due })),
       ),
   );
 
@@ -340,6 +408,7 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
           title: z.string().optional(),
           notes: z.string().optional(),
           priority: prioritySchema.optional(),
+          labelIds: z.array(z.string()).optional(),
           due: dueSchema.optional(),
         })
         .strict(),
@@ -351,12 +420,18 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
         openWorldHint: false,
       },
     },
-    async ({ id, title, notes, priority, due }) =>
+    async ({ id, title, notes, priority, labelIds, due }) =>
       withSession("update_task", dependencies, (service) => {
-        if (title === undefined && notes === undefined && priority === undefined && due === undefined) {
+        if (
+          title === undefined &&
+          notes === undefined &&
+          priority === undefined &&
+          labelIds === undefined &&
+          due === undefined
+        ) {
           throw new DomainError("INVALID_ARGUMENT", "Provide at least one task field to update");
         }
-        return successTaskResult("Updated", service.updateTask(id, { title, notes, priority, due }));
+        return successTaskResult("Updated", service.updateTask(id, { title, notes, priority, labelIds, due }));
       }),
   );
 

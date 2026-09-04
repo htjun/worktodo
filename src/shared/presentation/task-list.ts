@@ -204,7 +204,7 @@ export function buildTaskListItems(
       id: entry.task.id,
       title: entry.task.title,
       subtitle: placement,
-      keywords: [placement, entry.task.notes],
+      keywords: [placement, entry.task.notes, ...labelNames],
       accessories: [
         ...labelAccessories,
         ...[priority, due ? `${due.title} ${due.text}` : null, completed, trashed]

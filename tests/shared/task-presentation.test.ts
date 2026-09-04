@@ -200,6 +200,11 @@ describe("task presentation mapping", () => {
     expect(item.detail.labels).toEqual(
       labels.filter((label) => labelIds.includes(label.id)).map((label) => label.name),
     );
+    expect(item.keywords).toEqual([
+      "Personal",
+      "Open the planning workspace",
+      ...labels.filter((label) => labelIds.includes(label.id)).map((label) => label.name),
+    ]);
   });
 
   it("maps lifecycle actions for safe secondary placement", () => {

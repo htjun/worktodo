@@ -79,6 +79,7 @@ describe("Worktodo MCP task tools", () => {
           "complete_task",
           "create_task",
           "get_task",
+          "list_labels",
           "list_projects",
           "list_tasks",
           "move_task",
@@ -90,6 +91,12 @@ describe("Worktodo MCP task tools", () => {
         ].sort(),
       );
       expect(byName.get("list_tasks")?.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      expect(byName.get("list_labels")?.annotations).toMatchObject({
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -109,7 +116,74 @@ describe("Worktodo MCP task tools", () => {
           openWorldHint: false,
         });
       }
-      expect(context.client.getInstructions()).toContain("Use list_projects and list_tasks to resolve stable IDs");
+      expect(context.client.getInstructions()).toContain(
+        "Use list_projects, list_labels, and list_tasks to resolve stable IDs",
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  it("discovers Labels, replaces assignments, filters one Label view, and searches before pagination", async () => {
+    const context = await createContext();
+    try {
+      const waiting = context.service.createLabel("Ｗaiting");
+      const research = context.service.createLabel("Research");
+      const labelsResult = await callTool(context.client, "list_labels", { query: "waiting", limit: 1 });
+      expect(labelsResult.isError).not.toBe(true);
+      expect(labelsResult.structuredContent).toMatchObject({
+        query: "waiting",
+        offset: 0,
+        limit: 1,
+        total: 1,
+        hasMore: false,
+        labels: [{ id: waiting.id, name: "Ｗaiting" }],
+      });
+
+      const first = taskFrom(
+        await callTool(context.client, "create_task", {
+          title: "Review proposal",
+          labelIds: [research.id, waiting.id],
+        }),
+      );
+      expect(first).toMatchObject({ labelIds: [waiting.id, research.id] });
+      const second = taskFrom(
+        await callTool(context.client, "create_task", {
+          title: "Follow up",
+          labelIds: [waiting.id],
+        }),
+      );
+
+      const searched = await callTool(context.client, "list_tasks", {
+        query: "waiting",
+        offset: 1,
+        limit: 1,
+      });
+      expect(searched.structuredContent).toMatchObject({
+        total: 2,
+        offset: 1,
+        limit: 1,
+        hasMore: false,
+        tasks: [{ id: second.id }],
+      });
+
+      const labelView = await callTool(context.client, "list_tasks", { view: "label", labelId: waiting.id });
+      expect((labelView.structuredContent?.tasks as Array<{ id: string }>).map((task) => task.id)).toEqual([
+        first.id,
+        second.id,
+      ]);
+
+      const updated = taskFrom(
+        await callTool(context.client, "update_task", {
+          id: first.id,
+          priority: "high",
+        }),
+      );
+      expect(updated).toMatchObject({ priority: "high", labelIds: [waiting.id, research.id] });
+      expect(taskFrom(await callTool(context.client, "update_task", { id: first.id, labelIds: [] }))).toMatchObject({
+        labelIds: [],
+      });
+      expect(context.service.getTask(first.id as string)).toMatchObject({ projectId: null, labelIds: [] });
     } finally {
       await context.close();
     }
@@ -242,6 +316,7 @@ describe("Worktodo MCP task tools", () => {
     const context = await createContext();
     try {
       const project = context.service.createProject("Work");
+      const label = context.service.createLabel("Waiting");
       const inbox = context.service.createTask({ title: "Inbox", placement: { kind: "inbox" } });
       const today = context.service.createTask({
         title: "Today",
@@ -251,6 +326,7 @@ describe("Worktodo MCP task tools", () => {
       const upcoming = context.service.createTask({
         title: "Tomorrow",
         placement: { kind: "project", projectId: project.id },
+        labelIds: [label.id],
         due: { kind: "allDay", date: "2026-09-01" },
       });
       context.service.completeTask(today.id);
@@ -264,6 +340,7 @@ describe("Worktodo MCP task tools", () => {
         [{ view: "completed" }, [today.id]],
         [{ view: "trash" }, [inbox.id]],
         [{ view: "project", projectId: project.id }, [upcoming.id]],
+        [{ view: "label", labelId: label.id }, [upcoming.id]],
       ];
 
       for (const [args, expectedIds] of views) {
@@ -278,7 +355,7 @@ describe("Worktodo MCP task tools", () => {
         expect(tasks.map((task) => task.id)).toEqual(expectedIds);
       }
 
-      expect(context.getCloseCount()).toBe(7);
+      expect(context.getCloseCount()).toBe(8);
     } finally {
       await context.close();
     }
@@ -302,6 +379,22 @@ describe("Worktodo MCP task tools", () => {
         { type: "text", text: "INVALID_ARGUMENT: projectId is valid only for the project view" },
       ]);
 
+      const missingLabelId = await callTool(context.client, "list_tasks", { view: "label" });
+      expect(missingLabelId.content).toEqual([
+        { type: "text", text: "INVALID_ARGUMENT: The label view requires labelId" },
+      ]);
+
+      const invalidLabelCombination = await callTool(context.client, "list_tasks", {
+        view: "inbox",
+        labelId: id(1),
+      });
+      expect(invalidLabelCombination.content).toEqual([
+        { type: "text", text: "INVALID_ARGUMENT: labelId is valid only for the label view" },
+      ]);
+
+      const missingLabel = await callTool(context.client, "list_tasks", { view: "label", labelId: id(999) });
+      expect(missingLabel.content).toEqual([{ type: "text", text: "NOT_FOUND: Label not found" }]);
+
       const invalidTimeZone = await callTool(context.client, "list_tasks", {
         view: "inbox",
         timeZone: "not/a-zone",
@@ -320,7 +413,21 @@ describe("Worktodo MCP task tools", () => {
       expect(emptyUpdate.content).toEqual([
         { type: "text", text: "INVALID_ARGUMENT: Provide at least one task field to update" },
       ]);
-      expect(context.getCloseCount()).toBe(5);
+      const label = context.service.createLabel("Waiting");
+      const task = context.service.createTask({ title: "Task", placement: { kind: "inbox" } });
+      const duplicateLabels = await callTool(context.client, "update_task", {
+        id: task.id,
+        labelIds: [label.id, label.id],
+      });
+      expect(duplicateLabels.content).toEqual([
+        { type: "text", text: "INVALID_ARGUMENT: Label IDs cannot contain duplicates" },
+      ]);
+      const missingAssignment = await callTool(context.client, "update_task", {
+        id: task.id,
+        labelIds: [id(999)],
+      });
+      expect(missingAssignment.content).toEqual([{ type: "text", text: "NOT_FOUND: Label not found" }]);
+      expect(context.getCloseCount()).toBe(10);
     } finally {
       await context.close();
     }
