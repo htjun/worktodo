@@ -72,7 +72,7 @@ function snapshot(offset: number): WorktodoSnapshot {
       },
       {
         id: id(offset + 5),
-        title: `Completed inbox ${offset}`,
+        title: `Completed no-project task ${offset}`,
         notes: "",
         priority: "low",
         position: 1_024,
@@ -86,7 +86,7 @@ function snapshot(offset: number): WorktodoSnapshot {
       },
       {
         id: id(offset + 6),
-        title: `Active inbox ${offset}`,
+        title: `Active no-project task ${offset}`,
         notes: "",
         priority: "none",
         position: 1_024,

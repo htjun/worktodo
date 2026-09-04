@@ -1,5 +1,5 @@
 import { Form, Icon } from "@raycast/api";
-import { taskEditingPlacementKey, type DueDatePreset } from "./shared/application/task-editing";
+import { taskEditingProjectKey, type DueDatePreset } from "./shared/application/task-editing";
 import type { Label, Project } from "./shared/domain/model";
 
 export function ProjectDropdown({
@@ -14,12 +14,12 @@ export function ProjectDropdown({
   onChange: (value: string) => void;
 }) {
   return (
-    <Form.Dropdown id="placement" title="Project" value={value} error={error} onChange={onChange}>
-      <Form.Dropdown.Item value="inbox" title="Inbox" icon={Icon.Tray} />
+    <Form.Dropdown id="project" title="Project" value={value} error={error} onChange={onChange}>
+      <Form.Dropdown.Item value="no-project" title="No project" icon={Icon.Minus} />
       {projects.map((project) => (
         <Form.Dropdown.Item
           key={project.id}
-          value={taskEditingPlacementKey({ kind: "project", projectId: project.id })}
+          value={taskEditingProjectKey(project.id)}
           title={project.name}
           icon={Icon.Folder}
         />

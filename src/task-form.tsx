@@ -3,10 +3,10 @@ import { useMemo, useState } from "react";
 import {
   TaskEditingInteraction,
   taskEditingDefaults,
-  taskEditingPlacementKey,
+  taskEditingProjectKey,
   type TaskEditingFailureField,
 } from "./shared/application/task-editing";
-import { placementOf, type Label, type Placement, type Priority, type Project, type Task } from "./shared/domain/model";
+import type { Label, Priority, Project, Task } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
 import { DueDateFields, LabelPicker, ProjectDropdown } from "./task-form-controls";
 
@@ -20,7 +20,7 @@ export function TaskForm({
   task,
   projects,
   labels,
-  initialPlacement,
+  initialProjectId,
   initialLabelIds = [],
   viewerTimeZone,
   onSaved,
@@ -29,7 +29,7 @@ export function TaskForm({
   task?: Task;
   projects: readonly Project[];
   labels: readonly Label[];
-  initialPlacement: Placement;
+  initialProjectId: string | null;
   initialLabelIds?: readonly string[];
   viewerTimeZone: string;
   onSaved: () => void;
@@ -38,26 +38,26 @@ export function TaskForm({
   const [referenceInstantMs] = useState(Date.now);
   const editing = useMemo(() => new TaskEditingInteraction(service), [service]);
   const defaults = useMemo(
-    () => taskEditingDefaults(task, initialPlacement, referenceInstantMs, viewerTimeZone, initialLabelIds),
-    [initialLabelIds, initialPlacement, referenceInstantMs, task, viewerTimeZone],
+    () => taskEditingDefaults(task, initialProjectId, referenceInstantMs, viewerTimeZone, initialLabelIds),
+    [initialLabelIds, initialProjectId, referenceInstantMs, task, viewerTimeZone],
   );
   const [priority, setPriority] = useState<Priority>(defaults.priority);
   const [dueDatePreset, setDueDatePreset] = useState(defaults.dueDatePreset);
   const [customDueDate, setCustomDueDate] = useState<Date | null>(() =>
     defaults.customDueAtMs === null ? null : new Date(defaults.customDueAtMs),
   );
-  const [selectedPlacement, setSelectedPlacement] = useState(defaults.selectedPlacement);
+  const [selectedProject, setSelectedProject] = useState(defaults.selectedProject);
   const [selectedLabelIds, setSelectedLabelIds] = useState(defaults.selectedLabelIds);
   const [titleError, setTitleError] = useState<string>();
   const [dueError, setDueError] = useState<string>();
-  const [placementError, setPlacementError] = useState<string>();
+  const [projectError, setProjectError] = useState<string>();
   const [labelError, setLabelError] = useState<string>();
   const [formError, setFormError] = useState<string>();
 
   async function submit(values: FormValues): Promise<boolean> {
     setTitleError(undefined);
     setDueError(undefined);
-    setPlacementError(undefined);
+    setProjectError(undefined);
     setLabelError(undefined);
     setFormError(undefined);
     const outcome = editing.save(
@@ -68,7 +68,7 @@ export function TaskForm({
         priority,
         dueDatePreset,
         customDueAtMs: customDueDate?.getTime() ?? null,
-        selectedPlacement,
+        selectedProject,
         selectedLabelIds,
       },
       { referenceInstantMs, viewerTimeZone, projects, labels },
@@ -77,7 +77,7 @@ export function TaskForm({
       const setFieldError: Record<TaskEditingFailureField, (message: string) => void> = {
         title: setTitleError,
         due: setDueError,
-        placement: setPlacementError,
+        project: setProjectError,
         labels: setLabelError,
         form: setFormError,
       };
@@ -112,11 +112,11 @@ export function TaskForm({
       {!task ? (
         <ProjectDropdown
           projects={projects}
-          value={selectedPlacement}
-          error={placementError}
-          onChange={(placement) => {
-            setSelectedPlacement(placement);
-            setPlacementError(undefined);
+          value={selectedProject}
+          error={projectError}
+          onChange={(project) => {
+            setSelectedProject(project);
+            setProjectError(undefined);
           }}
         />
       ) : null}
@@ -172,17 +172,17 @@ export function MoveTaskForm({
 }) {
   const { pop } = useNavigation();
   const editing = useMemo(() => new TaskEditingInteraction(service), [service]);
-  const [selectedPlacement, setSelectedPlacement] = useState(() => taskEditingPlacementKey(placementOf(task)));
-  const [placementError, setPlacementError] = useState<string>();
+  const [selectedProject, setSelectedProject] = useState(() => taskEditingProjectKey(task.projectId));
+  const [projectError, setProjectError] = useState<string>();
   const [formError, setFormError] = useState<string>();
 
   async function submit(): Promise<boolean> {
     setFormError(undefined);
-    setPlacementError(undefined);
-    const outcome = editing.move(task.id, selectedPlacement, projects);
+    setProjectError(undefined);
+    const outcome = editing.move(task.id, selectedProject, projects);
     if (outcome.status === "failed") {
-      if (outcome.field === "placement") {
-        setPlacementError(outcome.message);
+      if (outcome.field === "project") {
+        setProjectError(outcome.message);
       } else {
         setFormError(outcome.message);
       }
@@ -208,11 +208,11 @@ export function MoveTaskForm({
       <Form.Description title="Task" text={task.title} />
       <ProjectDropdown
         projects={projects}
-        value={selectedPlacement}
-        error={placementError}
-        onChange={(placement) => {
-          setSelectedPlacement(placement);
-          setPlacementError(undefined);
+        value={selectedProject}
+        error={projectError}
+        onChange={(project) => {
+          setSelectedProject(project);
+          setProjectError(undefined);
         }}
       />
       {formError ? <Form.Description title="Error" text={formError} /> : null}

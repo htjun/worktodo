@@ -1,5 +1,5 @@
 import { isStaticTaskViewKind, type TaskView, type TaskViewResult } from "../application/task-views";
-import type { Label, Placement, Project } from "../domain/model";
+import type { Label, Project } from "../domain/model";
 import { addCalendarDays, startOfCalendarDate } from "../domain/queries";
 import { buildAllTaskListSections, buildTaskListItems, type TaskListEntry, type TaskListSection } from "./task-list";
 
@@ -28,12 +28,6 @@ const STATIC_VIEW_CONTENT: Record<Exclude<TaskView["kind"], "project" | "label">
     searchPlaceholder: "Search upcoming tasks",
     emptyTitle: "No upcoming tasks",
     emptyDescription: "Tasks due after today appear here.",
-  },
-  inbox: {
-    title: "Inbox",
-    searchPlaceholder: "Search Inbox",
-    emptyTitle: "Inbox is empty",
-    emptyDescription: "Create a task or move one here.",
   },
   completed: {
     title: "Completed",
@@ -105,13 +99,8 @@ export function taskViewContent(
   return STATIC_VIEW_CONTENT[view.kind];
 }
 
-export function initialPlacementForTaskView(view: TaskView): Placement {
-  switch (view.kind) {
-    case "project":
-      return { kind: "project", projectId: view.projectId };
-    default:
-      return { kind: "inbox" };
-  }
+export function initialProjectIdForTaskView(view: TaskView): string | null {
+  return view.kind === "project" ? view.projectId : null;
 }
 
 export function initialLabelIdsForTaskView(view: TaskView): string[] {

@@ -179,7 +179,7 @@ describe("menu-bar presentation", () => {
     });
   });
 
-  it("shows the project as a compact suffix while leaving Inbox task titles unchanged", () => {
+  it("shows the project as a compact suffix while leaving no-project task titles unchanged", () => {
     const baseTask = {
       id: "task-1",
       title: "Submit report",

@@ -44,7 +44,7 @@ describe("Worktodo application session", () => {
     const label = first.service.createLabel("Next");
     const task = first.service.createTask({
       title: "Protect application wiring",
-      placement: { kind: "project", projectId: project.id },
+      projectId: project.id,
       labelIds: [label.id],
     });
     const exported = first.portability.exportTo(exportDirectory);

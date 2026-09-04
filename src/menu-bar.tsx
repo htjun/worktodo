@@ -273,7 +273,7 @@ export default function Command(props: LaunchProps) {
         <MenuBarExtra.Item
           title="New Task"
           icon={menuIcon(Icon.Plus)}
-          onAction={() => openMyTasks({ view: "inbox", createTask: true })}
+          onAction={() => openMyTasks({ view: "all", createTask: true })}
         />
         <MenuBarExtra.Item
           title="Open All Tasks"

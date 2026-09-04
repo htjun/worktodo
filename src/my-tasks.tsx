@@ -20,7 +20,7 @@ import {
 } from "./shared/application/task-lifecycle-interaction";
 import { loadTaskView, normalizeTaskView, type TaskView } from "./shared/application/task-views";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import { placementOf, type Label, type Project, type Task } from "./shared/domain/model";
+import type { Label, Project, Task } from "./shared/domain/model";
 import { taskLifecycleHistoryTitle, taskLifecycleMutationPresentation } from "./shared/presentation/task-lifecycle";
 import { parseMyTasksLaunchContext, type MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { taskListRowPresentation } from "./shared/presentation/task-list";
@@ -28,7 +28,7 @@ import { EditLabelsForm, MoveTaskForm, TaskForm } from "./task-form";
 import {
   buildTaskViewSections,
   initialLabelIdsForTaskView,
-  initialPlacementForTaskView,
+  initialProjectIdForTaskView,
   lifecycleActionForTaskView,
   TaskViewDropdown,
   taskViewContent,
@@ -270,7 +270,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         service={session.service}
         projects={state.projects}
         labels={state.labels}
-        initialPlacement={{ kind: "inbox" }}
+        initialProjectId={null}
         viewerTimeZone={viewerTimeZone}
         onSaved={refreshAfterUnrelatedMutation}
       />,
@@ -305,7 +305,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
           task={task}
           projects={state.projects}
           labels={state.labels}
-          initialPlacement={placementOf(task)}
+          initialProjectId={task.projectId}
           viewerTimeZone={viewerTimeZone}
           onSaved={refreshAfterUnrelatedMutation}
         />,
@@ -333,7 +333,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       service={session.service}
       projects={state.projects}
       labels={state.labels}
-      initialPlacement={initialPlacementForTaskView(view)}
+      initialProjectId={initialProjectIdForTaskView(view)}
       initialLabelIds={initialLabelIdsForTaskView(view)}
       viewerTimeZone={viewerTimeZone}
       onSaved={refreshAfterUnrelatedMutation}
@@ -484,7 +484,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                                   task={item.task}
                                   projects={state.projects}
                                   labels={state.labels}
-                                  initialPlacement={placementOf(item.task)}
+                                  initialProjectId={item.task.projectId}
                                   viewerTimeZone={viewerTimeZone}
                                   onSaved={refreshAfterUnrelatedMutation}
                                 />

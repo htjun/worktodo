@@ -48,7 +48,7 @@ describe("secondary human workflows", () => {
       const label = createLabel(session.service, "Next", changed);
       const task = session.service.createTask({
         title: "Organize regression coverage",
-        placement: { kind: "project", projectId: project.id },
+        projectId: project.id,
         labelIds: [label.id],
       });
       now = 500;
@@ -90,7 +90,7 @@ describe("secondary human workflows", () => {
     const setup = openWorktodoAtPath(databasePath, options);
     const task = setup.service.createTask({
       title: "Complete from menu",
-      placement: { kind: "inbox" },
+      projectId: null,
       due: { kind: "allDay", date: "2026-08-31" },
     });
     setup.close();
@@ -167,7 +167,7 @@ describe("secondary human workflows", () => {
       now: () => 1_000,
       recoveryDirectory: join(sourceDirectory, "recovery"),
     });
-    source.service.createTask({ title: "Imported task", placement: { kind: "inbox" } });
+    source.service.createTask({ title: "Imported task", projectId: null });
     const exported = source.portability.exportTo(exportDirectory);
     source.close();
 
@@ -177,7 +177,7 @@ describe("secondary human workflows", () => {
       now: () => 2_000,
       recoveryDirectory: join(targetDirectory, "recovery"),
     });
-    target.service.createTask({ title: "Current task", placement: { kind: "inbox" } });
+    target.service.createTask({ title: "Current task", projectId: null });
     const prepared = target.portability.prepare(exported.path);
     const onReplaced = vi.fn();
 

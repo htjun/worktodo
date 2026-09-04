@@ -16,19 +16,19 @@ Worktodo is direct, calm, and compact. Copy should describe the state or next ac
 
 ## Interface patterns
 
-| Context                                | Pattern                                      | Example                                     |
-| -------------------------------------- | -------------------------------------------- | ------------------------------------------- |
-| Command, navigation, and action titles | Title Case; no ending punctuation            | `New Task`, `Move to Trash`                 |
-| Action in an object submenu            | Verb without the repeated object             | `Complete`, `Open`, `Edit`                  |
-| Form-opening action                    | `New` + object                               | `New Project`                               |
-| Form submission                        | Concrete verb + object                       | `Create Project`, `Save Task`               |
-| Success feedback                       | Object + past-tense verb                     | `Task created`                              |
-| Failure feedback                       | `Unable to` + verb + object                  | `Unable to create task`                     |
-| Search placeholder                     | Sentence case; name the searchable set       | `Search completed tasks`                    |
-| Empty-state title                      | Short statement of the state                 | `No tasks yet`                              |
-| Empty-state description                | One sentence with the next step or view rule | `Create a task to get started.`             |
-| Confirmation title                     | Concrete destructive question                | `Remove “Planning”?`                        |
-| Confirmation message                   | State the user-visible consequence           | `Tasks in this project will move to Inbox.` |
+| Context                                | Pattern                                      | Example                                       |
+| -------------------------------------- | -------------------------------------------- | --------------------------------------------- |
+| Command, navigation, and action titles | Title Case; no ending punctuation            | `New Task`, `Move to Trash`                   |
+| Action in an object submenu            | Verb without the repeated object             | `Complete`, `Open`, `Edit`                    |
+| Form-opening action                    | `New` + object                               | `New Project`                                 |
+| Form submission                        | Concrete verb + object                       | `Create Project`, `Save Task`                 |
+| Success feedback                       | Object + past-tense verb                     | `Task created`                                |
+| Failure feedback                       | `Unable to` + verb + object                  | `Unable to create task`                       |
+| Search placeholder                     | Sentence case; name the searchable set       | `Search completed tasks`                      |
+| Empty-state title                      | Short statement of the state                 | `No tasks yet`                                |
+| Empty-state description                | One sentence with the next step or view rule | `Create a task to get started.`               |
+| Confirmation title                     | Concrete destructive question                | `Remove “Planning”?`                          |
+| Confirmation message                   | State the user-visible consequence           | `Tasks in this project will have no project.` |
 
 ## Terminology
 
@@ -38,7 +38,7 @@ Worktodo is direct, calm, and compact. Copy should describe the state or next ac
 - Tasks are moved to `Trash` because the operation is recoverable. Do not call this remove or delete.
 - Projects and labels are removed because their definitions are deleted. Confirmations explain what happens to their tasks or assignments.
 - Use `Export Backup` and `Restore Backup` for the backup workflow. Use `Replace Worktodo Data` only at the destructive confirmation step.
-- Capitalize `Inbox` and `Trash` as named destinations. Use lowercase for task, project, and label in sentences.
+- Capitalize `Trash` as a named destination. Use lowercase for task, project, and label in sentences.
 
 ## Punctuation and ellipses
 

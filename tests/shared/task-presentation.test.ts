@@ -56,35 +56,30 @@ describe("task presentation mapping", () => {
       emptyTitle: "Nothing due today",
       emptyDescription: "Overdue tasks also appear here.",
     });
-    expect(taskViewContent({ kind: "inbox" }, [], [])).toMatchObject({
-      searchPlaceholder: "Search Inbox",
-      emptyTitle: "Inbox is empty",
-      emptyDescription: "Create a task or move one here.",
-    });
   });
 
-  it("groups All Tasks under Inbox and non-empty projects in project order", () => {
+  it("groups All Tasks under No project and non-empty projects in project order", () => {
     const work: Project = { ...project, id: "work", name: "Work", position: 2_048 };
     const empty: Project = { ...project, id: "empty", name: "Empty", position: 3_072 };
-    const inboxTask = task({ id: "inbox", projectId: null });
+    const noProjectTask = task({ id: "no-project", projectId: null });
     const workTask = task({ id: "work-task", projectId: work.id });
     const directPersonalTask = task({ id: "personal-direct" });
     const secondPersonalTask = task({ id: "personal-second" });
 
     const groups = buildAllTaskListSections(
-      [inboxTask, workTask, directPersonalTask, secondPersonalTask],
+      [noProjectTask, workTask, directPersonalTask, secondPersonalTask],
       [work, empty, project],
       [],
       "Australia/Melbourne",
     );
 
     expect(groups.map(({ key, title }) => ({ key, title }))).toEqual([
-      { key: "all:inbox", title: "Inbox" },
+      { key: "all:no-project", title: "No project" },
       { key: "all:project:work", title: "Work" },
       { key: `all:project:${project.id}`, title: "Personal" },
     ]);
     expect(groups.map((group) => group.items.map((item) => [item.id, item.subtitle]))).toEqual([
-      [["inbox", "Inbox"]],
+      [["no-project", "No project"]],
       [["work-task", "Work"]],
       [
         ["personal-direct", "Personal"],
@@ -93,11 +88,11 @@ describe("task presentation mapping", () => {
     ]);
   });
 
-  it("preserves query order and supplies due, priority, and placement metadata", () => {
+  it("preserves query order and supplies due, priority, and project metadata", () => {
     const first = task();
     const second = task({
       id: "00000000-0000-4000-8000-000000000004",
-      title: "Inbox task",
+      title: "No-project task",
       projectId: null,
       priority: "none",
       due: { kind: "none" },
@@ -117,10 +112,10 @@ describe("task presentation mapping", () => {
       ],
       keywords: ["Personal", "Open the planning workspace"],
     });
-    expect(items[1]).toMatchObject({ subtitle: "Inbox", accessories: [] });
+    expect(items[1]).toMatchObject({ subtitle: "No project", accessories: [] });
   });
 
-  it("builds deterministic detail metadata for every placement and due kind", () => {
+  it("builds deterministic detail metadata for every project and due kind", () => {
     const timedAtMs = Date.parse("2026-10-04T02:30:00.000Z");
     const timedLabel = new Intl.DateTimeFormat(undefined, {
       dateStyle: "medium",
@@ -158,7 +153,7 @@ describe("task presentation mapping", () => {
 
     expect(first.map((item) => item.detail.metadata.slice(0, 3))).toEqual([
       [
-        { title: "Project", text: "Inbox" },
+        { title: "Project", text: "No project" },
         { title: "Priority", text: "None" },
         { title: "Due Date", text: "None" },
       ],
@@ -227,8 +222,8 @@ describe("task presentation mapping", () => {
     ]);
   });
 
-  it("maps lifecycle actions for safe secondary placement", () => {
-    for (const viewKind of ["all", "today", "upcoming", "inbox", "project"]) {
+  it("maps lifecycle actions for safe secondary views", () => {
+    for (const viewKind of ["all", "today", "upcoming", "project"]) {
       const kind = taskLifecycleActionKindForViewKind(viewKind);
       expect({ kind, ...taskLifecycleMutationPresentation(kind) }).toEqual({
         kind: "complete",

@@ -47,9 +47,9 @@ type DuePresentation = {
   text: string;
 };
 
-function placementLabel(task: Task, projects: Map<string, Project>): string {
+function projectLabel(task: Task, projects: Map<string, Project>): string {
   if (task.projectId === null) {
-    return "Inbox";
+    return "No project";
   }
   return projects.get(task.projectId)?.name ?? task.projectId;
 }
@@ -151,13 +151,13 @@ function priorityDetailLabel(task: Task): string {
 
 function detailPresentation(
   entry: TaskListEntry,
-  placement: string,
+  project: string,
   labelNames: string[],
   viewerTimeZone: string,
 ): TaskDetailPresentation {
   const due = duePresentation(entry, viewerTimeZone);
   const metadata: TaskDetailField[] = [
-    { title: "Project", text: placement },
+    { title: "Project", text: project },
     { title: "Priority", text: priorityDetailLabel(entry.task) },
     due,
     { title: "Created", text: instantLabel(entry.task.createdAtMs, viewerTimeZone) },
@@ -187,7 +187,7 @@ export function buildTaskListItems(
   const labelMap = new Map(labels.map((label) => [label.id, label.name]));
 
   return entries.map((entry) => {
-    const placement = placementLabel(entry.task, projectMap);
+    const project = projectLabel(entry.task, projectMap);
     const labelNames = entry.task.labelIds.flatMap((labelId) => {
       const name = labelMap.get(labelId);
       return name ? [name] : [];
@@ -203,15 +203,15 @@ export function buildTaskListItems(
     return {
       id: entry.task.id,
       title: entry.task.title,
-      subtitle: placement,
-      keywords: [placement, entry.task.notes, ...labelNames],
+      subtitle: project,
+      keywords: [project, entry.task.notes, ...labelNames],
       accessories: [
         ...labelAccessories,
         ...[priority, due ? `${due.title} ${due.text}` : null, completed, trashed]
           .filter((value): value is string => value !== null)
           .map((text): TaskListAccessory => ({ kind: "text", text })),
       ],
-      detail: detailPresentation(entry, placement, labelNames, viewerTimeZone),
+      detail: detailPresentation(entry, project, labelNames, viewerTimeZone),
       task: entry.task,
     };
   });
@@ -225,8 +225,8 @@ export function buildAllTaskListSections(
 ): TaskListSection[] {
   const groups = [
     {
-      key: "all:inbox",
-      title: "Inbox",
+      key: "all:no-project",
+      title: "No project",
       tasks: tasks.filter((task) => task.projectId === null),
     },
     ...projects.map((project) => ({

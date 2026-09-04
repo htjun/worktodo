@@ -147,11 +147,11 @@ describe("interface copy", () => {
 });
 
 describe("Label UI adapters", () => {
-  it("keeps Project placement flat and projects stable Label IDs through one TagPicker", () => {
+  it("keeps Project selection flat and projects stable Label IDs through one TagPicker", () => {
     const source = readFileSync(join(process.cwd(), "src/task-form-controls.tsx"), "utf8");
 
-    expect(source).toContain('<Form.Dropdown.Item value="inbox" title="Inbox"');
-    expect(source).toContain('taskEditingPlacementKey({ kind: "project", projectId: project.id })');
+    expect(source).toContain('<Form.Dropdown.Item value="no-project" title="No project"');
+    expect(source).toContain("taskEditingProjectKey(project.id)");
     expect(source).toContain('<Form.TagPicker id="labels" title="Labels" value={value}');
     expect(source).toContain("<Form.TagPicker.Item key={label.id} value={label.id} title={label.name} />");
     expect(source).not.toContain("Section");
@@ -164,7 +164,7 @@ describe("Label UI adapters", () => {
     expect(quickAdd).toContain("labels: session.service.listLabels()");
     expect(quickAdd).toContain("selectedLabelIds,");
     expect(quickAdd).toContain("labels={state.labels}");
-    expect(taskForm).toContain("taskEditingDefaults(task, initialPlacement");
+    expect(taskForm).toContain("taskEditingDefaults(task, initialProjectId");
     expect(taskForm).toContain("useState(defaults.selectedLabelIds)");
     expect(taskForm).toContain("editing.assignLabels(task.id, selectedLabelIds)");
     expect(taskForm).toContain('navigationTitle="Edit Labels"');
@@ -195,9 +195,9 @@ describe("Label UI adapters", () => {
     expect(views).toContain('<List.Dropdown.Section title="Labels">');
     expect(views).toContain("value={`label:${label.id}`}");
     expect(tasks).toContain("normalizeTaskView(view, projects, labels)");
-    expect(tasks).toContain("initialPlacement={initialPlacementForTaskView(view)}");
+    expect(tasks).toContain("initialProjectId={initialProjectIdForTaskView(view)}");
     expect(tasks).toContain("initialLabelIds={initialLabelIdsForTaskView(view)}");
-    expect(presentation).toContain("keywords: [placement, entry.task.notes, ...labelNames]");
+    expect(presentation).toContain("keywords: [project, entry.task.notes, ...labelNames]");
   });
 });
 

@@ -75,12 +75,6 @@ export function queryAllTasks(tasks: readonly Task[], viewerTimeZone: string): T
     });
 }
 
-export function queryInbox(tasks: readonly Task[]): Task[] {
-  return tasks
-    .filter((task) => task.projectId === null && task.completedAtMs === null && task.trashedAtMs === null)
-    .sort(compareOrdinaryTasks);
-}
-
 export function queryProject(tasks: readonly Task[], projectId: string): Task[] {
   return tasks
     .filter((task) => task.projectId === projectId && task.completedAtMs === null && task.trashedAtMs === null)

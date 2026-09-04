@@ -1,13 +1,4 @@
-import {
-  DomainError,
-  placementOf,
-  type DueValue,
-  type Label,
-  type Placement,
-  type Priority,
-  type Project,
-  type Task,
-} from "../domain/model";
+import { DomainError, type DueValue, type Label, type Priority, type Project, type Task } from "../domain/model";
 import { addCalendarDays, calendarDateAt, startOfCalendarDate } from "../domain/queries";
 import type { CreateTaskInput, TaskService, UpdateTaskInput } from "../domain/task-service";
 
@@ -19,7 +10,7 @@ export type TaskEditingValues = {
   priority: Priority;
   dueDatePreset: DueDatePreset;
   customDueAtMs: number | null;
-  selectedPlacement: string;
+  selectedProject: string;
   selectedLabelIds: string[];
 };
 
@@ -32,7 +23,7 @@ export type TaskEditingContext = {
 
 export type TaskEditingDefaults = TaskEditingValues;
 
-export type TaskEditingFailureField = "title" | "due" | "placement" | "labels" | "form";
+export type TaskEditingFailureField = "title" | "due" | "project" | "labels" | "form";
 
 export type TaskEditingOutcome =
   | { status: "succeeded"; operation: "create" | "update" | "move"; task: Task }
@@ -114,12 +105,12 @@ function labelIdsForValues(values: TaskEditingValues, context: TaskEditingContex
 
 function createInput(values: TaskEditingValues, context: TaskEditingContext): CreateTaskInput {
   const due = dueForValues(undefined, values, context);
-  const placement = taskEditingPlacementFromKey(values.selectedPlacement, context.projects);
+  const projectId = taskEditingProjectIdFromKey(values.selectedProject, context.projects);
   return {
     title: values.title,
     notes: values.notes,
     priority: values.priority,
-    placement,
+    projectId,
     labelIds: labelIdsForValues(values, context),
     due,
   };
@@ -143,8 +134,8 @@ function failure(
   if (error instanceof DomainError && error.code === "INVALID_DUE_VALUE") {
     return { status: "failed", operation, field: "due", message };
   }
-  if (error instanceof DomainError && error.code === "INVALID_PLACEMENT") {
-    return { status: "failed", operation, field: "placement", message };
+  if (error instanceof DomainError && error.code === "INVALID_PROJECT") {
+    return { status: "failed", operation, field: "project", message };
   }
   if (error instanceof DomainError && (message.startsWith("Label") || message.includes("Label ID"))) {
     return { status: "failed", operation, field: "labels", message };
@@ -155,31 +146,26 @@ function failure(
   return { status: "failed", operation, field: "form", message };
 }
 
-export function taskEditingPlacementKey(placement: Placement): string {
-  switch (placement.kind) {
-    case "inbox":
-      return "inbox";
-    case "project":
-      return `${PROJECT_PREFIX}${placement.projectId}`;
-  }
+export function taskEditingProjectKey(projectId: string | null): string {
+  return projectId === null ? "no-project" : `${PROJECT_PREFIX}${projectId}`;
 }
 
-export function taskEditingPlacementFromKey(key: string, projects: readonly Project[]): Placement {
-  if (key === "inbox") {
-    return { kind: "inbox" };
+export function taskEditingProjectIdFromKey(key: string, projects: readonly Project[]): string | null {
+  if (key === "no-project") {
+    return null;
   }
   if (key.startsWith(PROJECT_PREFIX)) {
     const projectId = key.slice(PROJECT_PREFIX.length);
     if (projects.some((project) => project.id === projectId)) {
-      return { kind: "project", projectId };
+      return projectId;
     }
   }
-  throw new DomainError("INVALID_PLACEMENT", "Choose an existing project");
+  throw new DomainError("INVALID_PROJECT", "Choose an existing project");
 }
 
 export function taskEditingDefaults(
   task: Task | undefined,
-  initialPlacement: Placement,
+  initialProjectId: string | null,
   referenceInstantMs: number,
   viewerTimeZone: string,
   initialLabelIds: readonly string[] = [],
@@ -191,7 +177,7 @@ export function taskEditingDefaults(
       priority: "none",
       dueDatePreset: "none",
       customDueAtMs: null,
-      selectedPlacement: taskEditingPlacementKey(initialPlacement),
+      selectedProject: taskEditingProjectKey(initialProjectId),
       selectedLabelIds: [...initialLabelIds],
     };
   }
@@ -206,7 +192,7 @@ export function taskEditingDefaults(
         : task.due.kind === "allDay"
           ? startOfCalendarDate(task.due.date, viewerTimeZone)
           : task.due.instantMs,
-    selectedPlacement: taskEditingPlacementKey(placementOf(task)),
+    selectedProject: taskEditingProjectKey(task.projectId),
     selectedLabelIds: [...task.labelIds],
   };
 }
@@ -223,7 +209,7 @@ export function createOperationScopedTaskEditingMutations(openSession: OpenTaskE
   return {
     createTask: (input) => run((service) => service.createTask(input)),
     updateTask: (taskId, input) => run((service) => service.updateTask(taskId, input)),
-    moveTask: (taskId, placement) => run((service) => service.moveTask(taskId, placement)),
+    moveTask: (taskId, projectId) => run((service) => service.moveTask(taskId, projectId)),
   };
 }
 
@@ -245,10 +231,10 @@ export class TaskEditingInteraction {
     }
   }
 
-  move(taskId: string, selectedPlacement: string, projects: readonly Project[]): TaskEditingOutcome {
+  move(taskId: string, selectedProject: string, projects: readonly Project[]): TaskEditingOutcome {
     try {
-      const placement = taskEditingPlacementFromKey(selectedPlacement, projects);
-      return { status: "succeeded", operation: "move", task: this.mutations.moveTask(taskId, placement) };
+      const projectId = taskEditingProjectIdFromKey(selectedProject, projects);
+      return { status: "succeeded", operation: "move", task: this.mutations.moveTask(taskId, projectId) };
     } catch (error) {
       return failure("move", error);
     }

@@ -1,4 +1,4 @@
-import { DomainError, type DueValue, type Placement, type Priority } from "./model";
+import { DomainError, type DueValue, type Priority } from "./model";
 
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -98,21 +98,4 @@ export function validateDueValue(value: unknown): DueValue {
     };
   }
   throw new DomainError("INVALID_DUE_VALUE", "Due value fields do not match its kind");
-}
-
-export function validatePlacement(value: unknown): Placement {
-  if (typeof value !== "object" || value === null || !("kind" in value)) {
-    throw new DomainError("INVALID_PLACEMENT", "Placement is invalid");
-  }
-  if (value.kind === "inbox") {
-    return { kind: "inbox" };
-  }
-  if (value.kind === "project" && "projectId" in value) {
-    try {
-      return { kind: "project", projectId: validateId(value.projectId) };
-    } catch {
-      throw new DomainError("INVALID_PLACEMENT", "Project placement is invalid");
-    }
-  }
-  throw new DomainError("INVALID_PLACEMENT", "Placement fields do not match its kind");
 }

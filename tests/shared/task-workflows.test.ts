@@ -10,7 +10,7 @@ import {
   createOperationScopedTaskEditingMutations,
   TaskEditingInteraction,
   taskEditingDefaults,
-  taskEditingPlacementKey,
+  taskEditingProjectKey,
 } from "../../src/shared/application/task-editing";
 import {
   loadTaskView,
@@ -23,7 +23,7 @@ import { openWorktodoAtPath } from "../../src/shared/application/worktodo";
 import {
   buildTaskViewSections,
   initialLabelIdsForTaskView,
-  initialPlacementForTaskView,
+  initialProjectIdForTaskView,
   taskViewContent,
   taskViewFromKey,
   taskViewKey,
@@ -88,7 +88,7 @@ describe("main task workflows", () => {
           priority: "none",
           dueDatePreset: "today",
           customDueAtMs: null,
-          selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
+          selectedProject: taskEditingProjectKey(null),
           selectedLabelIds: [],
         },
         { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], labels: [] },
@@ -119,7 +119,7 @@ describe("main task workflows", () => {
           priority: "high",
           dueDatePreset: "tomorrow",
           customDueAtMs: null,
-          selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
+          selectedProject: taskEditingProjectKey(null),
           selectedLabelIds: [],
         },
         { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], labels: [] },
@@ -130,9 +130,7 @@ describe("main task workflows", () => {
       events.push("task saved");
       const saved = savedOutcome.task;
       now = 3_000;
-      const movedOutcome = editing.move(saved.id, taskEditingPlacementKey({ kind: "project", projectId: project.id }), [
-        project,
-      ]);
+      const movedOutcome = editing.move(saved.id, taskEditingProjectKey(project.id), [project]);
       if (movedOutcome.status !== "succeeded") {
         throw new Error(movedOutcome.message);
       }
@@ -145,7 +143,7 @@ describe("main task workflows", () => {
         projectId: project.id,
         due: { kind: "allDay", date: "2026-09-01" },
       });
-      expect(buildSections({ kind: "inbox" })[0].items).toEqual([]);
+      expect(buildSections({ kind: "all" }).map((section) => section.title)).toEqual(["Work"]);
       expect(buildSections({ kind: "project", projectId: project.id })[0].items.map((item) => item.id)).toEqual([
         quickTask.id,
       ]);
@@ -220,31 +218,30 @@ describe("main task workflows", () => {
     try {
       const project = session.service.createProject("Work");
       const label = session.service.createLabel("Waiting");
-      const inbox = session.service.createTask({
-        title: "Inbox",
-        placement: { kind: "inbox" },
+      const noProject = session.service.createTask({
+        title: "No project",
+        projectId: null,
         labelIds: [label.id],
       });
       const today = session.service.createTask({
         title: "Today",
-        placement: { kind: "project", projectId: project.id },
+        projectId: project.id,
         labelIds: [label.id],
         due: { kind: "allDay", date: "2026-08-31" },
       });
       const upcoming = session.service.createTask({
         title: "Tomorrow",
-        placement: { kind: "project", projectId: project.id },
+        projectId: project.id,
         labelIds: [label.id],
         due: { kind: "allDay", date: "2026-09-01" },
       });
       session.service.completeTask(today.id);
-      session.service.trashTask(inbox.id);
+      session.service.trashTask(noProject.id);
 
       const views: TaskView[] = [
         { kind: "all" },
         { kind: "today" },
         { kind: "upcoming" },
-        { kind: "inbox" },
         { kind: "completed" },
         { kind: "trash" },
         { kind: "project", projectId: project.id },
@@ -259,9 +256,8 @@ describe("main task workflows", () => {
         ["all", [upcoming.id]],
         ["today", []],
         ["upcoming", [upcoming.id]],
-        ["inbox", []],
         ["completed", [today.id]],
-        ["trash", [inbox.id]],
+        ["trash", [noProject.id]],
         [`project:${project.id}`, [upcoming.id]],
         [`label:${label.id}`, [upcoming.id]],
       ]);
@@ -272,11 +268,8 @@ describe("main task workflows", () => {
       expect(taskViewFromKey(`label:${label.id}`, [project], [label])).toEqual({ kind: "label", labelId: label.id });
       expect(normalizeTaskView({ kind: "project", projectId: project.id }, [], [label])).toEqual({ kind: "all" });
       expect(normalizeTaskView({ kind: "label", labelId: label.id }, [project], [])).toEqual({ kind: "all" });
-      expect(initialPlacementForTaskView({ kind: "project", projectId: project.id })).toEqual({
-        kind: "project",
-        projectId: project.id,
-      });
-      expect(initialPlacementForTaskView({ kind: "label", labelId: label.id })).toEqual({ kind: "inbox" });
+      expect(initialProjectIdForTaskView({ kind: "project", projectId: project.id })).toBe(project.id);
+      expect(initialProjectIdForTaskView({ kind: "label", labelId: label.id })).toBeNull();
       expect(initialLabelIdsForTaskView({ kind: "label", labelId: label.id })).toEqual([label.id]);
       expect(taskViewContent({ kind: "project", projectId: project.id }, [project], [label])).toMatchObject({
         title: "Work",
@@ -290,7 +283,7 @@ describe("main task workflows", () => {
       const labelView: TaskView = { kind: "label", labelId: label.id };
       const defaults = taskEditingDefaults(
         undefined,
-        initialPlacementForTaskView(labelView),
+        initialProjectIdForTaskView(labelView),
         evaluationInstantMs,
         viewerTimeZone,
         initialLabelIdsForTaskView(labelView),
@@ -336,17 +329,17 @@ describe("main task workflows", () => {
       const project = session.service.createProject("Work");
       const overdue = session.service.createTask({
         title: "Overdue",
-        placement: { kind: "inbox" },
+        projectId: null,
         due: { kind: "allDay", date: "2026-08-30" },
       });
       const today = session.service.createTask({
         title: "Today",
-        placement: { kind: "project", projectId: project.id },
+        projectId: project.id,
         due: { kind: "allDay", date: "2026-08-31" },
       });
       const upcoming = session.service.createTask({
         title: "Tomorrow",
-        placement: { kind: "project", projectId: project.id },
+        projectId: project.id,
         due: { kind: "allDay", date: "2026-09-01" },
       });
       const context = { evaluationInstantMs, viewerTimeZone: "Australia/Victoria" };
@@ -396,11 +389,11 @@ describe("main task workflows", () => {
       expect(resolveTaskView("label", undefined, id(99))).toEqual({ kind: "label", labelId: id(99) });
       expect(() => resolveTaskView("project", undefined, undefined)).toThrow("The project view requires projectId");
       expect(() => resolveTaskView("label", undefined, undefined)).toThrow("The label view requires labelId");
-      expect(() => resolveTaskView("inbox", project.id, undefined)).toThrow(
+      expect(() => resolveTaskView("all", project.id, undefined)).toThrow(
         "projectId is valid only for the project view",
       );
-      expect(() => resolveTaskView("inbox", undefined, id(99))).toThrow("labelId is valid only for the label view");
-      expect(() => loadTaskView(session.service, { kind: "inbox" }, { ...context, evaluationInstantMs: -1 })).toThrow(
+      expect(() => resolveTaskView("all", undefined, id(99))).toThrow("labelId is valid only for the label view");
+      expect(() => loadTaskView(session.service, { kind: "all" }, { ...context, evaluationInstantMs: -1 })).toThrow(
         "Evaluation instant must be a non-negative safe integer",
       );
     } finally {

@@ -3,7 +3,6 @@ import type { DueValue, Priority, Task } from "../../src/shared/domain/model";
 import {
   queryAllTasks,
   queryCompleted,
-  queryInbox,
   queryLabel,
   queryProject,
   queryToday,
@@ -189,18 +188,6 @@ describe("task queries", () => {
       id(1),
       id(2),
     ]);
-  });
-
-  it("returns active incomplete Inbox tasks in canonical ordinary order", () => {
-    const tasks = [
-      task(1, { kind: "none" }, { priority: "none", position: 1_024 }),
-      task(2, { kind: "none" }, { priority: "high", position: 2_048 }),
-      task(3, { kind: "none" }, { priority: "high", position: 1_024, createdAtMs: 2_000 }),
-      task(4, { kind: "none" }, { completedAtMs: 2_000 }),
-      task(5, { kind: "none" }, { trashedAtMs: 2_000 }),
-      task(6, { kind: "none" }, { projectId: id(100) }),
-    ];
-    expect(queryInbox(tasks).map((task) => task.id)).toEqual([id(3), id(2), id(1)]);
   });
 
   it("returns active incomplete project and label tasks in canonical ordinary order", () => {

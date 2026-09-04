@@ -232,7 +232,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
   async function remove(project: Project) {
     const confirmed = await confirmAlert({
       title: `Remove “${project.name}”?`,
-      message: "Tasks in this project will move to Inbox.",
+      message: "Tasks in this project will have no project.",
       primaryAction: { title: "Remove Project", style: Alert.ActionStyle.Destructive },
     });
     if (!confirmed) {
@@ -240,7 +240,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
     }
     try {
       removeProject(service, project.id, changed);
-      await showToast(Toast.Style.Success, "Project removed", "Tasks moved to Inbox.");
+      await showToast(Toast.Style.Success, "Project removed", "Tasks now have no project.");
     } catch (error) {
       await showToast(Toast.Style.Failure, "Unable to remove project", messageFrom(error));
     }

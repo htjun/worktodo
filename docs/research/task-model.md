@@ -5,8 +5,8 @@ Last verified: 2026-09-04
 
 ## Model
 
-Worktodo stores Projects, global Labels, and Tasks. A Task belongs to Inbox or one Project and has
-zero or more Labels.
+Worktodo stores Projects, global Labels, and Tasks. A Task optionally belongs to one Project and has
+zero or more Labels. Its Due value is independent of its Project.
 
 ### Project
 
@@ -39,8 +39,8 @@ conversion. Labels are ordered by `(position ASC, createdAtMs ASC, id ASC)`.
 | `title`         | Yes      | Non-empty trimmed title.                                        |
 | `notes`         | Yes      | Plain text, including Unicode and URLs.                         |
 | `priority`      | Yes      | `none`, `low`, `medium`, or `high`.                             |
-| `position`      | Yes      | Non-negative placement order.                                   |
-| `projectId`     | No       | Null for Inbox, otherwise one existing Project ID.              |
+| `position`      | Yes      | Non-negative order within its optional Project.                 |
+| `projectId`     | No       | Null for no Project, otherwise one existing Project ID.         |
 | `labelIds`      | Yes      | Unique existing Label IDs in canonical Label order.             |
 | `due`           | Yes      | No due value, an all-day date, or a timed instant and timezone. |
 | `createdAtMs`   | Yes      | Creation time in Unix epoch milliseconds.                       |
@@ -48,17 +48,17 @@ conversion. Labels are ordered by `(position ASC, createdAtMs ASC, id ASC)`.
 | `completedAtMs` | No       | Completion time, retained while the Task is in Trash.           |
 | `trashedAtMs`   | No       | Recoverable Trash time.                                         |
 
-Placement is `{ kind: "inbox" }` or `{ kind: "project", projectId }`. Label assignment never
-changes placement. Moving between Inbox and Projects, removing a Project, and every lifecycle
-transition preserve `labelIds`.
+Project assignment is a nullable stable Project ID. Label assignment never changes the Project.
+Assigning or clearing a Project, removing a Project, and every lifecycle transition preserve
+`labelIds`.
 
 Task assignment is a set. Duplicate, malformed, or missing Label IDs are rejected before a write.
 Service results always use canonical Label order. Replacing an assignment with the same canonical
 set is a no-op and preserves `updatedAtMs`; a real change advances it monotonically.
 
 Removing a Label cascades only through Task-to-Label associations. It does not move, complete,
-reopen, trash, restore, or delete a Task. Removing a Project appends all of its Tasks to Inbox in
-ordinary Task order and preserves their Labels and lifecycle values.
+reopen, trash, restore, or delete a Task. Removing a Project clears its Tasks' Project IDs, appends
+them after existing no-project Tasks in ordinary Task order, and preserves their Labels and lifecycle values.
 
 ## Due and lifecycle rules
 
@@ -73,8 +73,8 @@ Trash includes trashed Tasks whether complete or incomplete.
 Ordinary Task order is Priority descending, then `position`, `createdAtMs`, and `id` ascending.
 All Tasks places dated Tasks first by effective due instant and undated Tasks last.
 
-Completion, reopening, Trash, and restore are idempotent. Content, placement, and Label changes are
-blocked while a Task is in Trash. Restore preserves completion state, placement, and Labels.
+Completion, reopening, Trash, and restore are idempotent. Content, Project, and Label changes are
+blocked while a Task is in Trash. Restore preserves completion state, Project, and Labels.
 
 ## Schema migration
 
@@ -87,7 +87,7 @@ under `BEGIN IMMEDIATE`:
 - Direct Project Tasks come first. Section Tasks follow in canonical Section and Task order, stay
   in the same Project, and receive the converted Label.
 - Task identity, content, Due values, lifecycle values, and timestamps are preserved.
-- The Task table is rebuilt without Section placement, foreign keys are checked, and
+- The Task table is rebuilt without Section assignment, foreign keys are checked, and
   `user_version` advances only when the transaction succeeds.
 
 ## SQLite schema design

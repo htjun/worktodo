@@ -130,7 +130,7 @@ describe("production schema", () => {
         null,
         402,
       );
-      insertTask.run(id(24), "Inbox", "", "none", 77, null, null, "none", null, null, null, 303, 303, null, null);
+      insertTask.run(id(24), "No project", "", "none", 77, null, null, "none", null, null, null, 303, 303, null, null);
 
       expect(applyMigrations(db)).toEqual({ applied: true, previousVersion: 1, currentVersion: 2 });
       expect(

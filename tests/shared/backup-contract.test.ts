@@ -66,7 +66,7 @@ function completeDocument(): WorktodoBackupDocument {
       },
       {
         id: id(6),
-        title: "Completed inbox",
+        title: "Completed no-project task",
         notes: "Plain notes",
         priority: "low",
         position: 1_024,
@@ -80,7 +80,7 @@ function completeDocument(): WorktodoBackupDocument {
       },
       {
         id: id(5),
-        title: "Active inbox",
+        title: "Active no-project task",
         notes: "",
         priority: "none",
         position: 1_024,

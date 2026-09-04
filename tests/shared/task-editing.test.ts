@@ -3,13 +3,13 @@ import {
   createOperationScopedTaskEditingMutations,
   TaskEditingInteraction,
   taskEditingDefaults,
-  taskEditingPlacementFromKey,
-  taskEditingPlacementKey,
+  taskEditingProjectIdFromKey,
+  taskEditingProjectKey,
   type TaskEditingContext,
   type TaskEditingMutations,
   type TaskEditingValues,
 } from "../../src/shared/application/task-editing";
-import { DomainError, placementFields, type Label, type Project, type Task } from "../../src/shared/domain/model";
+import { DomainError, type Label, type Project, type Task } from "../../src/shared/domain/model";
 
 const project: Project = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -73,7 +73,7 @@ function values(overrides: Partial<TaskEditingValues> = {}): TaskEditingValues {
     priority: "medium",
     dueDatePreset: "none",
     customDueAtMs: null,
-    selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
+    selectedProject: taskEditingProjectKey(null),
     selectedLabelIds: [],
     ...overrides,
   };
@@ -87,7 +87,7 @@ function mutations() {
         notes: input.notes ?? "",
         priority: input.priority ?? "none",
         labelIds: input.labelIds ?? [],
-        ...placementFields(input.placement),
+        projectId: input.projectId ?? null,
         due: input.due ?? { kind: "none" },
       }),
     ),
@@ -100,26 +100,19 @@ function mutations() {
         due: input.due,
       }),
     ),
-    moveTask: vi.fn<TaskEditingMutations["moveTask"]>((_taskId, placement) => task(placementFields(placement))),
+    moveTask: vi.fn<TaskEditingMutations["moveTask"]>((_taskId, projectId) => task({ projectId })),
   };
 }
 
 describe("Task editing interaction", () => {
   it("owns new and edit defaults for every Due kind", () => {
-    expect(
-      taskEditingDefaults(
-        undefined,
-        { kind: "project", projectId: project.id },
-        referenceInstantMs,
-        "Australia/Melbourne",
-      ),
-    ).toEqual({
+    expect(taskEditingDefaults(undefined, project.id, referenceInstantMs, "Australia/Melbourne")).toEqual({
       title: "",
       notes: "",
       priority: "none",
       dueDatePreset: "none",
       customDueAtMs: null,
-      selectedPlacement: taskEditingPlacementKey({ kind: "project", projectId: project.id }),
+      selectedProject: taskEditingProjectKey(project.id),
       selectedLabelIds: [],
     });
 
@@ -130,21 +123,21 @@ describe("Task editing interaction", () => {
           labelIds: [label.id, otherLabel.id],
           due: { kind: "allDay", date: "2026-08-31" },
         }),
-        { kind: "inbox" },
+        null,
         referenceInstantMs,
         "Australia/Melbourne",
       ),
     ).toMatchObject({
       dueDatePreset: "today",
       customDueAtMs: Date.parse("2026-08-30T14:00:00.000Z"),
-      selectedPlacement: taskEditingPlacementKey({ kind: "project", projectId: project.id }),
+      selectedProject: taskEditingProjectKey(project.id),
       selectedLabelIds: [label.id, otherLabel.id],
     });
 
     expect(
       taskEditingDefaults(
         task({ due: { kind: "timed", instantMs: 2_000_000, timeZone: "Pacific/Auckland" } }),
-        { kind: "inbox" },
+        null,
         referenceInstantMs,
         "America/Los_Angeles",
       ),
@@ -206,12 +199,12 @@ describe("Task editing interaction", () => {
     );
   });
 
-  it("updates fields without re-resolving or moving the Task Placement", () => {
+  it("updates fields without re-resolving or moving the Task project", () => {
     const original = task({ projectId: project.id });
     const adapter = mutations();
     const outcome = new TaskEditingInteraction(adapter).save(
       original,
-      values({ selectedPlacement: "stale-placement-value" }),
+      values({ selectedProject: "stale-project-value" }),
       context({ projects: [] }),
     );
 
@@ -259,32 +252,28 @@ describe("Task editing interaction", () => {
   });
 
   it.each([
-    ["Inbox", taskEditingPlacementKey({ kind: "inbox" }), { kind: "inbox" }],
-    [
-      "Project",
-      taskEditingPlacementKey({ kind: "project", projectId: project.id }),
-      { kind: "project", projectId: project.id },
-    ],
-  ] as const)("resolves %s creation against the current catalog", (_label, selectedPlacement, placement) => {
+    ["no project", taskEditingProjectKey(null), null],
+    ["a Project", taskEditingProjectKey(project.id), project.id],
+  ] as const)("resolves %s creation against the current catalog", (_label, selectedProject, projectId) => {
     const adapter = mutations();
-    const outcome = new TaskEditingInteraction(adapter).save(undefined, values({ selectedPlacement }), context());
+    const outcome = new TaskEditingInteraction(adapter).save(undefined, values({ selectedProject }), context());
 
     expect(outcome.status).toBe("succeeded");
-    expect(adapter.createTask).toHaveBeenCalledWith(expect.objectContaining({ placement }));
+    expect(adapter.createTask).toHaveBeenCalledWith(expect.objectContaining({ projectId }));
   });
 
-  it("returns a stable Placement failure for a missing Project", () => {
+  it("returns a stable Project failure for a missing Project", () => {
     const adapter = mutations();
     const outcome = new TaskEditingInteraction(adapter).save(
       undefined,
-      values({ selectedPlacement: taskEditingPlacementKey({ kind: "project", projectId: project.id }) }),
+      values({ selectedProject: taskEditingProjectKey(project.id) }),
       context({ projects: [] }),
     );
 
     expect(outcome).toEqual({
       status: "failed",
       operation: "create",
-      field: "placement",
+      field: "project",
       message: "Choose an existing project",
     });
     expect(adapter.createTask).not.toHaveBeenCalled();
@@ -312,7 +301,7 @@ describe("Task editing interaction", () => {
         values({
           dueDatePreset: "custom",
           customDueAtMs: null,
-          selectedPlacement: taskEditingPlacementKey({ kind: "project", projectId: project.id }),
+          selectedProject: taskEditingProjectKey(project.id),
         }),
         context({ projects: [] }),
       ),
@@ -356,7 +345,7 @@ describe("Task editing interaction", () => {
     const submission = values({
       title: " Shared values ",
       dueDatePreset: "tomorrow",
-      selectedPlacement: taskEditingPlacementKey({ kind: "project", projectId: project.id }),
+      selectedProject: taskEditingProjectKey(project.id),
     });
 
     new TaskEditingInteraction(direct).save(undefined, submission, context());
@@ -384,19 +373,16 @@ describe("Task editing interaction", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it("moves through the same catalog-aware interface without coupling editing to Placement state", () => {
+  it("moves through the same catalog-aware interface without coupling editing to Project state", () => {
     const adapter = mutations();
     const editing = new TaskEditingInteraction(adapter);
-    const selectedPlacement = taskEditingPlacementKey({ kind: "project", projectId: project.id });
+    const selectedProject = taskEditingProjectKey(project.id);
 
-    expect(editing.move(task().id, selectedPlacement, [project])).toMatchObject({
+    expect(editing.move(task().id, selectedProject, [project])).toMatchObject({
       status: "succeeded",
       operation: "move",
       task: { projectId: project.id },
     });
-    expect(taskEditingPlacementFromKey(selectedPlacement, [project])).toEqual({
-      kind: "project",
-      projectId: project.id,
-    });
+    expect(taskEditingProjectIdFromKey(selectedProject, [project])).toBe(project.id);
   });
 });

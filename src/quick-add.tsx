@@ -4,7 +4,7 @@ import { requestMenuBarRefresh } from "./raycast-commands";
 import {
   createOperationScopedTaskEditingMutations,
   TaskEditingInteraction,
-  taskEditingPlacementKey,
+  taskEditingProjectKey,
   type DueDatePreset,
   type TaskEditingFailureField,
 } from "./shared/application/task-editing";
@@ -48,13 +48,13 @@ export default function QuickAdd() {
   const [editing] = useState(
     () => new TaskEditingInteraction(createOperationScopedTaskEditingMutations(openProductionWorktodo)),
   );
-  const [selectedPlacement, setSelectedPlacement] = useState(() => taskEditingPlacementKey({ kind: "inbox" }));
+  const [selectedProject, setSelectedProject] = useState(() => taskEditingProjectKey(null));
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [dueDatePreset, setDueDatePreset] = useState<DueDatePreset>("none");
   const [customDueDate, setCustomDueDate] = useState<Date | null>(null);
   const [titleError, setTitleError] = useState<string>();
   const [dueError, setDueError] = useState<string>();
-  const [placementError, setPlacementError] = useState<string>();
+  const [projectError, setProjectError] = useState<string>();
   const [labelError, setLabelError] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,7 +62,7 @@ export default function QuickAdd() {
   async function submit(values: QuickAddFormValues): Promise<boolean> {
     setTitleError(undefined);
     setDueError(undefined);
-    setPlacementError(undefined);
+    setProjectError(undefined);
     setLabelError(undefined);
     setFormError(undefined);
     if (state.error) {
@@ -78,7 +78,7 @@ export default function QuickAdd() {
         priority: "none",
         dueDatePreset,
         customDueAtMs: customDueDate?.getTime() ?? null,
-        selectedPlacement,
+        selectedProject,
         selectedLabelIds,
       },
       { referenceInstantMs, viewerTimeZone, projects: state.projects, labels: state.labels },
@@ -88,7 +88,7 @@ export default function QuickAdd() {
       const setFieldError: Record<TaskEditingFailureField, (message: string) => void> = {
         title: setTitleError,
         due: setDueError,
-        placement: setPlacementError,
+        project: setProjectError,
         labels: setLabelError,
         form: setFormError,
       };
@@ -118,11 +118,11 @@ export default function QuickAdd() {
       <Form.TextField id="title" title="Title" autoFocus error={titleError} onChange={() => setTitleError(undefined)} />
       <ProjectDropdown
         projects={state.projects}
-        value={selectedPlacement}
-        error={placementError}
-        onChange={(placement) => {
-          setSelectedPlacement(placement);
-          setPlacementError(undefined);
+        value={selectedProject}
+        error={projectError}
+        onChange={(project) => {
+          setSelectedProject(project);
+          setProjectError(undefined);
         }}
       />
       <LabelPicker

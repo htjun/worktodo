@@ -189,7 +189,7 @@ describe("Worktodo MCP task tools", () => {
     }
   });
 
-  it("lists placements and runs the complete recoverable task lifecycle", async () => {
+  it("lists project assignments and runs the complete recoverable task lifecycle", async () => {
     const context = await createContext();
     try {
       const project = context.service.createProject("Work");
@@ -206,14 +206,14 @@ describe("Worktodo MCP task tools", () => {
           title: "Ship MCP tools",
           notes: "Follow the roadmap",
           priority: "high",
-          placement: { kind: "project", projectId: project.id },
+          projectId: project.id,
           due: { kind: "allDay", date: "2026-08-31" },
         }),
       );
       expect(created).toMatchObject({
         title: "Ship MCP tools",
         priority: "high",
-        placement: { kind: "project", projectId: project.id },
+        projectId: project.id,
       });
       const taskId = created.id as string;
 
@@ -244,9 +244,9 @@ describe("Worktodo MCP task tools", () => {
           }),
         ),
       ).toMatchObject({ title: "Ship bounded MCP tools", priority: "medium", due: { kind: "timed" } });
-      expect(
-        taskFrom(await callTool(context.client, "move_task", { id: taskId, placement: { kind: "inbox" } })),
-      ).toMatchObject({ placement: { kind: "inbox" } });
+      expect(taskFrom(await callTool(context.client, "move_task", { id: taskId, projectId: null }))).toMatchObject({
+        projectId: null,
+      });
 
       const completed = taskFrom(await callTool(context.client, "complete_task", { id: taskId }));
       expect(completed.completedAtMs).toEqual(expect.any(Number));
@@ -277,15 +277,15 @@ describe("Worktodo MCP task tools", () => {
     try {
       context.service.createTask({
         title: "First report",
-        placement: { kind: "inbox" },
+        projectId: null,
         due: { kind: "allDay", date: "2026-08-31" },
       });
       context.service.createTask({
         title: "Second report",
-        placement: { kind: "inbox" },
+        projectId: null,
         due: { kind: "allDay", date: "2026-08-31" },
       });
-      context.service.createTask({ title: "Unscheduled", placement: { kind: "inbox" } });
+      context.service.createTask({ title: "Unscheduled", projectId: null });
 
       const result = await callTool(context.client, "list_tasks", {
         view: "today",
@@ -317,28 +317,27 @@ describe("Worktodo MCP task tools", () => {
     try {
       const project = context.service.createProject("Work");
       const label = context.service.createLabel("Waiting");
-      const inbox = context.service.createTask({ title: "Inbox", placement: { kind: "inbox" } });
+      const noProject = context.service.createTask({ title: "No project", projectId: null });
       const today = context.service.createTask({
         title: "Today",
-        placement: { kind: "project", projectId: project.id },
+        projectId: project.id,
         due: { kind: "allDay", date: "2026-08-31" },
       });
       const upcoming = context.service.createTask({
         title: "Tomorrow",
-        placement: { kind: "project", projectId: project.id },
+        projectId: project.id,
         labelIds: [label.id],
         due: { kind: "allDay", date: "2026-09-01" },
       });
       context.service.completeTask(today.id);
-      context.service.trashTask(inbox.id);
+      context.service.trashTask(noProject.id);
 
       const views: Array<[Record<string, unknown>, string[]]> = [
         [{ view: "all" }, [upcoming.id]],
         [{ view: "today" }, []],
         [{ view: "upcoming" }, [upcoming.id]],
-        [{ view: "inbox" }, []],
         [{ view: "completed" }, [today.id]],
-        [{ view: "trash" }, [inbox.id]],
+        [{ view: "trash" }, [noProject.id]],
         [{ view: "project", projectId: project.id }, [upcoming.id]],
         [{ view: "label", labelId: label.id }, [upcoming.id]],
       ];
@@ -355,7 +354,7 @@ describe("Worktodo MCP task tools", () => {
         expect(tasks.map((task) => task.id)).toEqual(expectedIds);
       }
 
-      expect(context.getCloseCount()).toBe(8);
+      expect(context.getCloseCount()).toBe(7);
     } finally {
       await context.close();
     }
@@ -371,7 +370,7 @@ describe("Worktodo MCP task tools", () => {
       ]);
 
       const invalidCombination = await callTool(context.client, "list_tasks", {
-        view: "inbox",
+        view: "all",
         projectId: id(1),
       });
       expect(invalidCombination).toMatchObject({ isError: true });
@@ -385,7 +384,7 @@ describe("Worktodo MCP task tools", () => {
       ]);
 
       const invalidLabelCombination = await callTool(context.client, "list_tasks", {
-        view: "inbox",
+        view: "all",
         labelId: id(1),
       });
       expect(invalidLabelCombination.content).toEqual([
@@ -396,7 +395,7 @@ describe("Worktodo MCP task tools", () => {
       expect(missingLabel.content).toEqual([{ type: "text", text: "NOT_FOUND: Label not found" }]);
 
       const invalidTimeZone = await callTool(context.client, "list_tasks", {
-        view: "inbox",
+        view: "all",
         timeZone: "not/a-zone",
       });
       expect(invalidTimeZone).toMatchObject({ isError: true });
@@ -414,7 +413,7 @@ describe("Worktodo MCP task tools", () => {
         { type: "text", text: "INVALID_ARGUMENT: Provide at least one task field to update" },
       ]);
       const label = context.service.createLabel("Waiting");
-      const task = context.service.createTask({ title: "Task", placement: { kind: "inbox" } });
+      const task = context.service.createTask({ title: "Task", projectId: null });
       const duplicateLabels = await callTool(context.client, "update_task", {
         id: task.id,
         labelIds: [label.id, label.id],

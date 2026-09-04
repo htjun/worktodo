@@ -1,6 +1,6 @@
 import { type CallToolResult, McpServer, type ToolAnnotations } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { DomainError, placementOf, type Task } from "../src/shared/domain/model";
+import { DomainError, type Task } from "../src/shared/domain/model";
 import type { TaskService } from "../src/shared/domain/task-service";
 import { normalizeLabelName } from "../src/shared/domain/validation";
 import {
@@ -27,10 +27,6 @@ const dueSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-const placementSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("inbox") }).strict(),
-  z.object({ kind: z.literal("project"), projectId: z.string() }).strict(),
-]);
 const taskSchema = z
   .object({
     id: z.string(),
@@ -38,7 +34,7 @@ const taskSchema = z
     notes: z.string(),
     priority: prioritySchema,
     position: nonNegativeSafeIntegerSchema,
-    placement: placementSchema,
+    projectId: z.string().nullable(),
     labelIds: z.array(z.string()),
     due: dueSchema,
     createdAtMs: nonNegativeSafeIntegerSchema,
@@ -106,7 +102,7 @@ function taskDocument(task: Task): TaskDocument {
     notes: task.notes,
     priority: task.priority,
     position: task.position,
-    placement: placementOf(task),
+    projectId: task.projectId,
     labelIds: task.labelIds,
     due: task.due,
     createdAtMs: task.createdAtMs,
@@ -183,7 +179,7 @@ function filterTasks(service: TaskService, tasks: Task[], query: string | undefi
     const values = [
       task.title,
       task.notes,
-      task.projectId === null ? "Inbox" : (projectNames.get(task.projectId) ?? ""),
+      task.projectId === null ? "No project" : (projectNames.get(task.projectId) ?? ""),
       ...task.labelIds.flatMap((labelId) => {
         const name = labelNames.get(labelId);
         return name ? [name] : [];
@@ -222,7 +218,7 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     "list_projects",
     {
       title: "List Worktodo Projects",
-      description: "List a bounded page of local Worktodo projects, including stable placement IDs.",
+      description: "List a bounded page of local Worktodo projects, including stable assignment IDs.",
       inputSchema: z.object(pageInputSchema).strict(),
       outputSchema: z
         .object({
@@ -371,13 +367,13 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     {
       title: "Create Worktodo Task",
       description:
-        "Create a local task. Placement defaults to Inbox; labelIds replace the complete Label assignment set.",
+        "Create a local task. projectId defaults to null; labelIds replace the complete Label assignment set.",
       inputSchema: z
         .object({
           title: z.string(),
           notes: z.string().optional(),
           priority: prioritySchema.optional(),
-          placement: placementSchema.optional(),
+          projectId: z.string().nullable().optional(),
           labelIds: z.array(z.string()).optional(),
           due: dueSchema.optional(),
         })
@@ -390,9 +386,9 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
         openWorldHint: false,
       },
     },
-    async ({ title, notes, priority, placement = { kind: "inbox" }, labelIds, due }) =>
+    async ({ title, notes, priority, projectId = null, labelIds, due }) =>
       withSession("create_task", dependencies, (service) =>
-        successTaskResult("Created", service.createTask({ title, notes, priority, placement, labelIds, due })),
+        successTaskResult("Created", service.createTask({ title, notes, priority, projectId, labelIds, due })),
       ),
   );
 
@@ -439,8 +435,8 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     "move_task",
     {
       title: "Move Worktodo Task",
-      description: "Move one active local task to Inbox or a project using stable IDs.",
-      inputSchema: z.object({ id: z.string(), placement: placementSchema }).strict(),
+      description: "Assign one active local task to a project or clear its project using a stable ID.",
+      inputSchema: z.object({ id: z.string(), projectId: z.string().nullable() }).strict(),
       outputSchema: taskOutputSchema,
       annotations: {
         readOnlyHint: false,
@@ -449,8 +445,8 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
         openWorldHint: false,
       },
     },
-    async ({ id, placement }) =>
-      withSession("move_task", dependencies, (service) => successTaskResult("Moved", service.moveTask(id, placement))),
+    async ({ id, projectId }) =>
+      withSession("move_task", dependencies, (service) => successTaskResult("Moved", service.moveTask(id, projectId))),
   );
 
   const lifecycleTools = [
@@ -478,7 +474,7 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
     {
       name: "restore_task",
       title: "Restore Worktodo Task",
-      description: "Restore one local task from Trash while preserving its content, placement, and completion state.",
+      description: "Restore one local task from Trash while preserving its content, project, and completion state.",
       action: "Restored",
       run: (service: TaskService, id: string) => service.restoreTask(id),
     },

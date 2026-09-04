@@ -3,7 +3,7 @@ import type { TodayResult, UpcomingResult } from "../domain/queries";
 import type { TaskService } from "../domain/task-service";
 import { canonicalizeTimeZone, validateId, validateNonNegativeInteger } from "../domain/validation";
 
-export const STATIC_TASK_VIEW_KINDS = ["all", "today", "upcoming", "inbox", "completed", "trash"] as const;
+export const STATIC_TASK_VIEW_KINDS = ["all", "today", "upcoming", "completed", "trash"] as const;
 export const TASK_VIEW_KINDS = [...STATIC_TASK_VIEW_KINDS, "project", "label"] as const;
 
 export type StaticTaskViewKind = (typeof STATIC_TASK_VIEW_KINDS)[number];
@@ -114,8 +114,6 @@ export function loadTaskView(source: TaskService, view: TaskView, context: TaskV
       return { kind: "upcoming", view, result: source.listUpcoming(evaluatedAtMs, viewerTimeZone), ...resultContext };
     case "all":
       return { kind: "tasks", view, result: source.listAllTasks(viewerTimeZone), ...resultContext };
-    case "inbox":
-      return { kind: "tasks", view, result: source.listInbox(), ...resultContext };
     case "project":
       return { kind: "tasks", view, result: source.listProjectTasks(view.projectId), ...resultContext };
     case "label":

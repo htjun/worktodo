@@ -12,7 +12,7 @@ import { taskLifecycleMutationActionPresentation } from "./task-lifecycle-raycas
 export {
   buildTaskViewSections,
   initialLabelIdsForTaskView,
-  initialPlacementForTaskView,
+  initialProjectIdForTaskView,
   taskViewKey,
 } from "./shared/presentation/task-views";
 export type { TaskListSection } from "./shared/presentation/task-views";
@@ -21,7 +21,6 @@ const VIEW_ICONS = {
   all: Icon.Folder,
   today: Icon.Calendar,
   upcoming: Icon.Calendar,
-  inbox: Icon.Tray,
   completed: Icon.CheckCircle,
   trash: Icon.Trash,
   project: Icon.Folder,
@@ -62,7 +61,6 @@ export function TaskViewDropdown({
         <List.Dropdown.Item value="all" title="All Tasks" icon={Icon.Folder} />
         <List.Dropdown.Item value="today" title="Today" icon={Icon.Calendar} />
         <List.Dropdown.Item value="upcoming" title="Upcoming" icon={Icon.Calendar} />
-        <List.Dropdown.Item value="inbox" title="Inbox" icon={Icon.Tray} />
         <List.Dropdown.Item value="completed" title="Completed" icon={Icon.CheckCircle} />
         <List.Dropdown.Item value="trash" title="Trash" icon={Icon.Trash} />
       </List.Dropdown.Section>

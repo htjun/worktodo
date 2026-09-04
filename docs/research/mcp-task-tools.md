@@ -29,27 +29,27 @@ automating it would launch a separate model session rather than only testing the
 | `list_labels`   | Yes       | No          | Yes        | Page and search global Labels with stable IDs.                 |
 | `list_tasks`    | Yes       | No          | Yes        | Page and search tasks in one supported task view.              |
 | `get_task`      | Yes       | No          | Yes        | Return one task by stable ID, including Trash and Completed.   |
-| `create_task`   | No        | No          | No         | Create an active task, defaulting to Inbox.                    |
+| `create_task`   | No        | No          | No         | Create an active task, defaulting to no Project.               |
 | `update_task`   | No        | Yes         | Yes        | Replace selected content fields or Label assignments.          |
-| `move_task`     | No        | Yes         | Yes        | Move an active task to Inbox or a project.                     |
+| `move_task`     | No        | Yes         | Yes        | Assign or clear an active task's Project.                      |
 | `complete_task` | No        | Yes         | Yes        | Complete an active task.                                       |
 | `reopen_task`   | No        | Yes         | Yes        | Reopen an active completed task.                               |
 | `trash_task`    | No        | Yes         | Yes        | Move a task to recoverable Trash without deleting its content. |
 | `restore_task`  | No        | Yes         | Yes        | Restore a task while preserving its completion state.          |
 
-`list_tasks` supports `all`, `today`, `upcoming`, `inbox`, `completed`, `trash`, `project`, and `label`
+`list_tasks` supports `all`, `today`, `upcoming`, `completed`, `trash`, `project`, and `label`
 views. Project and Label views require their matching stable ID. Search uses Unicode NFKC plus
 locale-independent lowercase normalization across title, notes, Project name, and assigned Label
 names, and runs before pagination. All list tools default to 50 results and reject limits above 100;
 results report the offset, total, and whether another page exists.
 
-Task inputs use the approved closed placement, priority, and due-value unions. An all-day due value is
+Task inputs use an optional `projectId` plus the approved closed priority and due-value unions. An all-day due value is
 a Gregorian `YYYY-MM-DD` string. A timed value is an exact non-negative Unix-millisecond instant plus
 an IANA timezone. Every task-list view validates and canonicalizes its timezone. The timezone defaults
 to the MCP process's current system timezone, but callers can provide another timezone explicitly.
 Every Task document also includes canonical `labelIds`. `create_task` can set the complete assignment
 set. For `update_task`, omitting `labelIds` preserves assignments and passing an empty list clears them.
-`move_task` changes only Inbox or Project placement.
+`move_task` changes only the nullable Project assignment.
 
 ## Safety and failure behavior
 

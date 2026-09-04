@@ -1,18 +1,7 @@
-import {
-  DomainError,
-  placementFields,
-  placementOf,
-  type DueValue,
-  type Label,
-  type Placement,
-  type Priority,
-  type Project,
-  type Task,
-} from "./model";
+import { DomainError, type DueValue, type Label, type Priority, type Project, type Task } from "./model";
 import {
   queryAllTasks,
   queryCompleted,
-  queryInbox,
   queryLabel,
   queryProject,
   queryToday,
@@ -28,7 +17,6 @@ import {
   normalizeLabelName,
   validateNonNegativeInteger,
   validateNotes,
-  validatePlacement,
   validatePriority,
   validateText,
 } from "./validation";
@@ -46,7 +34,7 @@ export type CreateTaskInput = {
   title: string;
   notes?: string;
   priority?: Priority;
-  placement: Placement;
+  projectId?: string | null;
   labelIds?: string[];
   due?: DueValue;
 };
@@ -65,13 +53,6 @@ function compareOrdered(left: OrderedEntity, right: OrderedEntity): number {
     left.createdAtMs - right.createdAtMs ||
     (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
   );
-}
-
-function samePlacement(left: Placement, right: Placement): boolean {
-  if (left.kind === "inbox") {
-    return right.kind === "inbox";
-  }
-  return right.kind === "project" && left.projectId === right.projectId;
 }
 
 function sameIds(left: readonly string[], right: readonly string[]): boolean {
@@ -169,16 +150,20 @@ export class TaskService {
     return task;
   }
 
-  private validatedPlacement(value: Placement): Placement {
-    const placement = validatePlacement(value);
-    if (placement.kind === "inbox") {
-      return placement;
+  private validatedProjectId(value: string | null): string | null {
+    if (value === null) {
+      return null;
     }
-    const project = this.repository.getProject(placement.projectId);
-    if (!project) {
-      throw new DomainError("INVALID_PLACEMENT", "Placement project does not exist");
+    let projectId: string;
+    try {
+      projectId = validateId(value);
+    } catch {
+      throw new DomainError("INVALID_PROJECT", "Project ID is invalid");
     }
-    return placement;
+    if (!this.repository.getProject(projectId)) {
+      throw new DomainError("INVALID_PROJECT", "Project does not exist");
+    }
+    return projectId;
   }
 
   private validatedLabelIds(values: readonly string[]): string[] {
@@ -197,8 +182,8 @@ export class TaskService {
     return labels.filter((label) => requested.has(label.id)).map((label) => label.id);
   }
 
-  private tasksInPlacement(placement: Placement): Task[] {
-    return this.repository.listTasks().filter((task) => samePlacement(placementOf(task), placement));
+  private tasksWithProject(projectId: string | null): Task[] {
+    return this.repository.listTasks().filter((task) => task.projectId === projectId);
   }
 
   createProject(name: string): Project {
@@ -252,11 +237,11 @@ export class TaskService {
       const project = this.requireProject(validId);
       const tasks = this.repository.listTasks();
       const projectTasks = tasks.filter((task) => task.projectId === project.id).sort(compareOrdered);
-      const inboxTasks = tasks.filter((task) => task.projectId === null);
+      const noProjectTasks = tasks.filter((task) => task.projectId === null);
       const operationTime = this.operationTime();
 
       for (const task of projectTasks) {
-        const position = appendPosition(inboxTasks, (existing) =>
+        const position = appendPosition(noProjectTasks, (existing) =>
           this.repository.updateTask({
             ...existing,
             updatedAtMs: effectiveUpdate(existing.updatedAtMs, operationTime),
@@ -269,7 +254,7 @@ export class TaskService {
           updatedAtMs: effectiveUpdate(task.updatedAtMs, operationTime),
         };
         this.repository.updateTask(updated);
-        inboxTasks.push(updated);
+        noProjectTasks.push(updated);
       }
       this.repository.deleteProject(project.id);
     });
@@ -346,9 +331,9 @@ export class TaskService {
     const priority = validatePriority(input.priority ?? "none");
     const due = validateDueValue(input.due ?? { kind: "none" });
     return this.repository.transaction(() => {
-      const placement = this.validatedPlacement(input.placement);
+      const projectId = this.validatedProjectId(input.projectId ?? null);
       const labelIds = this.validatedLabelIds(input.labelIds ?? []);
-      const tasks = this.tasksInPlacement(placement);
+      const tasks = this.tasksWithProject(projectId);
       const timestamp = this.operationTime();
       const position = appendPosition(tasks, (task) =>
         this.repository.updateTask({
@@ -362,7 +347,7 @@ export class TaskService {
         notes,
         priority,
         position,
-        ...placementFields(placement),
+        projectId,
         labelIds,
         due,
         createdAtMs: timestamp,
@@ -411,15 +396,15 @@ export class TaskService {
     });
   }
 
-  moveTask(id: string, placementValue: Placement): Task {
+  moveTask(id: string, projectIdValue: string | null): Task {
     const validId = validateId(id);
     return this.repository.transaction(() => {
       const task = this.requireActiveTask(validId);
-      const placement = this.validatedPlacement(placementValue);
-      if (samePlacement(placementOf(task), placement)) {
+      const projectId = this.validatedProjectId(projectIdValue);
+      if (task.projectId === projectId) {
         return task;
       }
-      const targetTasks = this.tasksInPlacement(placement);
+      const targetTasks = this.tasksWithProject(projectId);
       const operationTime = this.operationTime();
       const position = appendPosition(targetTasks, (existing) =>
         this.repository.updateTask({
@@ -429,7 +414,7 @@ export class TaskService {
       );
       const updated = {
         ...task,
-        ...placementFields(placement),
+        projectId,
         position,
         updatedAtMs: effectiveUpdate(task.updatedAtMs, operationTime),
       };
@@ -502,10 +487,6 @@ export class TaskService {
 
   listAllTasks(viewerTimeZone: string): Task[] {
     return queryAllTasks(this.repository.listTasks(), viewerTimeZone);
-  }
-
-  listInbox(): Task[] {
-    return queryInbox(this.repository.listTasks());
   }
 
   listProjectTasks(projectId: string): Task[] {

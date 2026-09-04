@@ -31,7 +31,7 @@ async function createContext(now = Date.parse("2026-08-30T06:25:30.123Z")) {
     title: "Ship backup",
     notes: "Keep every field",
     priority: "high",
-    placement: { kind: "project", projectId: project.id },
+    projectId: project.id,
     labelIds: [label.id],
     due: { kind: "allDay", date: "2026-08-31" },
   });
