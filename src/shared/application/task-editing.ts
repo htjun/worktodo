@@ -101,12 +101,14 @@ function dueForValues(task: Task | undefined, values: TaskEditingValues, context
 }
 
 function createInput(values: TaskEditingValues, context: TaskEditingContext): CreateTaskInput {
+  const due = dueForValues(undefined, values, context);
+  const placement = taskEditingPlacementFromKey(values.selectedPlacement, context.projects, context.sections);
   return {
     title: values.title,
     notes: values.notes,
     priority: values.priority,
-    placement: taskEditingPlacementFromKey(values.selectedPlacement, context.projects, context.sections),
-    due: dueForValues(undefined, values, context),
+    placement,
+    due,
   };
 }
 

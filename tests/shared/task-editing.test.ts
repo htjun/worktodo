@@ -190,6 +190,20 @@ describe("Task editing interaction", () => {
     );
   });
 
+  it("updates fields without re-resolving or moving the Task Placement", () => {
+    const original = task({ projectId: project.id });
+    const adapter = mutations();
+    const outcome = new TaskEditingInteraction(adapter).save(
+      original,
+      values({ selectedPlacement: "stale-placement-value" }),
+      context({ projects: [], sections: [] }),
+    );
+
+    expect(outcome).toMatchObject({ status: "succeeded", operation: "update" });
+    expect(adapter.updateTask).toHaveBeenCalledOnce();
+    expect(adapter.moveTask).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["Inbox", taskEditingPlacementKey({ kind: "inbox" }), { kind: "inbox" }],
     [
@@ -257,6 +271,17 @@ describe("Task editing interaction", () => {
       field: "due",
       message: "Choose a custom due date",
     });
+    expect(
+      editing.save(
+        undefined,
+        values({
+          dueDatePreset: "custom",
+          customDueAtMs: null,
+          selectedPlacement: taskEditingPlacementKey({ kind: "project", projectId: project.id }),
+        }),
+        context({ projects: [] }),
+      ),
+    ).toMatchObject({ status: "failed", field: "due" });
 
     adapter.createTask.mockImplementationOnce(() => {
       throw new Error("Database unavailable");
