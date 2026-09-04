@@ -9,7 +9,7 @@ import {
   type TaskEditingMutations,
   type TaskEditingValues,
 } from "../../src/shared/application/task-editing";
-import { DomainError, placementFields, type Project, type Task } from "../../src/shared/domain/model";
+import { DomainError, placementFields, type Label, type Project, type Task } from "../../src/shared/domain/model";
 
 const project: Project = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -22,6 +22,19 @@ const otherProject: Project = {
   ...project,
   id: "00000000-0000-4000-8000-000000000002",
   name: "Personal",
+};
+const label: Label = {
+  id: "00000000-0000-4000-8000-000000000010",
+  name: "Waiting",
+  position: 1_024,
+  createdAtMs: 1_000,
+  updatedAtMs: 1_000,
+};
+const otherLabel: Label = {
+  ...label,
+  id: "00000000-0000-4000-8000-000000000011",
+  name: "High Impact",
+  position: 2_048,
 };
 const referenceInstantMs = Date.parse("2026-08-30T14:30:00.000Z");
 
@@ -48,6 +61,7 @@ function context(overrides: Partial<TaskEditingContext> = {}): TaskEditingContex
     referenceInstantMs,
     viewerTimeZone: "Australia/Melbourne",
     projects: [project, otherProject],
+    labels: [label, otherLabel],
     ...overrides,
   };
 }
@@ -60,6 +74,7 @@ function values(overrides: Partial<TaskEditingValues> = {}): TaskEditingValues {
     dueDatePreset: "none",
     customDueAtMs: null,
     selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
+    selectedLabelIds: [],
     ...overrides,
   };
 }
@@ -71,12 +86,19 @@ function mutations() {
         title: input.title,
         notes: input.notes ?? "",
         priority: input.priority ?? "none",
+        labelIds: input.labelIds ?? [],
         ...placementFields(input.placement),
         due: input.due ?? { kind: "none" },
       }),
     ),
     updateTask: vi.fn<TaskEditingMutations["updateTask"]>((_taskId, input) =>
-      task({ title: input.title, notes: input.notes, priority: input.priority, due: input.due }),
+      task({
+        title: input.title,
+        notes: input.notes,
+        priority: input.priority,
+        labelIds: input.labelIds,
+        due: input.due,
+      }),
     ),
     moveTask: vi.fn<TaskEditingMutations["moveTask"]>((_taskId, placement) => task(placementFields(placement))),
   };
@@ -98,12 +120,14 @@ describe("Task editing interaction", () => {
       dueDatePreset: "none",
       customDueAtMs: null,
       selectedPlacement: taskEditingPlacementKey({ kind: "project", projectId: project.id }),
+      selectedLabelIds: [],
     });
 
     expect(
       taskEditingDefaults(
         task({
           projectId: project.id,
+          labelIds: [label.id, otherLabel.id],
           due: { kind: "allDay", date: "2026-08-31" },
         }),
         { kind: "inbox" },
@@ -114,6 +138,7 @@ describe("Task editing interaction", () => {
       dueDatePreset: "today",
       customDueAtMs: Date.parse("2026-08-30T14:00:00.000Z"),
       selectedPlacement: taskEditingPlacementKey({ kind: "project", projectId: project.id }),
+      selectedLabelIds: [label.id, otherLabel.id],
     });
 
     expect(
@@ -195,6 +220,44 @@ describe("Task editing interaction", () => {
     expect(adapter.moveTask).not.toHaveBeenCalled();
   });
 
+  it("creates multiple assignments in catalog order and clears them during editing", () => {
+    const adapter = mutations();
+    const editing = new TaskEditingInteraction(adapter);
+
+    const created = editing.save(undefined, values({ selectedLabelIds: [otherLabel.id, label.id] }), context());
+    expect(created).toMatchObject({
+      status: "succeeded",
+      task: { labelIds: [label.id, otherLabel.id] },
+    });
+    expect(adapter.createTask).toHaveBeenCalledWith(expect.objectContaining({ labelIds: [label.id, otherLabel.id] }));
+
+    const original = task({ labelIds: [label.id, otherLabel.id] });
+    editing.save(original, values({ title: "Changed", selectedLabelIds: original.labelIds }), context());
+    expect(adapter.updateTask).toHaveBeenLastCalledWith(
+      original.id,
+      expect.objectContaining({ title: "Changed", labelIds: [label.id, otherLabel.id] }),
+    );
+
+    editing.save(original, values({ selectedLabelIds: [] }), context());
+    expect(adapter.updateTask).toHaveBeenLastCalledWith(original.id, expect.objectContaining({ labelIds: [] }));
+  });
+
+  it.each([
+    ["a stale Label", [label.id], [] as Label[], "Label not found"],
+    ["a missing Label", ["00000000-0000-4000-8000-000000000099"], [label], "Label not found"],
+    ["duplicate Labels", [label.id, label.id], [label], "Label IDs cannot contain duplicates"],
+  ])("rejects %s before persistence", (_case, selectedLabelIds, labels, message) => {
+    const adapter = mutations();
+    const outcome = new TaskEditingInteraction(adapter).save(
+      undefined,
+      values({ selectedLabelIds }),
+      context({ labels }),
+    );
+
+    expect(outcome).toEqual({ status: "failed", operation: "create", field: "labels", message });
+    expect(adapter.createTask).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["Inbox", taskEditingPlacementKey({ kind: "inbox" }), { kind: "inbox" }],
     [
@@ -273,6 +336,16 @@ describe("Task editing interaction", () => {
       operation: "update",
       field: "due",
       message: "Stored Due is invalid",
+    });
+
+    adapter.updateTask.mockImplementationOnce(() => {
+      throw new DomainError("NOT_FOUND", "Label not found");
+    });
+    expect(editing.assignLabels(task().id, [label.id])).toEqual({
+      status: "failed",
+      operation: "update",
+      field: "labels",
+      message: "Label not found",
     });
   });
 

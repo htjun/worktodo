@@ -1,4 +1,4 @@
-import type { Project, Task } from "../domain/model";
+import type { Label, Project, Task } from "../domain/model";
 import type { TodayTask } from "../domain/queries";
 
 export type TaskListEntry = {
@@ -11,7 +11,7 @@ export type TaskListItem = {
   title: string;
   subtitle: string;
   keywords: string[];
-  metadata: string[];
+  accessories: TaskListAccessory[];
   detail: TaskDetailPresentation;
   task: Task;
 };
@@ -24,7 +24,7 @@ export type TaskListSection = {
 
 export type TaskListRowPresentation = {
   title: string;
-  accessories: string[];
+  accessories: TaskListAccessory[];
   isCompletionAcknowledged: boolean;
 };
 
@@ -37,7 +37,10 @@ export type TaskDetailPresentation = {
   markdown: string;
   links: string[];
   metadata: TaskDetailField[];
+  labels: string[];
 };
+
+export type TaskListAccessory = { kind: "text"; text: string } | { kind: "tag"; text: string };
 
 type DuePresentation = {
   title: "Due Date" | "Overdue" | "Today";
@@ -134,7 +137,7 @@ export function taskListRowPresentation(
   const isCompletionAcknowledged = acknowledgedTask?.id === item.id && acknowledgedTask.completedAtMs !== null;
   return {
     title: item.title,
-    accessories: isCompletionAcknowledged ? ["Completed"] : item.metadata,
+    accessories: isCompletionAcknowledged ? [{ kind: "text", text: "Completed" }] : item.accessories,
     isCompletionAcknowledged,
   };
 }
@@ -146,7 +149,12 @@ function priorityDetailLabel(task: Task): string {
   return `${task.priority[0].toUpperCase()}${task.priority.slice(1)}`;
 }
 
-function detailPresentation(entry: TaskListEntry, placement: string, viewerTimeZone: string): TaskDetailPresentation {
+function detailPresentation(
+  entry: TaskListEntry,
+  placement: string,
+  labelNames: string[],
+  viewerTimeZone: string,
+): TaskDetailPresentation {
   const due = duePresentation(entry, viewerTimeZone);
   const metadata: TaskDetailField[] = [
     { title: "Project", text: placement },
@@ -165,18 +173,29 @@ function detailPresentation(entry: TaskListEntry, placement: string, viewerTimeZ
     markdown: taskNotesMarkdown(entry.task.notes),
     links: extractTaskNoteLinks(entry.task.notes),
     metadata,
+    labels: labelNames,
   };
 }
 
 export function buildTaskListItems(
   entries: readonly TaskListEntry[],
   projects: readonly Project[],
+  labels: readonly Label[],
   viewerTimeZone: string,
 ): TaskListItem[] {
   const projectMap = new Map(projects.map((project) => [project.id, project]));
+  const labelMap = new Map(labels.map((label) => [label.id, label.name]));
 
   return entries.map((entry) => {
     const placement = placementLabel(entry.task, projectMap);
+    const labelNames = entry.task.labelIds.flatMap((labelId) => {
+      const name = labelMap.get(labelId);
+      return name ? [name] : [];
+    });
+    const labelAccessories: TaskListAccessory[] = labelNames.slice(0, 2).map((text) => ({ kind: "tag", text }));
+    if (labelNames.length > 2) {
+      labelAccessories.push({ kind: "text", text: `+${labelNames.length - 2}` });
+    }
     const due = entry.task.due.kind === "none" ? null : duePresentation(entry, viewerTimeZone);
     const priority = entry.task.priority === "none" ? null : `${entry.task.priority} priority`;
     const completed = lifecycleLabel("Completed", entry.task.completedAtMs, viewerTimeZone);
@@ -186,10 +205,13 @@ export function buildTaskListItems(
       title: entry.task.title,
       subtitle: placement,
       keywords: [placement, entry.task.notes],
-      metadata: [priority, due ? `${due.title} ${due.text}` : null, completed, trashed].filter(
-        (value): value is string => value !== null,
-      ),
-      detail: detailPresentation(entry, placement, viewerTimeZone),
+      accessories: [
+        ...labelAccessories,
+        ...[priority, due ? `${due.title} ${due.text}` : null, completed, trashed]
+          .filter((value): value is string => value !== null)
+          .map((text): TaskListAccessory => ({ kind: "text", text })),
+      ],
+      detail: detailPresentation(entry, placement, labelNames, viewerTimeZone),
       task: entry.task,
     };
   });
@@ -198,6 +220,7 @@ export function buildTaskListItems(
 export function buildAllTaskListSections(
   tasks: readonly Task[],
   projects: readonly Project[],
+  labels: readonly Label[],
   viewerTimeZone: string,
 ): TaskListSection[] {
   const groups = [
@@ -221,6 +244,7 @@ export function buildAllTaskListSections(
       items: buildTaskListItems(
         group.tasks.map((task) => ({ task })),
         projects,
+        labels,
         viewerTimeZone,
       ),
     }));

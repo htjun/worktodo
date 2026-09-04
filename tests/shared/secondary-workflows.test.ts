@@ -60,6 +60,8 @@ describe("secondary human workflows", () => {
       const changeCount = changes.length;
       expect(() => renameProject(session.service, project.id, " ", changed)).toThrow("Project name cannot be empty");
       expect(changes).toHaveLength(changeCount);
+      expect(() => createLabel(session.service, "later", changed)).toThrow("Label name already exists");
+      expect(changes).toHaveLength(changeCount);
 
       now = 2_000;
       removeLabel(session.service, label.id, changed);

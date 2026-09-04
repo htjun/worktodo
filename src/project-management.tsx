@@ -12,8 +12,15 @@ import {
   useNavigation,
 } from "@raycast/api";
 import { useCallback, useEffect, useState } from "react";
-import { createProject, removeProject, renameProject } from "./shared/application/project-workflows";
-import type { Project } from "./shared/domain/model";
+import {
+  createLabel,
+  createProject,
+  removeLabel,
+  removeProject,
+  renameLabel,
+  renameProject,
+} from "./shared/application/project-workflows";
+import type { Label, Project } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
 
 type CollectionState<T> = {
@@ -81,6 +88,111 @@ function NameForm({
         onChange={() => setNameError(undefined)}
       />
     </Form>
+  );
+}
+
+export function LabelsView({ service, onChanged }: { service: TaskService; onChanged: () => void }) {
+  const [state, setState] = useState<CollectionState<Label>>({ isLoading: true, error: null, items: [] });
+
+  const refresh = useCallback(() => {
+    try {
+      setState({ isLoading: false, error: null, items: service.listLabels() });
+    } catch (error) {
+      setState({ isLoading: false, error: messageFrom(error), items: [] });
+    }
+  }, [service]);
+
+  useEffect(() => refresh(), [refresh]);
+
+  const changed = useCallback(() => {
+    refresh();
+    onChanged();
+  }, [onChanged, refresh]);
+
+  const createTarget = (
+    <NameForm
+      navigationTitle="New Label"
+      fieldTitle="Label Name"
+      submitTitle="Create Label"
+      successTitle="Label created"
+      save={(name) => createLabel(service, name, changed)}
+    />
+  );
+
+  async function remove(label: Label) {
+    const confirmed = await confirmAlert({
+      title: `Remove “${label.name}”?`,
+      message: "Tasks keep their placement and content. Only this Label and its assignments are removed.",
+      primaryAction: { title: "Remove Label", style: Alert.ActionStyle.Destructive },
+    });
+    if (!confirmed) {
+      return;
+    }
+    try {
+      removeLabel(service, label.id, changed);
+      await showToast(Toast.Style.Success, "Label removed", "Tasks kept their placement and content.");
+    } catch (error) {
+      await showToast(Toast.Style.Failure, "Unable to remove label", messageFrom(error));
+    }
+  }
+
+  return (
+    <List navigationTitle="Labels" isLoading={state.isLoading} searchBarPlaceholder="Search Labels">
+      {state.error ? (
+        <List.EmptyView icon={Icon.Warning} title="Unable to load labels" description={state.error} />
+      ) : state.items.length === 0 ? (
+        <List.EmptyView
+          icon={Icon.Tag}
+          title="No labels"
+          description="Create a global label to organize tasks across projects."
+          actions={
+            <ActionPanel>
+              <Action.Push title="Create Label" icon={Icon.Plus} target={createTarget} />
+            </ActionPanel>
+          }
+        />
+      ) : (
+        state.items.map((label) => (
+          <List.Item
+            key={label.id}
+            icon={Icon.Tag}
+            title={label.name}
+            actions={
+              <ActionPanel>
+                <Action.Push
+                  title="Rename Label"
+                  icon={Icon.Pencil}
+                  shortcut={Keyboard.Shortcut.Common.Edit}
+                  target={
+                    <NameForm
+                      navigationTitle="Rename Label"
+                      fieldTitle="Label Name"
+                      submitTitle="Save Label"
+                      successTitle="Label renamed"
+                      initialName={label.name}
+                      save={(name) => renameLabel(service, label.id, name, changed)}
+                    />
+                  }
+                />
+                <Action.Push
+                  title="Create Label"
+                  icon={Icon.Plus}
+                  shortcut={Keyboard.Shortcut.Common.New}
+                  target={createTarget}
+                />
+                <Action
+                  title="Remove Label"
+                  icon={Icon.Trash}
+                  style={Action.Style.Destructive}
+                  shortcut={Keyboard.Shortcut.Common.Remove}
+                  onAction={() => remove(label)}
+                />
+              </ActionPanel>
+            }
+          />
+        ))
+      )}
+    </List>
   );
 }
 

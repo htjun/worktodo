@@ -1,5 +1,5 @@
 import { isStaticTaskViewKind, type TaskView, type TaskViewResult } from "../application/task-views";
-import type { Placement, Project } from "../domain/model";
+import type { Label, Placement, Project } from "../domain/model";
 import { addCalendarDays, startOfCalendarDate } from "../domain/queries";
 import { buildAllTaskListSections, buildTaskListItems, type TaskListEntry, type TaskListSection } from "./task-list";
 
@@ -109,7 +109,11 @@ function upcomingSectionTitle(date: string, localDate: string, viewerTimeZone: s
   return new Intl.DateTimeFormat(undefined, options).format(new Date(startOfCalendarDate(date, viewerTimeZone)));
 }
 
-export function buildTaskViewSections(taskView: TaskViewResult, projects: readonly Project[]): TaskListSection[] {
+export function buildTaskViewSections(
+  taskView: TaskViewResult,
+  projects: readonly Project[],
+  labels: readonly Label[],
+): TaskListSection[] {
   if (taskView.kind === "today") {
     return [
       {
@@ -118,6 +122,7 @@ export function buildTaskViewSections(taskView: TaskViewResult, projects: readon
         items: buildTaskListItems(
           taskView.result.tasks.map(({ task, status }) => ({ task, todayStatus: status })),
           projects,
+          labels,
           taskView.viewerTimeZone,
         ),
       },
@@ -134,12 +139,12 @@ export function buildTaskViewSections(taskView: TaskViewResult, projects: readon
     return [...groups].map(([date, group]) => ({
       key: `upcoming:${date}`,
       title: upcomingSectionTitle(date, taskView.result.localDate, taskView.viewerTimeZone),
-      items: buildTaskListItems(group, projects, taskView.viewerTimeZone),
+      items: buildTaskListItems(group, projects, labels, taskView.viewerTimeZone),
     }));
   }
 
   if (taskView.view.kind === "all") {
-    return buildAllTaskListSections(taskView.result, projects, taskView.viewerTimeZone);
+    return buildAllTaskListSections(taskView.result, projects, labels, taskView.viewerTimeZone);
   }
 
   return [
@@ -149,6 +154,7 @@ export function buildTaskViewSections(taskView: TaskViewResult, projects: readon
       items: buildTaskListItems(
         taskView.result.map((task) => ({ task })),
         projects,
+        labels,
         taskView.viewerTimeZone,
       ),
     },

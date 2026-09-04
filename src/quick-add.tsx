@@ -9,8 +9,8 @@ import {
   type TaskEditingFailureField,
 } from "./shared/application/task-editing";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import type { Project } from "./shared/domain/model";
-import { DueDateFields, ProjectDropdown } from "./task-form-controls";
+import type { Label, Project } from "./shared/domain/model";
+import { DueDateFields, LabelPicker, ProjectDropdown } from "./task-form-controls";
 
 type QuickAddFormValues = {
   title: string;
@@ -19,6 +19,7 @@ type QuickAddFormValues = {
 
 type QuickAddState = {
   projects: Project[];
+  labels: Label[];
   error: string | null;
 };
 
@@ -35,10 +36,11 @@ export default function QuickAdd() {
       session = openProductionWorktodo();
       return {
         projects: session.service.listProjects(),
+        labels: session.service.listLabels(),
         error: null,
       };
     } catch (error) {
-      return { projects: [], error: messageFrom(error) };
+      return { projects: [], labels: [], error: messageFrom(error) };
     } finally {
       session?.close();
     }
@@ -47,11 +49,13 @@ export default function QuickAdd() {
     () => new TaskEditingInteraction(createOperationScopedTaskEditingMutations(openProductionWorktodo)),
   );
   const [selectedPlacement, setSelectedPlacement] = useState(() => taskEditingPlacementKey({ kind: "inbox" }));
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [dueDatePreset, setDueDatePreset] = useState<DueDatePreset>("none");
   const [customDueDate, setCustomDueDate] = useState<Date | null>(null);
   const [titleError, setTitleError] = useState<string>();
   const [dueError, setDueError] = useState<string>();
   const [placementError, setPlacementError] = useState<string>();
+  const [labelError, setLabelError] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,6 +63,7 @@ export default function QuickAdd() {
     setTitleError(undefined);
     setDueError(undefined);
     setPlacementError(undefined);
+    setLabelError(undefined);
     setFormError(undefined);
     if (state.error) {
       return false;
@@ -74,8 +79,9 @@ export default function QuickAdd() {
         dueDatePreset,
         customDueAtMs: customDueDate?.getTime() ?? null,
         selectedPlacement,
+        selectedLabelIds,
       },
-      { referenceInstantMs, viewerTimeZone, projects: state.projects },
+      { referenceInstantMs, viewerTimeZone, projects: state.projects, labels: state.labels },
     );
     if (outcome.status === "failed") {
       setIsSubmitting(false);
@@ -83,6 +89,7 @@ export default function QuickAdd() {
         title: setTitleError,
         due: setDueError,
         placement: setPlacementError,
+        labels: setLabelError,
         form: setFormError,
       };
       setFieldError[outcome.field](outcome.message);
@@ -116,6 +123,15 @@ export default function QuickAdd() {
         onChange={(placement) => {
           setSelectedPlacement(placement);
           setPlacementError(undefined);
+        }}
+      />
+      <LabelPicker
+        labels={state.labels}
+        value={selectedLabelIds}
+        error={labelError}
+        onChange={(value) => {
+          setSelectedLabelIds(value);
+          setLabelError(undefined);
         }}
       />
       <DueDateFields

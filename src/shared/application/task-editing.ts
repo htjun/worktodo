@@ -2,6 +2,7 @@ import {
   DomainError,
   placementOf,
   type DueValue,
+  type Label,
   type Placement,
   type Priority,
   type Project,
@@ -19,17 +20,19 @@ export type TaskEditingValues = {
   dueDatePreset: DueDatePreset;
   customDueAtMs: number | null;
   selectedPlacement: string;
+  selectedLabelIds: string[];
 };
 
 export type TaskEditingContext = {
   referenceInstantMs: number;
   viewerTimeZone: string;
   projects: readonly Project[];
+  labels: readonly Label[];
 };
 
 export type TaskEditingDefaults = TaskEditingValues;
 
-export type TaskEditingFailureField = "title" | "due" | "placement" | "form";
+export type TaskEditingFailureField = "title" | "due" | "placement" | "labels" | "form";
 
 export type TaskEditingOutcome =
   | { status: "succeeded"; operation: "create" | "update" | "move"; task: Task }
@@ -97,6 +100,18 @@ function dueForValues(task: Task | undefined, values: TaskEditingValues, context
   };
 }
 
+function labelIdsForValues(values: TaskEditingValues, context: TaskEditingContext): string[] {
+  if (new Set(values.selectedLabelIds).size !== values.selectedLabelIds.length) {
+    throw new DomainError("INVALID_ARGUMENT", "Label IDs cannot contain duplicates");
+  }
+  const selected = new Set(values.selectedLabelIds);
+  const labelIds = context.labels.filter((label) => selected.has(label.id)).map((label) => label.id);
+  if (labelIds.length !== selected.size) {
+    throw new DomainError("NOT_FOUND", "Label not found");
+  }
+  return labelIds;
+}
+
 function createInput(values: TaskEditingValues, context: TaskEditingContext): CreateTaskInput {
   const due = dueForValues(undefined, values, context);
   const placement = taskEditingPlacementFromKey(values.selectedPlacement, context.projects);
@@ -105,6 +120,7 @@ function createInput(values: TaskEditingValues, context: TaskEditingContext): Cr
     notes: values.notes,
     priority: values.priority,
     placement,
+    labelIds: labelIdsForValues(values, context),
     due,
   };
 }
@@ -114,6 +130,7 @@ function updateInput(task: Task, values: TaskEditingValues, context: TaskEditing
     title: values.title,
     notes: values.notes,
     priority: values.priority,
+    labelIds: labelIdsForValues(values, context),
     due: dueForValues(task, values, context),
   };
 }
@@ -128,6 +145,9 @@ function failure(
   }
   if (error instanceof DomainError && error.code === "INVALID_PLACEMENT") {
     return { status: "failed", operation, field: "placement", message };
+  }
+  if (error instanceof DomainError && (message.startsWith("Label") || message.includes("Label ID"))) {
+    return { status: "failed", operation, field: "labels", message };
   }
   if (error instanceof DomainError && error.code === "INVALID_ARGUMENT" && message.startsWith("Task title")) {
     return { status: "failed", operation, field: "title", message };
@@ -162,6 +182,7 @@ export function taskEditingDefaults(
   initialPlacement: Placement,
   referenceInstantMs: number,
   viewerTimeZone: string,
+  initialLabelIds: readonly string[] = [],
 ): TaskEditingDefaults {
   if (!task) {
     return {
@@ -171,6 +192,7 @@ export function taskEditingDefaults(
       dueDatePreset: "none",
       customDueAtMs: null,
       selectedPlacement: taskEditingPlacementKey(initialPlacement),
+      selectedLabelIds: [...initialLabelIds],
     };
   }
   return {
@@ -185,6 +207,7 @@ export function taskEditingDefaults(
           ? startOfCalendarDate(task.due.date, viewerTimeZone)
           : task.due.instantMs,
     selectedPlacement: taskEditingPlacementKey(placementOf(task)),
+    selectedLabelIds: [...task.labelIds],
   };
 }
 
@@ -228,6 +251,18 @@ export class TaskEditingInteraction {
       return { status: "succeeded", operation: "move", task: this.mutations.moveTask(taskId, placement) };
     } catch (error) {
       return failure("move", error);
+    }
+  }
+
+  assignLabels(taskId: string, selectedLabelIds: string[]): TaskEditingOutcome {
+    try {
+      return {
+        status: "succeeded",
+        operation: "update",
+        task: this.mutations.updateTask(taskId, { labelIds: selectedLabelIds }),
+      };
+    } catch (error) {
+      return failure("update", error);
     }
   }
 }

@@ -6,9 +6,9 @@ import {
   taskEditingPlacementKey,
   type TaskEditingFailureField,
 } from "./shared/application/task-editing";
-import { placementOf, type Placement, type Priority, type Project, type Task } from "./shared/domain/model";
+import { placementOf, type Label, type Placement, type Priority, type Project, type Task } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
-import { DueDateFields, ProjectDropdown } from "./task-form-controls";
+import { DueDateFields, LabelPicker, ProjectDropdown } from "./task-form-controls";
 
 type FormValues = {
   title: string;
@@ -19,14 +19,18 @@ export function TaskForm({
   service,
   task,
   projects,
+  labels,
   initialPlacement,
+  initialLabelIds = [],
   viewerTimeZone,
   onSaved,
 }: {
   service: TaskService;
   task?: Task;
   projects: readonly Project[];
+  labels: readonly Label[];
   initialPlacement: Placement;
+  initialLabelIds?: readonly string[];
   viewerTimeZone: string;
   onSaved: () => void;
 }) {
@@ -34,8 +38,8 @@ export function TaskForm({
   const [referenceInstantMs] = useState(Date.now);
   const editing = useMemo(() => new TaskEditingInteraction(service), [service]);
   const defaults = useMemo(
-    () => taskEditingDefaults(task, initialPlacement, referenceInstantMs, viewerTimeZone),
-    [initialPlacement, referenceInstantMs, task, viewerTimeZone],
+    () => taskEditingDefaults(task, initialPlacement, referenceInstantMs, viewerTimeZone, initialLabelIds),
+    [initialLabelIds, initialPlacement, referenceInstantMs, task, viewerTimeZone],
   );
   const [priority, setPriority] = useState<Priority>(defaults.priority);
   const [dueDatePreset, setDueDatePreset] = useState(defaults.dueDatePreset);
@@ -43,15 +47,18 @@ export function TaskForm({
     defaults.customDueAtMs === null ? null : new Date(defaults.customDueAtMs),
   );
   const [selectedPlacement, setSelectedPlacement] = useState(defaults.selectedPlacement);
+  const [selectedLabelIds, setSelectedLabelIds] = useState(defaults.selectedLabelIds);
   const [titleError, setTitleError] = useState<string>();
   const [dueError, setDueError] = useState<string>();
   const [placementError, setPlacementError] = useState<string>();
+  const [labelError, setLabelError] = useState<string>();
   const [formError, setFormError] = useState<string>();
 
   async function submit(values: FormValues): Promise<boolean> {
     setTitleError(undefined);
     setDueError(undefined);
     setPlacementError(undefined);
+    setLabelError(undefined);
     setFormError(undefined);
     const outcome = editing.save(
       task,
@@ -62,14 +69,16 @@ export function TaskForm({
         dueDatePreset,
         customDueAtMs: customDueDate?.getTime() ?? null,
         selectedPlacement,
+        selectedLabelIds,
       },
-      { referenceInstantMs, viewerTimeZone, projects },
+      { referenceInstantMs, viewerTimeZone, projects, labels },
     );
     if (outcome.status === "failed") {
       const setFieldError: Record<TaskEditingFailureField, (message: string) => void> = {
         title: setTitleError,
         due: setDueError,
         placement: setPlacementError,
+        labels: setLabelError,
         form: setFormError,
       };
       setFieldError[outcome.field](outcome.message);
@@ -111,6 +120,15 @@ export function TaskForm({
           }}
         />
       ) : null}
+      <LabelPicker
+        labels={labels}
+        value={selectedLabelIds}
+        error={labelError}
+        onChange={(value) => {
+          setSelectedLabelIds(value);
+          setLabelError(undefined);
+        }}
+      />
       <DueDateFields
         preset={dueDatePreset}
         customDate={customDueDate}
@@ -195,6 +213,67 @@ export function MoveTaskForm({
         onChange={(placement) => {
           setSelectedPlacement(placement);
           setPlacementError(undefined);
+        }}
+      />
+      {formError ? <Form.Description title="Error" text={formError} /> : null}
+    </Form>
+  );
+}
+
+export function EditLabelsForm({
+  service,
+  task,
+  labels,
+  onSaved,
+}: {
+  service: TaskService;
+  task: Task;
+  labels: readonly Label[];
+  onSaved: () => void;
+}) {
+  const { pop } = useNavigation();
+  const editing = useMemo(() => new TaskEditingInteraction(service), [service]);
+  const [selectedLabelIds, setSelectedLabelIds] = useState(task.labelIds);
+  const [labelError, setLabelError] = useState<string>();
+  const [formError, setFormError] = useState<string>();
+
+  async function submit(): Promise<boolean> {
+    setLabelError(undefined);
+    setFormError(undefined);
+    const outcome = editing.assignLabels(task.id, selectedLabelIds);
+    if (outcome.status === "failed") {
+      if (outcome.field === "labels") {
+        setLabelError(outcome.message);
+      } else {
+        setFormError(outcome.message);
+      }
+      await showToast(Toast.Style.Failure, "Unable to update labels", outcome.message);
+      return false;
+    }
+
+    onSaved();
+    await showToast(Toast.Style.Success, "Labels updated");
+    pop();
+    return true;
+  }
+
+  return (
+    <Form
+      navigationTitle="Edit Labels"
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm title="Save Labels" icon={Icon.Tag} onSubmit={submit} />
+        </ActionPanel>
+      }
+    >
+      <Form.Description title="Task" text={task.title} />
+      <LabelPicker
+        labels={labels}
+        value={selectedLabelIds}
+        error={labelError}
+        onChange={(value) => {
+          setSelectedLabelIds(value);
+          setLabelError(undefined);
         }}
       />
       {formError ? <Form.Description title="Error" text={formError} /> : null}

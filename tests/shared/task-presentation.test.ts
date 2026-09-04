@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { taskLifecycleActionKindForViewKind } from "../../src/shared/application/task-lifecycle-interaction";
-import type { Project, Task } from "../../src/shared/domain/model";
+import type { Label, Project, Task } from "../../src/shared/domain/model";
 import { taskLifecycleMutationPresentation } from "../../src/shared/presentation/task-lifecycle";
 import {
   buildAllTaskListSections,
@@ -17,6 +17,13 @@ const project: Project = {
   createdAtMs: 1_000,
   updatedAtMs: 1_000,
 };
+const labels: Label[] = ["Waiting", "High Impact", "Next", "Deep Work"].map((name, index) => ({
+  id: `label-${index + 1}`,
+  name,
+  position: (index + 1) * 1_024,
+  createdAtMs: 1_000,
+  updatedAtMs: 1_000,
+}));
 function task(overrides: Partial<Task> = {}): Task {
   return {
     id: "00000000-0000-4000-8000-000000000003",
@@ -47,6 +54,7 @@ describe("task presentation mapping", () => {
     const groups = buildAllTaskListSections(
       [inboxTask, workTask, directPersonalTask, secondPersonalTask],
       [work, empty, project],
+      [],
       "Australia/Melbourne",
     );
 
@@ -77,15 +85,19 @@ describe("task presentation mapping", () => {
     const items = buildTaskListItems(
       [{ task: first, todayStatus: "overdue" }, { task: second }],
       [project],
+      [],
       "Australia/Melbourne",
     );
     expect(items.map((item) => item.id)).toEqual([first.id, second.id]);
     expect(items[0]).toMatchObject({
       subtitle: "Personal",
-      metadata: ["high priority", "Overdue 2026-10-04"],
+      accessories: [
+        { kind: "text", text: "high priority" },
+        { kind: "text", text: "Overdue 2026-10-04" },
+      ],
       keywords: ["Personal", "Open the planning workspace"],
     });
-    expect(items[1]).toMatchObject({ subtitle: "Inbox", metadata: [] });
+    expect(items[1]).toMatchObject({ subtitle: "Inbox", accessories: [] });
   });
 
   it("builds deterministic detail metadata for every placement and due kind", () => {
@@ -121,8 +133,8 @@ describe("task presentation mapping", () => {
       { task: sourceTasks[2], todayStatus: "dueToday" as const },
     ];
 
-    const first = buildTaskListItems(entries, [project], "Australia/Melbourne");
-    const second = buildTaskListItems(entries, [project], "Australia/Melbourne");
+    const first = buildTaskListItems(entries, [project], [], "Australia/Melbourne");
+    const second = buildTaskListItems(entries, [project], [], "Australia/Melbourne");
 
     expect(first.map((item) => item.detail.metadata.slice(0, 3))).toEqual([
       [
@@ -158,6 +170,38 @@ describe("task presentation mapping", () => {
     ).toEqual(["https://example.com/path", "https://example.org/a_(b)", "http://localhost:8080/test"]);
   });
 
+  it.each([
+    [[], []],
+    [[labels[0].id], [{ kind: "tag", text: "Waiting" }]],
+    [
+      [labels[0].id, labels[1].id],
+      [
+        { kind: "tag", text: "Waiting" },
+        { kind: "tag", text: "High Impact" },
+      ],
+    ],
+    [
+      labels.map((label) => label.id),
+      [
+        { kind: "tag", text: "Waiting" },
+        { kind: "tag", text: "High Impact" },
+        { kind: "text", text: "+2" },
+      ],
+    ],
+  ])("shows a bounded row summary for %s Labels and every Label in details", (labelIds, accessories) => {
+    const [item] = buildTaskListItems(
+      [{ task: task({ priority: "none", due: { kind: "none" }, labelIds }) }],
+      [project],
+      labels,
+      "Australia/Melbourne",
+    );
+
+    expect(item.accessories).toEqual(accessories);
+    expect(item.detail.labels).toEqual(
+      labels.filter((label) => labelIds.includes(label.id)).map((label) => label.name),
+    );
+  });
+
   it("maps lifecycle actions for safe secondary placement", () => {
     for (const viewKind of ["all", "today", "upcoming", "inbox", "project"]) {
       const kind = taskLifecycleActionKindForViewKind(viewKind);
@@ -183,18 +227,18 @@ describe("task presentation mapping", () => {
 
   it("shows completion acknowledgement without changing the task title or source item", () => {
     const source = task({ priority: "medium", due: { kind: "none" } });
-    const [item] = buildTaskListItems([{ task: source }], [], "Australia/Melbourne");
+    const [item] = buildTaskListItems([{ task: source }], [], [], "Australia/Melbourne");
     const before = structuredClone(item);
     const completed = { ...source, completedAtMs: 2_000, updatedAtMs: 2_000 };
 
     expect(taskListRowPresentation(item, completed)).toEqual({
       title: source.title,
-      accessories: ["Completed"],
+      accessories: [{ kind: "text", text: "Completed" }],
       isCompletionAcknowledged: true,
     });
     expect(taskListRowPresentation(item, undefined)).toEqual({
       title: source.title,
-      accessories: ["medium priority"],
+      accessories: [{ kind: "text", text: "medium priority" }],
       isCompletionAcknowledged: false,
     });
     expect(item).toEqual(before);
@@ -221,12 +265,13 @@ describe("task presentation mapping", () => {
         },
       ],
       [project],
+      [],
       "Australia/Melbourne",
     );
 
-    expect(item.metadata).toEqual([
-      `Completed ${format.format(new Date(completedAtMs))}`,
-      `Trashed ${format.format(new Date(trashedAtMs))}`,
+    expect(item.accessories).toEqual([
+      { kind: "text", text: `Completed ${format.format(new Date(completedAtMs))}` },
+      { kind: "text", text: `Trashed ${format.format(new Date(trashedAtMs))}` },
     ]);
     expect(item.detail.metadata).toEqual([
       { title: "Project", text: "Personal" },

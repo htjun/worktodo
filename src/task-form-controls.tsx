@@ -1,6 +1,6 @@
 import { Form, Icon } from "@raycast/api";
 import { taskEditingPlacementKey, type DueDatePreset } from "./shared/application/task-editing";
-import type { Project } from "./shared/domain/model";
+import type { Label, Project } from "./shared/domain/model";
 
 export function ProjectDropdown({
   projects,
@@ -25,6 +25,26 @@ export function ProjectDropdown({
         />
       ))}
     </Form.Dropdown>
+  );
+}
+
+export function LabelPicker({
+  labels,
+  value,
+  error,
+  onChange,
+}: {
+  labels: readonly Label[];
+  value: string[];
+  error?: string;
+  onChange: (value: string[]) => void;
+}) {
+  return (
+    <Form.TagPicker id="labels" title="Labels" value={value} error={error} onChange={onChange}>
+      {labels.map((label) => (
+        <Form.TagPicker.Item key={label.id} value={label.id} title={label.name} />
+      ))}
+    </Form.TagPicker>
   );
 }
 

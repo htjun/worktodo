@@ -61,6 +61,7 @@ describe("main task workflows", () => {
         buildTaskViewSections(
           loadTaskView(session.service, view, { evaluationInstantMs, viewerTimeZone }),
           session.service.listProjects(),
+          session.service.listLabels(),
         );
       const events: string[] = [];
       let quickSessionCloseCount = 0;
@@ -86,8 +87,9 @@ describe("main task workflows", () => {
           dueDatePreset: "today",
           customDueAtMs: null,
           selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
+          selectedLabelIds: [],
         },
-        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project] },
+        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], labels: [] },
       );
       if (quickOutcome.status !== "succeeded") {
         throw new Error(quickOutcome.message);
@@ -116,8 +118,9 @@ describe("main task workflows", () => {
           dueDatePreset: "tomorrow",
           customDueAtMs: null,
           selectedPlacement: taskEditingPlacementKey({ kind: "inbox" }),
+          selectedLabelIds: [],
         },
-        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project] },
+        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], labels: [] },
       );
       if (savedOutcome.status !== "succeeded") {
         throw new Error(savedOutcome.message);

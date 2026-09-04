@@ -101,6 +101,47 @@ describe("All Tasks entry points", () => {
   });
 });
 
+describe("Label UI adapters", () => {
+  it("keeps Project placement flat and projects stable Label IDs through one TagPicker", () => {
+    const source = readFileSync(join(process.cwd(), "src/task-form-controls.tsx"), "utf8");
+
+    expect(source).toContain('<Form.Dropdown.Item value="inbox" title="Inbox"');
+    expect(source).toContain('taskEditingPlacementKey({ kind: "project", projectId: project.id })');
+    expect(source).toContain('<Form.TagPicker id="labels" title="Labels" value={value}');
+    expect(source).toContain("<Form.TagPicker.Item key={label.id} value={label.id} title={label.name} />");
+    expect(source).not.toContain("Section");
+  });
+
+  it("submits selected Labels from Quick Add and the full Task form", () => {
+    const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
+    const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
+
+    expect(quickAdd).toContain("labels: session.service.listLabels()");
+    expect(quickAdd).toContain("selectedLabelIds,");
+    expect(quickAdd).toContain("labels={state.labels}");
+    expect(taskForm).toContain("taskEditingDefaults(task, initialPlacement");
+    expect(taskForm).toContain("useState(defaults.selectedLabelIds)");
+    expect(taskForm).toContain("editing.assignLabels(task.id, selectedLabelIds)");
+    expect(taskForm).toContain('navigationTitle="Edit Labels"');
+  });
+
+  it("offers global Label management and refreshes it through the external-mutation path", () => {
+    const tasks = readFileSync(join(process.cwd(), "src/my-tasks.tsx"), "utf8");
+    const management = readFileSync(join(process.cwd(), "src/project-management.tsx"), "utf8");
+
+    expect(tasks).toContain('title="Manage Labels"');
+    expect(tasks).toContain("<LabelsView service={session.service} onChanged={refreshAfterUnrelatedMutation} />");
+    expect(tasks).toContain("lifecycle.current?.refreshAfterExternalMutation()");
+    expect(tasks).toContain('<List.Item.Detail.Metadata.TagList title="Labels">');
+    expect(tasks).toContain('title="Edit Labels"');
+    expect(tasks).toContain("item.task.completedAtMs === null && item.task.trashedAtMs === null");
+    expect(management).toContain('navigationTitle="Labels"');
+    expect(management).toContain("const confirmed = await confirmAlert(");
+    expect(management).toContain("if (!confirmed)");
+    expect(management).toContain("Only this Label and its assignments are removed.");
+  });
+});
+
 describe("menu bar feedback", () => {
   it("shows a Toast for user-initiated launches", async () => {
     const options = { title: "Task completed", message: "Submit report" };

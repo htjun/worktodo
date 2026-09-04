@@ -10,7 +10,7 @@ import {
   useNavigation,
 } from "@raycast/api";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ProjectsView } from "./project-management";
+import { LabelsView, ProjectsView } from "./project-management";
 import { requestMenuBarRefresh } from "./raycast-commands";
 import {
   DELAYED_COMPLETION_POLICY,
@@ -20,11 +20,11 @@ import {
 } from "./shared/application/task-lifecycle-interaction";
 import { loadTaskView, normalizeTaskView, type TaskView } from "./shared/application/task-views";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
-import { placementOf, type Project, type Task } from "./shared/domain/model";
+import { placementOf, type Label, type Project, type Task } from "./shared/domain/model";
 import { taskLifecycleHistoryTitle, taskLifecycleMutationPresentation } from "./shared/presentation/task-lifecycle";
 import { parseMyTasksLaunchContext, type MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { taskListRowPresentation } from "./shared/presentation/task-list";
-import { MoveTaskForm, TaskForm } from "./task-form";
+import { EditLabelsForm, MoveTaskForm, TaskForm } from "./task-form";
 import {
   buildTaskViewSections,
   initialPlacementForTaskView,
@@ -42,6 +42,7 @@ type ListState = {
   mutationError: string | null;
   taskSections: TaskListSection[];
   projects: Project[];
+  labels: Label[];
 };
 
 function messageFrom(error: unknown): string {
@@ -87,6 +88,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     mutationError: null,
     taskSections: [],
     projects: [],
+    labels: [],
   });
 
   useEffect(() => {
@@ -101,6 +103,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         mutationError: null,
         taskSections: [],
         projects: [],
+        labels: [],
       });
     }
     return () => opened?.close();
@@ -113,6 +116,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     setState((current) => ({ ...current, isLoading: true, error: null }));
     try {
       const projects = session.service.listProjects();
+      const labels = session.service.listLabels();
       const nextView = normalizeTaskView(view, projects);
       if (taskViewKey(nextView) !== taskViewKey(view)) {
         lifecycle.current?.clearAcknowledgements();
@@ -126,8 +130,10 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         taskSections: buildTaskViewSections(
           loadTaskView(session.service, nextView, { evaluationInstantMs: Date.now(), viewerTimeZone }),
           projects,
+          labels,
         ),
         projects,
+        labels,
       });
     } catch (error) {
       setState((current) => ({
@@ -259,6 +265,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       <TaskForm
         service={session.service}
         projects={state.projects}
+        labels={state.labels}
         initialPlacement={{ kind: "inbox" }}
         viewerTimeZone={viewerTimeZone}
         onSaved={refreshAfterUnrelatedMutation}
@@ -271,6 +278,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     session,
     state.error,
     state.isLoading,
+    state.labels,
     state.projects,
     viewerTimeZone,
   ]);
@@ -292,6 +300,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
           service={session.service}
           task={task}
           projects={state.projects}
+          labels={state.labels}
           initialPlacement={placementOf(task)}
           viewerTimeZone={viewerTimeZone}
           onSaved={refreshAfterUnrelatedMutation}
@@ -308,6 +317,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     session,
     state.error,
     state.isLoading,
+    state.labels,
     state.projects,
     viewerTimeZone,
   ]);
@@ -318,6 +328,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     <TaskForm
       service={session.service}
       projects={state.projects}
+      labels={state.labels}
       initialPlacement={initialPlacementForTaskView(view)}
       viewerTimeZone={viewerTimeZone}
       onSaved={refreshAfterUnrelatedMutation}
@@ -325,6 +336,9 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   ) : null;
   const projectsTarget = session ? (
     <ProjectsView service={session.service} onChanged={refreshAfterUnrelatedMutation} />
+  ) : null;
+  const labelsTarget = session ? (
+    <LabelsView service={session.service} onChanged={refreshAfterUnrelatedMutation} />
   ) : null;
 
   const changeView = useCallback((nextView: TaskView) => {
@@ -356,12 +370,13 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
             title={taskCount === 0 ? content.emptyTitle : "No matching tasks"}
             description={taskCount === 0 ? content.emptyDescription : "Try a different search."}
             actions={
-              createTarget || projectsTarget || taskHistoryState ? (
+              createTarget || projectsTarget || labelsTarget || taskHistoryState ? (
                 <ActionPanel>
                   {createTarget ? <Action.Push title="Create Task" icon={Icon.Plus} target={createTarget} /> : null}
                   {projectsTarget ? (
                     <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
                   ) : null}
+                  {labelsTarget ? <Action.Push title="Manage Labels" icon={Icon.Tag} target={labelsTarget} /> : null}
                   {taskHistoryState ? (
                     <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} />
                   ) : null}
@@ -392,7 +407,9 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                     accessories={
                       isShowingDetail && !row.isCompletionAcknowledged
                         ? undefined
-                        : row.accessories.map((text) => ({ text }))
+                        : row.accessories.map((accessory) =>
+                            accessory.kind === "tag" ? { tag: accessory.text } : { text: accessory.text },
+                          )
                     }
                     detail={
                       <List.Item.Detail
@@ -406,6 +423,13 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                                 text={field.text}
                               />
                             ))}
+                            {item.detail.labels.length > 0 ? (
+                              <List.Item.Detail.Metadata.TagList title="Labels">
+                                {item.detail.labels.map((label) => (
+                                  <List.Item.Detail.Metadata.TagList.Item key={label} text={label} />
+                                ))}
+                              </List.Item.Detail.Metadata.TagList>
+                            ) : null}
                             {item.detail.links.map((url, index) => (
                               <List.Item.Detail.Metadata.Link
                                 key={url}
@@ -452,8 +476,23 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                                   service={session.service}
                                   task={item.task}
                                   projects={state.projects}
+                                  labels={state.labels}
                                   initialPlacement={placementOf(item.task)}
                                   viewerTimeZone={viewerTimeZone}
+                                  onSaved={refreshAfterUnrelatedMutation}
+                                />
+                              }
+                            />
+                          ) : null}
+                          {item.task.completedAtMs === null && item.task.trashedAtMs === null ? (
+                            <Action.Push
+                              title="Edit Labels"
+                              icon={Icon.Tag}
+                              target={
+                                <EditLabelsForm
+                                  service={session.service}
+                                  task={item.task}
+                                  labels={state.labels}
                                   onSaved={refreshAfterUnrelatedMutation}
                                 />
                               }
@@ -483,6 +522,9 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                           ) : null}
                           {projectsTarget ? (
                             <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
+                          ) : null}
+                          {labelsTarget ? (
+                            <Action.Push title="Manage Labels" icon={Icon.Tag} target={labelsTarget} />
                           ) : null}
                           {view.kind !== "trash" ? (
                             <Action
