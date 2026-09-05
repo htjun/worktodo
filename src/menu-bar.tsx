@@ -19,7 +19,7 @@ import { buildMenuBarTaskHistoryItem, menuBarTaskTitle, type MenuBarModel } from
 import { taskLifecycleHistoryTitle, taskLifecycleMutationPresentation } from "./shared/presentation/task-lifecycle";
 import type { MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { taskLifecycleHistoryActionPresentation } from "./task-lifecycle-raycast";
-import { activeTaskIcon } from "./task-priority-raycast";
+import { menuBarTaskIcon } from "./task-priority-raycast";
 
 const EMPTY_MODEL: MenuBarModel = { count: 0, title: undefined, sections: [] };
 const menuBarVisibilityCache = new Cache({ namespace: "menu-bar-visibility" });
@@ -220,7 +220,7 @@ export default function Command(props: LaunchProps) {
         state.model.sections.map((section) => (
           <MenuBarExtra.Section key={section.key} title={section.title}>
             {section.tasks.map((task) => (
-              <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={activeTaskIcon(task.priority)}>
+              <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={menuBarTaskIcon(task.priority)}>
                 <MenuBarExtra.Item
                   title="Complete"
                   icon={menuIcon(Icon.CheckCircle)}

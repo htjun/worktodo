@@ -37,7 +37,7 @@ import {
   taskLifecycleHistoryActionPresentation,
   taskLifecycleMutationActionPresentation,
 } from "../src/task-lifecycle-raycast";
-import { activeTaskIcon, taskListIcon } from "../src/task-priority-raycast";
+import { activeTaskIcon, menuBarTaskIcon, taskListIcon } from "../src/task-priority-raycast";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -179,6 +179,8 @@ describe("binary priority adapters", () => {
   it("uses red only for prioritized active tasks and preserves lifecycle icons", () => {
     expect(activeTaskIcon(false)).toBe("circle");
     expect(activeTaskIcon(true)).toEqual({ source: "circle", tintColor: "red" });
+    expect(menuBarTaskIcon(false)).toEqual({ source: "circle", tintColor: "secondary-text" });
+    expect(menuBarTaskIcon(true)).toEqual({ source: "circle", tintColor: "red" });
     expect(taskListIcon({ kind: "all" }, true, false)).toEqual({ source: "circle", tintColor: "red" });
     expect(taskListIcon({ kind: "all" }, false, false)).toBe("circle");
     expect(taskListIcon({ kind: "all" }, true, true)).toBe("check-circle");
