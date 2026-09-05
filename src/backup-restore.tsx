@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { launchMyTasks, requestMenuBarRefresh } from "./raycast-commands";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import type { PortabilityService, PreparedImport } from "./shared/portability/portability-service";
+import { PortabilityError } from "./shared/portability/backup-contract";
 import {
   exportSuccessMarkdown,
   failurePresentation,
@@ -114,7 +115,7 @@ function ImportFailure({ message, recoveryPath }: { message: string; recoveryPat
 }
 
 function ImportPreviewView({ portability, prepared }: { portability: PortabilityService; prepared: PreparedImport }) {
-  const { push } = useNavigation();
+  const { pop, push } = useNavigation();
 
   async function replace() {
     const confirmed = await confirmAlert({
@@ -133,6 +134,10 @@ function ImportPreviewView({ portability, prepared }: { portability: Portability
     } catch (error) {
       const failure = failurePresentation(error, "import");
       await showToast(Toast.Style.Failure, failure.title, failure.message);
+      if (error instanceof PortabilityError && error.code === "STALE_PREVIEW") {
+        pop();
+        return;
+      }
       if (failure.recoveryPath) {
         push(<ImportFailure message={failure.message} recoveryPath={failure.recoveryPath} />);
       }

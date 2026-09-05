@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
 import { readFileSync, statSync, type BigIntStats } from "node:fs";
 import { extname, isAbsolute } from "node:path";
 import {
+  createBackupDocument,
   parseBackupJson,
   PortabilityError,
+  serializeBackupDocument,
   type WorktodoBackupDocument,
   type WorktodoSnapshot,
 } from "./backup-contract";
@@ -35,7 +38,19 @@ export type PreparedImport = {
   path: string;
   document: WorktodoBackupDocument;
   preview: ImportPreview;
+  currentFingerprint: string;
 };
+
+export function snapshotFingerprint(snapshot: WorktodoSnapshot): string {
+  const canonical = serializeBackupDocument(
+    createBackupDocument(0, {
+      projects: snapshot.projects,
+      labels: snapshot.labels,
+      tasks: snapshot.tasks,
+    }),
+  );
+  return createHash("sha256").update(canonical, "utf8").digest("hex");
+}
 
 function sameFile(left: BigIntStats, right: BigIntStats): boolean {
   return (

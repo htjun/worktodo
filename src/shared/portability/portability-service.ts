@@ -7,7 +7,13 @@ import {
 } from "./backup-contract";
 import { ensurePrivateDirectory, publishBackupFile } from "./backup-file";
 import { backupFilename, readSnapshot, type ExportBackupResult } from "./export-backup";
-import { buildImportPreview, countSnapshot, readBackupFile, type PreparedImport } from "./import-preview";
+import {
+  buildImportPreview,
+  countSnapshot,
+  readBackupFile,
+  snapshotFingerprint,
+  type PreparedImport,
+} from "./import-preview";
 import { ImportReplacementError, type ReplaceableTaskRepository, type ReplacementResult } from "./replace-backup";
 
 export type { ExportBackupResult } from "./export-backup";
@@ -62,7 +68,12 @@ export class PortabilityService {
     try {
       const document = readBackupFile(path);
       const current = this.repository.transaction(() => readSnapshot(this.repository));
-      return { path, document, preview: buildImportPreview(document, current) };
+      return {
+        path,
+        document,
+        preview: buildImportPreview(document, current),
+        currentFingerprint: snapshotFingerprint(current),
+      };
     } catch (error) {
       throw unchangedError(error);
     }
@@ -71,12 +82,16 @@ export class PortabilityService {
   replace(prepared: PreparedImport): ReplacementResult {
     const replacementAtMs = this.now();
     const document = parseBackupDocument(prepared.document);
-    ensurePrivateDirectory(this.recoveryDirectory);
     let recoveryPath: string | undefined;
 
     try {
       return this.repository.transaction(() => {
-        const current = createBackupDocument(replacementAtMs, readSnapshot(this.repository));
+        const currentSnapshot = readSnapshot(this.repository);
+        if (snapshotFingerprint(currentSnapshot) !== prepared.currentFingerprint) {
+          throw new PortabilityError("STALE_PREVIEW", "Worktodo changed since this preview. Preview the backup again.");
+        }
+        const current = createBackupDocument(replacementAtMs, currentSnapshot);
+        ensurePrivateDirectory(this.recoveryDirectory);
         recoveryPath = publishBackupFile(
           this.recoveryDirectory,
           backupFilename(replacementAtMs),
@@ -87,6 +102,9 @@ export class PortabilityService {
         return { recoveryPath, replaced: countSnapshot(document) };
       });
     } catch (error) {
+      if (error instanceof PortabilityError && error.code === "STALE_PREVIEW") {
+        throw error;
+      }
       throw new ImportReplacementError(error, recoveryPath);
     }
   }

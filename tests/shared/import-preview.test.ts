@@ -9,7 +9,7 @@ import {
   type WorktodoBackupDocument,
   type WorktodoSnapshot,
 } from "../../src/shared/portability/backup-contract";
-import { readBackupFile } from "../../src/shared/portability/import-preview";
+import { readBackupFile, snapshotFingerprint } from "../../src/shared/portability/import-preview";
 import { PortabilityService } from "../../src/shared/portability/portability-service";
 import type { ReplaceableTaskRepository } from "../../src/shared/portability/replace-backup";
 
@@ -91,6 +91,7 @@ describe("Worktodo import validation and preview", () => {
 
     const prepared = serviceFor({ projects: [], labels: [], tasks: [] }).service.prepare(path);
     expect(prepared.document).toEqual(document);
+    expect(prepared.currentFingerprint).toBe(snapshotFingerprint({ projects: [], labels: [], tasks: [] }));
     expect(prepared.preview).toEqual({
       formatVersion: 3,
       exportedAtMs: 9_000,
@@ -191,5 +192,39 @@ describe("Worktodo import validation and preview", () => {
     expect(transaction).toHaveBeenCalledOnce();
     expect(prepared.preview.current.tasks).toBe(0);
     expect(prepared.document.tasks).toHaveLength(4);
+  });
+
+  it("fingerprints the complete canonical current snapshot", () => {
+    const current = populatedSnapshot();
+    const original = snapshotFingerprint(current);
+    expect(
+      snapshotFingerprint({
+        projects: [...current.projects].reverse(),
+        labels: [...current.labels].reverse(),
+        tasks: [...current.tasks].reverse(),
+      }),
+    ).toBe(original);
+
+    const mutations: WorktodoSnapshot[] = [
+      { ...current, projects: [{ ...current.projects[0], name: "Personal" }] },
+      { ...current, labels: [{ ...current.labels[0], name: "Later" }] },
+      { ...current, tasks: [{ ...current.tasks[0], title: "Changed" }, ...current.tasks.slice(1)] },
+      { ...current, tasks: [{ ...current.tasks[0], notes: "Changed" }, ...current.tasks.slice(1)] },
+      { ...current, tasks: [{ ...current.tasks[0], priority: true }, ...current.tasks.slice(1)] },
+      { ...current, tasks: [{ ...current.tasks[0], position: 2_048 }, ...current.tasks.slice(1)] },
+      {
+        ...current,
+        tasks: [{ ...current.tasks[0], due: { kind: "allDay", date: "2026-09-06" } }, ...current.tasks.slice(1)],
+      },
+      { ...current, tasks: [{ ...current.tasks[0], projectId: current.projects[0].id }, ...current.tasks.slice(1)] },
+      { ...current, tasks: [{ ...current.tasks[0], labelIds: [current.labels[0].id] }, ...current.tasks.slice(1)] },
+      { ...current, tasks: [{ ...current.tasks[0], updatedAtMs: 101 }, ...current.tasks.slice(1)] },
+      {
+        ...current,
+        tasks: [{ ...current.tasks[0], updatedAtMs: 200, completedAtMs: 200 }, ...current.tasks.slice(1)],
+      },
+    ];
+
+    expect(mutations.map(snapshotFingerprint)).not.toContain(original);
   });
 });

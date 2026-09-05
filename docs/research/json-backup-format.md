@@ -56,11 +56,16 @@ current and incoming Projects, Labels, and Tasks.
 
 Replacement requires explicit confirmation. In one database transaction Worktodo:
 
-1. publishes an owner-only version 3 recovery backup of current data;
-2. deletes Task associations, Tasks, Labels, and Projects in foreign-key-safe order;
-3. inserts the selected canonical snapshot;
-4. runs SQLite integrity and foreign-key checks; and
-5. compares the stored result with the selected backup.
+1. verifies that the complete current snapshot still matches the preview;
+2. publishes an owner-only version 3 recovery backup of current data;
+3. deletes Task associations, Tasks, Labels, and Projects in foreign-key-safe order;
+4. inserts the selected canonical snapshot;
+5. runs SQLite integrity and foreign-key checks; and
+6. compares the stored result with the selected backup.
+
+If any current Project, Label, Task, relationship, ordering value, Due value, note, timestamp, or
+lifecycle state changed after preview, Worktodo rejects the restore before creating a recovery
+backup and requires a new preview.
 
 Any failure rolls the database back and reports whether a recovery file was already published.
 Recovery files are never overwritten.

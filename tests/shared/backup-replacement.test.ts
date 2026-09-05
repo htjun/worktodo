@@ -6,11 +6,13 @@ import type { TaskRepository } from "../../src/shared/domain/repository";
 import {
   createBackupDocument,
   parseBackupJson,
+  PortabilityError,
+  serializeBackupDocument,
   type WorktodoBackupDocument,
   type WorktodoSnapshot,
 } from "../../src/shared/portability/backup-contract";
 import { backupFilename, readSnapshot } from "../../src/shared/portability/export-backup";
-import { buildImportPreview } from "../../src/shared/portability/import-preview";
+import { buildImportPreview, snapshotFingerprint } from "../../src/shared/portability/import-preview";
 import { PortabilityService, type PreparedImport } from "../../src/shared/portability/portability-service";
 import {
   ImportReplacementError,
@@ -20,6 +22,7 @@ import {
 import { openWorktodoDatabase } from "../../src/shared/storage/database";
 import { applyMigrations } from "../../src/shared/storage/schema";
 import { SqliteTaskRepository } from "../../src/shared/storage/sqlite-task-repository";
+import { TaskService } from "../../src/shared/domain/task-service";
 
 const temporaryDirectories: string[] = [];
 
@@ -141,11 +144,12 @@ function storedDocument(repository: TaskRepository, exportedAtMs: number): Workt
   return createBackupDocument(exportedAtMs, readSnapshot(repository));
 }
 
-function prepared(document: WorktodoBackupDocument): PreparedImport {
+function prepared(document: WorktodoBackupDocument, current: WorktodoSnapshot): PreparedImport {
   return {
     path: "/tmp/incoming.json",
     document,
-    preview: buildImportPreview(document, { projects: [], labels: [], tasks: [] }),
+    preview: buildImportPreview(document, current),
+    currentFingerprint: snapshotFingerprint(current),
   };
 }
 
@@ -167,7 +171,7 @@ describe("Worktodo backup replacement", () => {
     const incoming = createBackupDocument(8_000, snapshot(100));
     const { db, repository, recoveryDirectory } = await createContext(initial);
     try {
-      const result = portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming));
+      const result = portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming, initial));
 
       expect(storedDocument(repository, incoming.exportedAtMs)).toEqual(incoming);
       expect(result.replaced).toEqual({
@@ -206,7 +210,7 @@ describe("Worktodo backup replacement", () => {
     try {
       let error: unknown;
       try {
-        portability(failAfter(repository, method), recoveryDirectory, 9_000).replace(prepared(incoming));
+        portability(failAfter(repository, method), recoveryDirectory, 9_000).replace(prepared(incoming, initial));
       } catch (caught) {
         error = caught;
       }
@@ -230,7 +234,7 @@ describe("Worktodo backup replacement", () => {
       const collision = join(recoveryDirectory, backupFilename(9_000));
       await writeFile(collision, "existing", "utf8");
 
-      expect(() => portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming))).toThrow(
+      expect(() => portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming, initial))).toThrow(
         ImportReplacementError,
       );
       expect(storedDocument(repository, 9_000)).toEqual(createBackupDocument(9_000, initial));
@@ -245,11 +249,11 @@ describe("Worktodo backup replacement", () => {
     const incoming = createBackupDocument(8_000, snapshot(100));
     const { db, directory, repository, recoveryDirectory } = await createContext(initial);
     try {
-      const replacement = portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming));
+      const replacement = portability(repository, recoveryDirectory, 9_000).replace(prepared(incoming, initial));
       const recovery = parseBackupJson(await readFile(replacement.recoveryPath, "utf8"));
       const secondRecoveryDirectory = join(directory, "Restore Backups");
 
-      portability(repository, secondRecoveryDirectory, 10_000).replace(prepared(recovery));
+      portability(repository, secondRecoveryDirectory, 10_000).replace(prepared(recovery, incoming));
       expect(storedDocument(repository, recovery.exportedAtMs)).toEqual(recovery);
     } finally {
       db.close();
@@ -261,5 +265,65 @@ describe("Worktodo backup replacement", () => {
       "/Users/example/Library/Application Support/Worktodo/Backups",
     );
     expect(() => resolveRecoveryDirectory("relative")).toThrow("must be absolute");
+  });
+
+  it.each([
+    ["task creation", (service: TaskService) => service.createTask({ title: "Created after preview" })],
+    ["task content", (service: TaskService) => service.updateTask(id(6), { title: "Edited after preview" })],
+    ["task lifecycle", (service: TaskService) => service.completeTask(id(6))],
+    ["project content", (service: TaskService) => service.renameProject(id(1), "Renamed project")],
+    ["label content", (service: TaskService) => service.renameLabel(id(2), "Renamed label")],
+  ])("rejects a stale preview after %s through a second connection", async (_label, mutate) => {
+    const initial = snapshot(0);
+    const incoming = createBackupDocument(8_000, { projects: [], labels: [], tasks: [] });
+    const { db, directory, repository, recoveryDirectory } = await createContext(initial);
+    const inputPath = join(directory, "incoming.json");
+    await writeFile(inputPath, serializeBackupDocument(incoming), "utf8");
+    const service = portability(repository, recoveryDirectory, 9_000);
+    const preview = service.prepare(inputPath);
+    const secondDb = openWorktodoDatabase(join(directory, "worktodo.sqlite"));
+    applyMigrations(secondDb);
+    const secondRepository = new SqliteTaskRepository(secondDb);
+    const secondService = new TaskService(secondRepository, { createId: () => id(999), now: () => 1_000 });
+
+    try {
+      mutate(secondService);
+      const expected = createBackupDocument(9_000, readSnapshot(secondRepository));
+      let error: unknown;
+      try {
+        service.replace(preview);
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toBeInstanceOf(PortabilityError);
+      expect(error).toMatchObject({ code: "STALE_PREVIEW" });
+      expect((error as Error).message).toBe("Worktodo changed since this preview. Preview the backup again.");
+      expect(createBackupDocument(9_000, readSnapshot(repository))).toEqual(expected);
+      await expect(stat(recoveryDirectory)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      secondDb.close();
+      db.close();
+    }
+  });
+
+  it("allows replacement after a stale import is previewed again", async () => {
+    const initial = snapshot(0);
+    const incoming = createBackupDocument(8_000, { projects: [], labels: [], tasks: [] });
+    const { db, directory, repository, recoveryDirectory } = await createContext(initial);
+    const inputPath = join(directory, "incoming.json");
+    await writeFile(inputPath, serializeBackupDocument(incoming), "utf8");
+    const service = portability(repository, recoveryDirectory, 9_000);
+    const stale = service.prepare(inputPath);
+    repository.transaction(() => repository.updateTask({ ...repository.getTask(id(6))!, notes: "Changed" }));
+
+    try {
+      expect(() => service.replace(stale)).toThrow(PortabilityError);
+      const refreshed = service.prepare(inputPath);
+      expect(service.replace(refreshed).replaced.tasks).toBe(0);
+      expect(repository.listTasks()).toEqual([]);
+    } finally {
+      db.close();
+    }
   });
 });

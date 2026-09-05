@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ImportReplacementError } from "../../src/shared/portability/replace-backup";
+import { PortabilityError } from "../../src/shared/portability/backup-contract";
 import { MAX_REPRESENTABLE_TIMESTAMP_MS } from "../../src/shared/domain/validation";
 import type { ImportPreview } from "../../src/shared/portability/import-preview";
 import {
@@ -61,6 +62,17 @@ describe("backup and restore presentation", () => {
     expect(failurePresentation(new Error("Invalid file"), "import").message).toBe(
       "Invalid file. Worktodo data was not changed.",
     );
+  });
+
+  it("tells the user to preview again when current data changed", () => {
+    const error = new PortabilityError(
+      "STALE_PREVIEW",
+      "Worktodo changed since this preview. Preview the backup again.",
+    );
+    expect(failurePresentation(error, "import")).toEqual({
+      title: "Backup restore failed",
+      message: "Worktodo changed since this preview. Preview the backup again. Worktodo data was not changed.",
+    });
   });
 
   it("states that export failures did not change task data", () => {
