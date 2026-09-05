@@ -44,4 +44,5 @@ This note records local evidence used to choose the initial repository shape. It
 ## Still unverified
 
 - Store treatment of a sibling MCP entry point and its dependencies.
-- The final shared database path and journal/locking policy.
+
+**Storage resolution (2026-09-06):** Production uses `~/Library/Application Support/Worktodo/worktodo.sqlite` with SQLite DELETE journal mode, synchronous FULL, enabled foreign keys, and a 2,000 ms busy timeout. See the [SQLite runtime validation](sqlite-runtime-validation.md) and current [task model](task-model.md).

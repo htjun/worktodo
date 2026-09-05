@@ -37,13 +37,7 @@ Both migration contenders acknowledge readiness before starting. The holder acqu
 
 An earlier native run exposed an inadequate crash probe: the writer left an inactive, zero-header journal because its changes had not spilled to disk. The corrected probe uses a small cache only in the crash worker, verifies the journal header before SIGKILL, and tests actual recovery. No journal is manually deleted. An earlier launch also timed out at Raycast's confirmation prompt before any database checks.
 
-Detailed JSON and databases remain outside the repository at:
-
-```text
-/var/folders/8j/k3dh8_gd5lg5d5q83ypfgf1r0000gn/T/worktodo-sqlite-spike/9b3c07aa-980b-44dd-9ed4-16723a017333/report.json
-```
-
-This temporary path may be cleared by macOS; the measured summary above is the durable record.
+Raw temporary reports and databases were not retained in the repository. The measured summary above is the durable evidence from that validation run.
 
 ## Approved storage policies
 
