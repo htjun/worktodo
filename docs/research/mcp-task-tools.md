@@ -1,6 +1,6 @@
 # Worktodo MCP Task Tools
 
-**Status:** Implemented and locally validated on 2026-09-04.
+**Status:** Implemented and locally validated on 2026-09-05.
 
 Worktodo exposes its shared task domain through a local STDIO MCP server. The adapter calls the same
 `TaskService` used by Raycast and never receives direct SQL access or alternate task rules. Each tool
@@ -43,7 +43,8 @@ locale-independent lowercase normalization across title, notes, Project name, an
 names, and runs before pagination. All list tools default to 50 results and reject limits above 100;
 results report the offset, total, and whether another page exists.
 
-Task inputs use an optional `projectId` plus the approved closed priority and due-value unions. An all-day due value is
+Task inputs use an optional `projectId`, a boolean `priority`, and the approved closed due-value union. Priority defaults
+to `false`, changes only visual emphasis, and never changes task order. An all-day due value is
 a Gregorian `YYYY-MM-DD` string. A timed value is an exact non-negative Unix-millisecond instant plus
 an IANA timezone. Every task-list view validates and canonicalizes its timezone. The timezone defaults
 to the MCP process's current system timezone, but callers can provide another timezone explicitly.
