@@ -70,6 +70,11 @@ backup and requires a new preview.
 Any failure rolls the database back and reports whether a recovery file was already published.
 Recovery files are never overwritten.
 
+Backup publication flushes the candidate file before creating its final name, then synchronizes the
+destination directory before reporting success. Recovery-directory preparation also synchronizes
+the directory and its parent. These barriers use the supported macOS filesystem operations; they do
+not claim protection from hardware or filesystem implementations that violate flush guarantees.
+
 ## Verification
 
 The backup contract, export, preview, replacement, recovery, file-stability, and presentation suites

@@ -10,7 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { basename, isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { PortabilityError } from "./backup-contract";
 
 export const WORKTODO_MAX_BACKUP_BYTES = 100 * 1024 * 1024;
@@ -37,6 +37,17 @@ function closeCandidate(descriptor: number): void {
   }
 }
 
+function syncDirectory(directory: string): void {
+  const descriptor = openSync(directory, "r");
+  try {
+    fsyncSync(descriptor);
+  } catch (error) {
+    closeCandidate(descriptor);
+    throw error;
+  }
+  closeSync(descriptor);
+}
+
 export function assertBackupSize(contents: string, maximumBytes = WORKTODO_MAX_BACKUP_BYTES): void {
   if (Buffer.byteLength(contents, "utf8") > maximumBytes) {
     throw new PortabilityError("FILE_TOO_LARGE", "The Worktodo backup exceeds the 100 MiB limit.");
@@ -53,6 +64,8 @@ export function ensurePrivateDirectory(directory: string): void {
     if (!statSync(directory).isDirectory()) {
       throw new Error("Recovery destination is not a directory");
     }
+    syncDirectory(directory);
+    syncDirectory(dirname(directory));
   } catch (error) {
     throw new PortabilityError("FILE_WRITE_FAILED", "Worktodo could not prepare the recovery folder.", error);
   }
@@ -75,6 +88,7 @@ export function publishBackupFile(directory: string, filename: string, contents:
   const destination = join(directory, filename);
   const candidate = join(directory, `.${filename}.${randomUUID()}.tmp`);
   let descriptor: number | undefined;
+  let linked = false;
 
   try {
     descriptor = openSync(candidate, "wx", 0o600);
@@ -84,9 +98,16 @@ export function publishBackupFile(directory: string, filename: string, contents:
     closeSync(descriptor);
     descriptor = undefined;
     linkSync(candidate, destination);
+    linked = true;
+    syncDirectory(directory);
+    unlinkSync(candidate);
+    syncDirectory(directory);
   } catch (error) {
     if (descriptor !== undefined) {
       closeCandidate(descriptor);
+    }
+    if (linked) {
+      removeCandidate(destination);
     }
     removeCandidate(candidate);
     if (errorCode(error) === "EEXIST") {
@@ -95,6 +116,5 @@ export function publishBackupFile(directory: string, filename: string, contents:
     throw new PortabilityError("FILE_WRITE_FAILED", "Worktodo could not write the backup file.", error);
   }
 
-  removeCandidate(candidate);
   return destination;
 }
