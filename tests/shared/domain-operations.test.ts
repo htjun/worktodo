@@ -67,26 +67,26 @@ describe("shared domain operations", () => {
     ];
     const noProject = service.createTask({
       title: "No project",
-      priority: "none",
+      priority: false,
       projectId: null,
       due: dueValues[0],
     });
     const direct = service.createTask({
       title: "Project",
       notes: "Plan at https://example.com/roadmap",
-      priority: "low",
+      priority: true,
       projectId: project.id,
       due: dueValues[1],
     });
     const labelledTask = service.createTask({
       title: "Labelled",
       notes: "Unicode note: café ☕",
-      priority: "medium",
+      priority: false,
       projectId: project.id,
       labelIds: [next.id],
       due: dueValues[2],
     });
-    service.createTask({ title: "High", priority: "high", projectId: null });
+    service.createTask({ title: "Priority", priority: true, projectId: null });
 
     context.setNow(2_000);
     service.completeTask(labelledTask.id);
@@ -96,19 +96,19 @@ describe("shared domain operations", () => {
 
     const reopened = openWorktodoDatabase(databasePath);
     try {
-      expect(applyMigrations(reopened)).toEqual({ applied: false, previousVersion: 2, currentVersion: 2 });
+      expect(applyMigrations(reopened)).toEqual({ applied: false, previousVersion: 3, currentVersion: 3 });
       const repository = new SqliteTaskRepository(reopened);
       expect(repository.getTask(noProject.id)).toMatchObject({
         projectId: null,
         labelIds: [],
         due: { kind: "none" },
-        priority: "none",
+        priority: false,
       });
       expect(repository.getTask(direct.id)).toMatchObject({
         projectId: project.id,
         labelIds: [],
         due: { kind: "allDay", date: "2026-10-04" },
-        priority: "low",
+        priority: true,
       });
       expect(repository.getTask(labelledTask.id)).toEqual(completedAndTrashed);
       expect(
@@ -116,7 +116,7 @@ describe("shared domain operations", () => {
           .listTasks()
           .map((task) => task.priority)
           .sort(),
-      ).toEqual(["high", "low", "medium", "none"]);
+      ).toEqual([false, false, true, true]);
     } finally {
       reopened.close();
     }
@@ -153,6 +153,10 @@ describe("shared domain operations", () => {
         "INVALID_DUE_VALUE",
       );
       expectDomainError(() => service.createTask({ title: "  ", projectId: null }), "INVALID_ARGUMENT");
+      expectDomainError(
+        () => service.createTask({ title: "Legacy priority", priority: "high" as never, projectId: null }),
+        "INVALID_ARGUMENT",
+      );
       expect(firstProject.name).toBe("First");
       expect(repository.listTasks()).toEqual([]);
     } finally {
@@ -195,6 +199,7 @@ describe("shared domain operations", () => {
     const { service, db } = context;
     try {
       const task = service.createTask({ title: "Lifecycle", projectId: null });
+      expect(task.priority).toBe(false);
       context.setNow(500);
       const completed = service.completeTask(task.id);
       expect(completed.completedAtMs).toBe(1_001);
@@ -241,14 +246,14 @@ describe("shared domain operations", () => {
       const updated = service.updateTask(task.id, {
         title: "Final",
         notes: "Details",
-        priority: "high",
+        priority: true,
         labelIds: [secondLabel.id, firstLabel.id],
         due: { kind: "timed", instantMs: 2_000_000, timeZone: "Australia/Melbourne" },
       });
       expect(updated).toMatchObject({
         title: "Final",
         notes: "Details",
-        priority: "high",
+        priority: true,
         labelIds: [firstLabel.id, secondLabel.id],
         updatedAtMs: 2_000,
       });
@@ -329,13 +334,13 @@ describe("shared domain operations", () => {
       const secondLabel = service.createLabel("Second");
       const directFirst = service.createTask({
         title: "Direct first",
-        priority: "low",
+        priority: false,
         projectId: project.id,
         labelIds: [firstLabel.id],
       });
       const directSecond = service.createTask({
         title: "Direct second",
-        priority: "high",
+        priority: true,
         projectId: project.id,
         labelIds: [secondLabel.id],
       });

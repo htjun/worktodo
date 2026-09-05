@@ -35,6 +35,7 @@ import {
   type TaskListSection,
 } from "./task-views";
 import { taskLifecycleHistoryActionPresentation } from "./task-lifecycle-raycast";
+import { taskListIcon } from "./task-priority-raycast";
 
 type ListState = {
   isLoading: boolean;
@@ -405,7 +406,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                   <List.Item
                     key={item.id}
                     id={item.id}
-                    icon={row.isCompletionAcknowledged ? Icon.CheckCircle : content.taskIcon}
+                    icon={taskListIcon(view, item.task.priority, row.isCompletionAcknowledged)}
                     title={row.title}
                     subtitle={item.subtitle}
                     keywords={item.keywords}

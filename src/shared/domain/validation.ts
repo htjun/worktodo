@@ -1,8 +1,7 @@
-import { DomainError, type DueValue, type Priority } from "./model";
+import { DomainError, type DueValue } from "./model";
 
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-const PRIORITIES = new Set<Priority>(["none", "low", "medium", "high"]);
 
 export function validateId(value: unknown): string {
   if (typeof value !== "string" || !UUID_V4_PATTERN.test(value)) {
@@ -33,11 +32,11 @@ export function validateNotes(value: unknown): string {
   return value;
 }
 
-export function validatePriority(value: unknown): Priority {
-  if (typeof value !== "string" || !PRIORITIES.has(value as Priority)) {
+export function validatePriority(value: unknown): boolean {
+  if (typeof value !== "boolean") {
     throw new DomainError("INVALID_ARGUMENT", "Priority is invalid");
   }
-  return value as Priority;
+  return value;
 }
 
 export function validateNonNegativeInteger(value: unknown, label: string): number {

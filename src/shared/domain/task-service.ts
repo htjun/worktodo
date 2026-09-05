@@ -1,4 +1,4 @@
-import { DomainError, type DueValue, type Label, type Priority, type Project, type Task } from "./model";
+import { DomainError, type DueValue, type Label, type Project, type Task } from "./model";
 import {
   queryAllTasks,
   queryCompleted,
@@ -33,7 +33,7 @@ type OrderedEntity = Pick<Project, "id" | "position" | "createdAtMs">;
 export type CreateTaskInput = {
   title: string;
   notes?: string;
-  priority?: Priority;
+  priority?: boolean;
   projectId?: string | null;
   labelIds?: string[];
   due?: DueValue;
@@ -42,7 +42,7 @@ export type CreateTaskInput = {
 export type UpdateTaskInput = {
   title?: string;
   notes?: string;
-  priority?: Priority;
+  priority?: boolean;
   labelIds?: string[];
   due?: DueValue;
 };
@@ -328,7 +328,7 @@ export class TaskService {
   createTask(input: CreateTaskInput): Task {
     const title = validateText(input.title, "Task title");
     const notes = validateNotes(input.notes ?? "");
-    const priority = validatePriority(input.priority ?? "none");
+    const priority = validatePriority(input.priority ?? false);
     const due = validateDueValue(input.due ?? { kind: "none" });
     return this.repository.transaction(() => {
       const projectId = this.validatedProjectId(input.projectId ?? null);

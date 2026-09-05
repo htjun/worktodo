@@ -1,7 +1,7 @@
 # Worktodo Task Model
 
 Status: implemented
-Last verified: 2026-09-04
+Last verified: 2026-09-05
 
 ## Model
 
@@ -38,7 +38,7 @@ conversion. Labels are ordered by `(position ASC, createdAtMs ASC, id ASC)`.
 | `id`            | Yes      | Stable lowercase UUID v4.                                       |
 | `title`         | Yes      | Non-empty trimmed title.                                        |
 | `notes`         | Yes      | Plain text, including Unicode and URLs.                         |
-| `priority`      | Yes      | `none`, `low`, `medium`, or `high`.                             |
+| `priority`      | Yes      | Boolean visual emphasis; `false` by default.                    |
 | `position`      | Yes      | Non-negative order within its optional Project.                 |
 | `projectId`     | No       | Null for no Project, otherwise one existing Project ID.         |
 | `labelIds`      | Yes      | Unique existing Label IDs in canonical Label order.             |
@@ -71,7 +71,7 @@ that day. This week includes the same overdue and Today Tasks plus active incomp
 through Sunday in the viewer's timezone. Completed excludes Trash; Trash includes trashed Tasks
 whether complete or incomplete.
 
-Ordinary Task order is Priority descending, then `position`, `createdAtMs`, and `id` ascending.
+Ordinary Task order is `position`, `createdAtMs`, and `id` ascending. Priority never changes order.
 All tasks places dated Tasks first by effective due instant and undated Tasks last.
 
 Completion, reopening, Trash, and restore are idempotent. Content, Project, and Label changes are
@@ -79,8 +79,8 @@ blocked while a Task is in Trash. Restore preserves completion state, Project, a
 
 ## Schema migration
 
-Fresh databases are created directly at version 2. Opening version 1 performs one atomic migration
-under `BEGIN IMMEDIATE`:
+Fresh databases are created directly at version 3. Opening version 1 or 2 performs one atomic
+migration under `BEGIN IMMEDIATE`:
 
 - Projects and Sections are read in canonical Project and Section order.
 - The first Section for each normalized name retains its ID, name, and timestamps as a global
@@ -90,6 +90,9 @@ under `BEGIN IMMEDIATE`:
 - Task identity, content, Due values, lifecycle values, and timestamps are preserved.
 - The Task table is rebuilt without Section assignment, foreign keys are checked, and
   `user_version` advances only when the transaction succeeds.
+- The version 3 Task table stores priority as constrained integer `0` or `1`. Legacy `high` values
+  become `1`; `medium`, `low`, and `none` become `0`. Every other Task field and Label association
+  is preserved.
 
 ## SQLite schema design
 
@@ -120,8 +123,7 @@ CREATE TABLE tasks (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL CHECK (length(trim(title)) > 0),
   notes TEXT NOT NULL DEFAULT '',
-  priority TEXT NOT NULL DEFAULT 'none'
-    CHECK (priority IN ('none', 'low', 'medium', 'high')),
+  priority INTEGER NOT NULL DEFAULT 0 CHECK (priority IN (0, 1)),
   position INTEGER NOT NULL CHECK (position >= 0),
   project_id TEXT,
   due_kind TEXT NOT NULL DEFAULT 'none'
@@ -193,7 +195,7 @@ CREATE INDEX tasks_trashed_idx
   ON tasks (trashed_at_ms DESC, id)
   WHERE trashed_at_ms IS NOT NULL;
 
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 COMMIT;
 ```
 
@@ -201,8 +203,9 @@ COMMIT;
 
 ## Verification
 
-`tests/shared/production-schema.test.ts` covers fresh creation, populated version 1 conversion,
-normalized collision merging, empty Sections, ordering, lifecycle preservation, rollback,
-concurrent startup, foreign keys, reopen, and future-version rejection.
+`tests/shared/production-schema.test.ts` covers fresh creation, populated version 1 and version 2
+conversion, normalized collision merging, empty Sections, high-only priority conversion, ordering,
+lifecycle preservation, rollback, concurrent startup, foreign keys, reopen, and future-version
+rejection.
 `tests/shared/domain-operations.test.ts` covers Label lifecycle and assignment through the
 production SQLite repository. The repository-wide gate is `corepack pnpm run verify`.

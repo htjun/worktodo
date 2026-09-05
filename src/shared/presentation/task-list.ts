@@ -142,13 +142,6 @@ export function taskListRowPresentation(
   };
 }
 
-function priorityDetailLabel(task: Task): string {
-  if (task.priority === "none") {
-    return "None";
-  }
-  return `${task.priority[0].toUpperCase()}${task.priority.slice(1)}`;
-}
-
 function detailPresentation(
   entry: TaskListEntry,
   project: string,
@@ -158,7 +151,7 @@ function detailPresentation(
   const due = duePresentation(entry, viewerTimeZone);
   const metadata: TaskDetailField[] = [
     { title: "Project", text: project },
-    { title: "Priority", text: priorityDetailLabel(entry.task) },
+    { title: "Priority", text: entry.task.priority ? "Yes" : "No" },
     due,
     { title: "Created", text: instantLabel(entry.task.createdAtMs, viewerTimeZone) },
     { title: "Updated", text: instantLabel(entry.task.updatedAtMs, viewerTimeZone) },
@@ -197,7 +190,6 @@ export function buildTaskListItems(
       labelAccessories.push({ kind: "text", text: `+${labelNames.length - 2}` });
     }
     const due = entry.task.due.kind === "none" ? null : duePresentation(entry, viewerTimeZone);
-    const priority = entry.task.priority === "none" ? null : `${entry.task.priority} priority`;
     const completed = lifecycleLabel("Completed", entry.task.completedAtMs, viewerTimeZone);
     const trashed = lifecycleLabel("Trashed", entry.task.trashedAtMs, viewerTimeZone);
     return {
@@ -207,7 +199,7 @@ export function buildTaskListItems(
       keywords: [project, entry.task.notes, ...labelNames],
       accessories: [
         ...labelAccessories,
-        ...[priority, due ? `${due.title} ${due.text}` : null, completed, trashed]
+        ...[due ? `${due.title} ${due.text}` : null, completed, trashed]
           .filter((value): value is string => value !== null)
           .map((text): TaskListAccessory => ({ kind: "text", text })),
       ],

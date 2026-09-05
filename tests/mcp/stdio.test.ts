@@ -91,7 +91,7 @@ describe("Worktodo MCP stdio server", () => {
         arguments: {
           title: "Persist through stdio",
           notes: "Use the compiled server",
-          priority: "high",
+          priority: true,
           labelIds: [discoveredLabelId],
           due: { kind: "allDay", date: "2026-08-31" },
         },
@@ -101,7 +101,7 @@ describe("Worktodo MCP stdio server", () => {
         task: {
           title: "Persist through stdio",
           notes: "Use the compiled server",
-          priority: "high",
+          priority: true,
           projectId: null,
           labelIds: [discoveredLabelId],
           due: { kind: "allDay", date: "2026-08-31" },

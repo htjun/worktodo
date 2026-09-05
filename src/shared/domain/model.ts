@@ -1,5 +1,3 @@
-export type Priority = "none" | "low" | "medium" | "high";
-
 export type DueValue =
   { kind: "none" } | { kind: "allDay"; date: string } | { kind: "timed"; instantMs: number; timeZone: string };
 
@@ -23,7 +21,7 @@ export type Task = {
   id: string;
   title: string;
   notes: string;
-  priority: Priority;
+  priority: boolean;
   position: number;
   projectId: string | null;
   labelIds: string[];

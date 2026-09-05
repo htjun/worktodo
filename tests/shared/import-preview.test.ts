@@ -40,7 +40,7 @@ function task(index: number, completedAtMs: number | null, trashedAtMs: number |
     id: id(index),
     title: `Task ${index}`,
     notes: "",
-    priority: "none" as const,
+    priority: false,
     position: 1_024,
     projectId: null,
     labelIds: [],
@@ -92,7 +92,7 @@ describe("Worktodo import validation and preview", () => {
     const prepared = serviceFor({ projects: [], labels: [], tasks: [] }).service.prepare(path);
     expect(prepared.document).toEqual(document);
     expect(prepared.preview).toEqual({
-      formatVersion: 2,
+      formatVersion: 3,
       exportedAtMs: 9_000,
       incoming: {
         projects: 1,
@@ -158,7 +158,7 @@ describe("Worktodo import validation and preview", () => {
   it.each([
     [
       "unsupported versions",
-      (document: WorktodoBackupDocument) => ({ ...document, version: 3 }),
+      (document: WorktodoBackupDocument) => ({ ...document, version: 4 }),
       "UNSUPPORTED_VERSION",
     ],
     [

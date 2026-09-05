@@ -1,4 +1,4 @@
-import { DomainError, type DueValue, type Label, type Priority, type Project, type Task } from "../domain/model";
+import { DomainError, type DueValue, type Label, type Project, type Task } from "../domain/model";
 import { addCalendarDays, calendarDateAt, startOfCalendarDate } from "../domain/queries";
 import type { CreateTaskInput, TaskService, UpdateTaskInput } from "../domain/task-service";
 
@@ -7,7 +7,7 @@ export type DueDatePreset = "none" | "today" | "tomorrow" | "endOfWeek" | "custo
 export type TaskEditingValues = {
   title: string;
   notes: string;
-  priority: Priority;
+  priority: boolean;
   dueDatePreset: DueDatePreset;
   customDueAtMs: number | null;
   selectedProject: string;
@@ -173,7 +173,7 @@ export function taskEditingDefaults(
     return {
       title: "",
       notes: "",
-      priority: "none",
+      priority: false,
       dueDatePreset: "none",
       customDueAtMs: null,
       selectedProject: taskEditingProjectKey(initialProjectId),

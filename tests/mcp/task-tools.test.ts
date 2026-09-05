@@ -176,10 +176,10 @@ describe("Worktodo MCP task tools", () => {
       const updated = taskFrom(
         await callTool(context.client, "update_task", {
           id: first.id,
-          priority: "high",
+          priority: true,
         }),
       );
-      expect(updated).toMatchObject({ priority: "high", labelIds: [waiting.id, research.id] });
+      expect(updated).toMatchObject({ priority: true, labelIds: [waiting.id, research.id] });
       expect(taskFrom(await callTool(context.client, "update_task", { id: first.id, labelIds: [] }))).toMatchObject({
         labelIds: [],
       });
@@ -205,14 +205,14 @@ describe("Worktodo MCP task tools", () => {
         await callTool(context.client, "create_task", {
           title: "Ship MCP tools",
           notes: "Follow the roadmap",
-          priority: "high",
+          priority: true,
           projectId: project.id,
           due: { kind: "allDay", date: "2026-08-31" },
         }),
       );
       expect(created).toMatchObject({
         title: "Ship MCP tools",
-        priority: "high",
+        priority: true,
         projectId: project.id,
       });
       const taskId = created.id as string;
@@ -239,11 +239,11 @@ describe("Worktodo MCP task tools", () => {
           await callTool(context.client, "update_task", {
             id: taskId,
             title: "Ship bounded MCP tools",
-            priority: "medium",
+            priority: false,
             due: { kind: "timed", instantMs: 1_788_139_800_000, timeZone: "Australia/Melbourne" },
           }),
         ),
-      ).toMatchObject({ title: "Ship bounded MCP tools", priority: "medium", due: { kind: "timed" } });
+      ).toMatchObject({ title: "Ship bounded MCP tools", priority: false, due: { kind: "timed" } });
       expect(taskFrom(await callTool(context.client, "move_task", { id: taskId, projectId: null }))).toMatchObject({
         projectId: null,
       });
@@ -365,6 +365,9 @@ describe("Worktodo MCP task tools", () => {
     try {
       expect(await callTool(context.client, "list_tasks", { view: "inbox" })).toMatchObject({ isError: true });
       expect(await callTool(context.client, "list_tasks", { view: "upcoming" })).toMatchObject({ isError: true });
+      expect(
+        await callTool(context.client, "create_task", { title: "Legacy priority", priority: "high" }),
+      ).toMatchObject({ isError: true });
 
       const invalidView = await callTool(context.client, "list_tasks", { view: "project" });
       expect(invalidView).toMatchObject({ isError: true });

@@ -15,7 +15,7 @@ const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 50;
 
 const nonNegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const prioritySchema = z.enum(["none", "low", "medium", "high"]);
+const prioritySchema = z.boolean();
 const dueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }).strict(),
   z.object({ kind: z.literal("allDay"), date: z.string().describe("Gregorian date in YYYY-MM-DD format") }).strict(),

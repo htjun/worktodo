@@ -10,6 +10,7 @@ import {
   PRODUCTION_SCHEMA_SQL,
   UnsupportedSchemaVersionError,
   WORKTODO_SCHEMA_VERSION_1_SQL,
+  WORKTODO_SCHEMA_VERSION_2_SQL,
 } from "../../src/shared/storage/schema";
 import { extractTaskModelSchema } from "../helpers/extract-task-model-schema";
 
@@ -33,12 +34,12 @@ describe("production schema", () => {
     expect(PRODUCTION_SCHEMA_SQL).toBe(extractTaskModelSchema(markdown));
   });
 
-  it("creates a fresh version 2 database exactly once", async () => {
+  it("creates a fresh version 3 database exactly once", async () => {
     const db = openWorktodoDatabase(await temporaryDatabasePath());
     try {
-      expect(applyMigrations(db)).toEqual({ applied: true, previousVersion: 0, currentVersion: 2 });
-      expect(applyMigrations(db)).toEqual({ applied: false, previousVersion: 2, currentVersion: 2 });
-      expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(2);
+      expect(applyMigrations(db)).toEqual({ applied: true, previousVersion: 0, currentVersion: 3 });
+      expect(applyMigrations(db)).toEqual({ applied: false, previousVersion: 3, currentVersion: 3 });
+      expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(3);
       expect(
         db
           .prepare("PRAGMA table_list")
@@ -72,6 +73,16 @@ describe("production schema", () => {
       ]);
       expect(db.prepare("PRAGMA integrity_check").get()?.integrity_check).toBe("ok");
       expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      expect(
+        db
+          .prepare("PRAGMA table_info(tasks)")
+          .all()
+          .find((row) => row.name === "priority"),
+      ).toMatchObject({
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: "0",
+      });
     } finally {
       db.close();
     }
@@ -132,7 +143,7 @@ describe("production schema", () => {
       );
       insertTask.run(id(24), "No project", "", "none", 77, null, null, "none", null, null, null, 303, 303, null, null);
 
-      expect(applyMigrations(db)).toEqual({ applied: true, previousVersion: 1, currentVersion: 2 });
+      expect(applyMigrations(db)).toEqual({ applied: true, previousVersion: 1, currentVersion: 3 });
       expect(
         db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'sections'").get(),
       ).toBeUndefined();
@@ -155,6 +166,12 @@ describe("production schema", () => {
       expect(db.prepare("SELECT task_id, label_id FROM task_labels ORDER BY task_id").all()).toEqual([
         { task_id: id(22), label_id: id(11) },
         { task_id: id(23), label_id: id(11) },
+      ]);
+      expect(db.prepare("SELECT id, priority FROM tasks ORDER BY id").all()).toEqual([
+        { id: id(21), priority: 1 },
+        { id: id(22), priority: 0 },
+        { id: id(23), priority: 0 },
+        { id: id(24), priority: 0 },
       ]);
       expect(db.prepare("SELECT * FROM tasks WHERE id = ?").get(id(22))).toMatchObject({
         title: "Section completed",
@@ -184,18 +201,52 @@ describe("production schema", () => {
         "tasks_timed_today_idx",
         "tasks_trashed_idx",
       ]);
-      expect(applyMigrations(db)).toEqual({ applied: false, previousVersion: 2, currentVersion: 2 });
+      expect(applyMigrations(db)).toEqual({ applied: false, previousVersion: 3, currentVersion: 3 });
     } finally {
       db.close();
     }
   });
 
-  it("rolls back fresh and version 1 migrations completely on failure", async () => {
-    for (const version of [0, 1]) {
+  it("atomically converts version 2 priorities and preserves task label associations", async () => {
+    const db = openWorktodoDatabase(await temporaryDatabasePath());
+    try {
+      db.exec(WORKTODO_SCHEMA_VERSION_2_SQL);
+      db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?, ?)").run(id(1), "Work", 1_024, 100, 100);
+      db.prepare("INSERT INTO labels VALUES (?, ?, ?, ?, ?, ?)").run(id(2), "Waiting", "waiting", 1_024, 100, 100);
+      const insertTask = db.prepare(
+        "INSERT INTO tasks VALUES (?, ?, '', ?, ?, ?, 'none', NULL, NULL, NULL, 100, 100, NULL, NULL)",
+      );
+      insertTask.run(id(10), "None", "none", 1_024, null);
+      insertTask.run(id(11), "Low", "low", 2_048, id(1));
+      insertTask.run(id(12), "Medium", "medium", 3_072, id(1));
+      insertTask.run(id(13), "High", "high", 4_096, id(1));
+      db.prepare("INSERT INTO task_labels VALUES (?, ?)").run(id(13), id(2));
+
+      expect(applyMigrations(db)).toEqual({ applied: true, previousVersion: 2, currentVersion: 3 });
+      expect(db.prepare("SELECT id, priority, project_id FROM tasks ORDER BY id").all()).toEqual([
+        { id: id(10), priority: 0, project_id: null },
+        { id: id(11), priority: 0, project_id: id(1) },
+        { id: id(12), priority: 0, project_id: id(1) },
+        { id: id(13), priority: 1, project_id: id(1) },
+      ]);
+      expect(db.prepare("SELECT task_id, label_id FROM task_labels").all()).toEqual([
+        { task_id: id(13), label_id: id(2) },
+      ]);
+      expect(db.prepare("PRAGMA integrity_check").get()?.integrity_check).toBe("ok");
+      expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rolls back fresh, version 1, and version 2 migrations completely on failure", async () => {
+    for (const version of [0, 1, 2]) {
       const db = openWorktodoDatabase(await temporaryDatabasePath());
       try {
         if (version === 1) {
           db.exec(WORKTODO_SCHEMA_VERSION_1_SQL);
+        } else if (version === 2) {
+          db.exec(WORKTODO_SCHEMA_VERSION_2_SQL);
         }
         expect(() =>
           applyMigrations(db, {
@@ -210,12 +261,21 @@ describe("production schema", () => {
           expect(
             db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'labels'").get(),
           ).toBeUndefined();
-        } else {
+        } else if (version === 1) {
           expect(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'sections'").get()).toEqual(
             {
               name: "sections",
             },
           );
+        } else {
+          expect(
+            db
+              .prepare("PRAGMA table_info(tasks)")
+              .all()
+              .find((row) => row.name === "priority"),
+          ).toMatchObject({
+            type: "TEXT",
+          });
         }
       } finally {
         db.close();
@@ -226,9 +286,9 @@ describe("production schema", () => {
   it("rejects a future schema version without changing it", async () => {
     const db = openWorktodoDatabase(await temporaryDatabasePath());
     try {
-      db.exec("PRAGMA user_version = 3");
+      db.exec("PRAGMA user_version = 4");
       expect(() => applyMigrations(db)).toThrow(UnsupportedSchemaVersionError);
-      expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(3);
+      expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(4);
       expect(db.isTransaction).toBe(false);
     } finally {
       db.close();
@@ -251,6 +311,6 @@ describe("production schema", () => {
     ]);
     const migrations = results.map(({ stdout }) => JSON.parse(stdout) as { applied: boolean; currentVersion: number });
     expect(migrations.filter((result) => result.applied)).toHaveLength(1);
-    expect(migrations.every((result) => result.currentVersion === 2)).toBe(true);
+    expect(migrations.every((result) => result.currentVersion === 3)).toBe(true);
   });
 });

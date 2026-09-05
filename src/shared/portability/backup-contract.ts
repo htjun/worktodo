@@ -3,7 +3,7 @@ import type { Label, Project, Task } from "../domain/model";
 import { canonicalizeTimeZone, normalizeLabelName, validateCalendarDate } from "../domain/validation";
 
 export const WORKTODO_BACKUP_FORMAT = "worktodo-backup";
-export const WORKTODO_BACKUP_VERSION = 2;
+export const WORKTODO_BACKUP_VERSION = 3;
 
 export type WorktodoSnapshot = {
   projects: Project[];
@@ -108,7 +108,14 @@ const lifecycleFields = {
   trashedAtMs: nonNegativeInteger.nullable(),
 };
 
-function validLifecycle(value: z.infer<typeof taskSchemaBase>): boolean {
+type LifecycleValue = {
+  createdAtMs: number;
+  updatedAtMs: number;
+  completedAtMs: number | null;
+  trashedAtMs: number | null;
+};
+
+function validLifecycle(value: LifecycleValue): boolean {
   return (
     value.updatedAtMs >= value.createdAtMs &&
     (value.completedAtMs === null ||
@@ -121,7 +128,7 @@ const taskSchemaBase = z.strictObject({
   id: uuidV4,
   title: trimmedText,
   notes: z.string(),
-  priority: z.enum(["none", "low", "medium", "high"]),
+  priority: z.boolean(),
   position: nonNegativeInteger,
   projectId: uuidV4.nullable(),
   due: dueSchema,
@@ -130,7 +137,11 @@ const taskSchemaBase = z.strictObject({
 
 const taskSchema = taskSchemaBase.extend({ labelIds: z.array(uuidV4) }).refine(validLifecycle);
 
-const legacyTaskSchema = taskSchemaBase
+const legacyTaskSchemaBase = taskSchemaBase.extend({ priority: z.enum(["none", "low", "medium", "high"]) });
+
+const version2TaskSchema = legacyTaskSchemaBase.extend({ labelIds: z.array(uuidV4) }).refine(validLifecycle);
+
+const version1TaskSchema = legacyTaskSchemaBase
   .extend({ sectionId: uuidV4.nullable() })
   .refine(validLifecycle)
   .refine((value) => value.sectionId === null || value.projectId !== null);
@@ -144,17 +155,27 @@ const backupSchema = z.strictObject({
   tasks: z.array(taskSchema),
 });
 
-const legacyBackupSchema = z.strictObject({
+const version2BackupSchema = z.strictObject({
+  format: z.literal(WORKTODO_BACKUP_FORMAT),
+  version: z.literal(2),
+  exportedAtMs: nonNegativeInteger,
+  projects: z.array(projectSchema),
+  labels: z.array(labelSchema),
+  tasks: z.array(version2TaskSchema),
+});
+
+const version1BackupSchema = z.strictObject({
   format: z.literal(WORKTODO_BACKUP_FORMAT),
   version: z.literal(1),
   exportedAtMs: nonNegativeInteger,
   projects: z.array(projectSchema),
   sections: z.array(legacySectionSchema),
-  tasks: z.array(legacyTaskSchema),
+  tasks: z.array(version1TaskSchema),
 });
 
-type LegacyBackupDocument = z.infer<typeof legacyBackupSchema>;
-type LegacyTask = z.infer<typeof legacyTaskSchema>;
+type Version2BackupDocument = z.infer<typeof version2BackupSchema>;
+type Version1BackupDocument = z.infer<typeof version1BackupSchema>;
+type Version1Task = z.infer<typeof version1TaskSchema>;
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -168,11 +189,12 @@ function rejectUnsupportedVersion(value: unknown): void {
     candidate?.format === WORKTODO_BACKUP_FORMAT &&
     Number.isInteger(candidate.version) &&
     candidate.version !== 1 &&
+    candidate.version !== 2 &&
     candidate.version !== WORKTODO_BACKUP_VERSION
   ) {
     throw new PortabilityError(
       "UNSUPPORTED_VERSION",
-      `This Worktodo backup uses version ${String(candidate.version)}. This version of Worktodo supports versions 1 and 2.`,
+      `This Worktodo backup uses version ${String(candidate.version)}. This version of Worktodo supports versions 1, 2, and 3.`,
     );
   }
 }
@@ -234,7 +256,7 @@ function validateRelationships(document: WorktodoBackupDocument): void {
   }
 }
 
-function validateLegacyRelationships(document: LegacyBackupDocument): void {
+function validateVersion1Relationships(document: Version1BackupDocument): void {
   rejectDuplicates(
     "project",
     document.projects.map((project) => project.id),
@@ -270,12 +292,12 @@ function validateLegacyRelationships(document: LegacyBackupDocument): void {
   }
 }
 
-function convertedLegacyTask(task: LegacyTask, position: number, labelIds: string[]): Task {
+function convertedVersion1Task(task: Version1Task, position: number, labelIds: string[]): Task {
   return {
     id: task.id,
     title: task.title,
     notes: task.notes,
-    priority: task.priority,
+    priority: task.priority === "high",
     position,
     projectId: task.projectId,
     labelIds,
@@ -287,8 +309,8 @@ function convertedLegacyTask(task: LegacyTask, position: number, labelIds: strin
   };
 }
 
-function convertLegacyDocument(document: LegacyBackupDocument): WorktodoBackupDocument {
-  validateLegacyRelationships(document);
+function convertVersion1Document(document: Version1BackupDocument): WorktodoBackupDocument {
+  validateVersion1Relationships(document);
   const projects = [...document.projects].sort(compareOrdered);
   const projectRank = new Map(projects.map((project, index) => [project.id, index]));
   const sections = [...document.sections].sort(
@@ -318,7 +340,7 @@ function convertLegacyDocument(document: LegacyBackupDocument): WorktodoBackupDo
 
   const converted = new Map<string, Task>();
   for (const task of document.tasks.filter((candidate) => candidate.projectId === null)) {
-    converted.set(task.id, convertedLegacyTask(task, task.position, []));
+    converted.set(task.id, convertedVersion1Task(task, task.position, []));
   }
   for (const project of projects) {
     const direct = document.tasks
@@ -333,7 +355,7 @@ function convertLegacyDocument(document: LegacyBackupDocument): WorktodoBackupDo
           .map((task) => ({ task, labelId: labelBySection.get(section.id) })),
       );
     [...direct.map((task) => ({ task, labelId: undefined })), ...sectionTasks].forEach(({ task, labelId }, index) => {
-      converted.set(task.id, convertedLegacyTask(task, (index + 1) * 1_024, labelId ? [labelId] : []));
+      converted.set(task.id, convertedVersion1Task(task, (index + 1) * 1_024, labelId ? [labelId] : []));
     });
   }
 
@@ -350,6 +372,14 @@ function convertLegacyDocument(document: LegacyBackupDocument): WorktodoBackupDo
       }
       return convertedTask;
     }),
+  };
+}
+
+function convertVersion2Document(document: Version2BackupDocument): WorktodoBackupDocument {
+  return {
+    ...document,
+    version: WORKTODO_BACKUP_VERSION,
+    tasks: document.tasks.map((task) => ({ ...task, priority: task.priority === "high" })),
   };
 }
 
@@ -375,7 +405,7 @@ export function canonicalBackupDocument(document: WorktodoBackupDocument): Workt
   };
 }
 
-function parseVersion2(value: unknown): WorktodoBackupDocument {
+function parseVersion3(value: unknown): WorktodoBackupDocument {
   const parsed = backupSchema.safeParse(value);
   if (!parsed.success) {
     throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
@@ -389,13 +419,20 @@ export function parseBackupDocument(value: unknown): WorktodoBackupDocument {
   rejectUnsupportedVersion(value);
   const candidate = record(value);
   if (candidate?.format === WORKTODO_BACKUP_FORMAT && candidate.version === 1) {
-    const parsed = legacyBackupSchema.safeParse(value);
+    const parsed = version1BackupSchema.safeParse(value);
     if (!parsed.success) {
       throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
     }
-    return parseVersion2(convertLegacyDocument(parsed.data));
+    return parseVersion3(convertVersion1Document(parsed.data));
   }
-  return parseVersion2(value);
+  if (candidate?.format === WORKTODO_BACKUP_FORMAT && candidate.version === 2) {
+    const parsed = version2BackupSchema.safeParse(value);
+    if (!parsed.success) {
+      throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
+    }
+    return parseVersion3(convertVersion2Document(parsed.data));
+  }
+  return parseVersion3(value);
 }
 
 export function parseBackupJson(value: string): WorktodoBackupDocument {
@@ -409,7 +446,7 @@ export function parseBackupJson(value: string): WorktodoBackupDocument {
 }
 
 export function createBackupDocument(exportedAtMs: number, snapshot: WorktodoSnapshot): WorktodoBackupDocument {
-  return parseVersion2({
+  return parseVersion3({
     format: WORKTODO_BACKUP_FORMAT,
     version: WORKTODO_BACKUP_VERSION,
     exportedAtMs,
@@ -418,5 +455,5 @@ export function createBackupDocument(exportedAtMs: number, snapshot: WorktodoSna
 }
 
 export function serializeBackupDocument(document: WorktodoBackupDocument): string {
-  return `${JSON.stringify(parseVersion2(document), null, 2)}\n`;
+  return `${JSON.stringify(parseVersion3(document), null, 2)}\n`;
 }

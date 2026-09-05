@@ -1,5 +1,5 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
-import type { DueValue, Label, Priority, Project, Task } from "../domain/model";
+import type { DueValue, Label, Project, Task } from "../domain/model";
 import type { TaskRepository } from "../domain/repository";
 import { normalizeLabelName } from "../domain/validation";
 
@@ -29,10 +29,10 @@ function nullableInteger(row: Row, column: string): number | null {
   return row[column] === null ? null : requiredInteger(row, column);
 }
 
-function priority(row: Row): Priority {
-  const value = requiredString(row, "priority");
-  if (value === "none" || value === "low" || value === "medium" || value === "high") {
-    return value;
+function priority(row: Row): boolean {
+  const value = requiredInteger(row, "priority");
+  if (value === 0 || value === 1) {
+    return value === 1;
   }
   throw new Error("Invalid stored priority");
 }
@@ -236,7 +236,7 @@ export class SqliteTaskRepository implements TaskRepository {
         task.id,
         task.title,
         task.notes,
-        task.priority,
+        Number(task.priority),
         task.position,
         task.projectId,
         ...due,
@@ -263,7 +263,7 @@ export class SqliteTaskRepository implements TaskRepository {
       .run(
         task.title,
         task.notes,
-        task.priority,
+        Number(task.priority),
         task.position,
         task.projectId,
         ...due,

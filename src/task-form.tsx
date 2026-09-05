@@ -6,7 +6,7 @@ import {
   taskEditingProjectKey,
   type TaskEditingFailureField,
 } from "./shared/application/task-editing";
-import type { Label, Priority, Project, Task } from "./shared/domain/model";
+import type { Label, Project, Task } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
 import { DueDateFields, LabelPicker, ProjectDropdown } from "./task-form-controls";
 
@@ -39,7 +39,7 @@ export function TaskForm({
     () => taskEditingDefaults(task, initialProjectId, referenceInstantMs, viewerTimeZone),
     [initialProjectId, referenceInstantMs, task, viewerTimeZone],
   );
-  const [priority, setPriority] = useState<Priority>(defaults.priority);
+  const [priority, setPriority] = useState(defaults.priority);
   const [dueDatePreset, setDueDatePreset] = useState(defaults.dueDatePreset);
   const [customDueDate, setCustomDueDate] = useState<Date | null>(() =>
     defaults.customDueAtMs === null ? null : new Date(defaults.customDueAtMs),
@@ -141,17 +141,7 @@ export function TaskForm({
         }}
       />
       <Form.TextArea id="notes" title="Notes" defaultValue={defaults.notes} />
-      <Form.Dropdown
-        id="priority"
-        title="Priority"
-        value={priority}
-        onChange={(value) => setPriority(value as Priority)}
-      >
-        <Form.Dropdown.Item value="none" title="None" />
-        <Form.Dropdown.Item value="low" title="Low" />
-        <Form.Dropdown.Item value="medium" title="Medium" />
-        <Form.Dropdown.Item value="high" title="High" />
-      </Form.Dropdown>
+      <Form.Checkbox id="priority" label="Priority" value={priority} onChange={setPriority} />
       {formError ? <Form.Description title="Error" text={formError} /> : null}
     </Form>
   );

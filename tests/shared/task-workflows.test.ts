@@ -83,7 +83,7 @@ describe("main task workflows", () => {
         {
           title: "Refactor safely",
           notes: "Protect the user workflow",
-          priority: "none",
+          priority: false,
           dueDatePreset: "today",
           customDueAtMs: null,
           selectedProject: taskEditingProjectKey(null),
@@ -101,7 +101,7 @@ describe("main task workflows", () => {
       expect(quickSessionCloseCount).toBe(1);
       expect(session.service.getTask(quickTask.id)).toMatchObject({
         notes: "Protect the user workflow",
-        priority: "none",
+        priority: false,
         projectId: null,
         due: { kind: "allDay", date: "2026-08-31" },
       });
@@ -114,7 +114,7 @@ describe("main task workflows", () => {
         {
           title: "Refactor Worktodo safely",
           notes: "Keep behavior stable",
-          priority: "high",
+          priority: true,
           dueDatePreset: "tomorrow",
           customDueAtMs: null,
           selectedProject: taskEditingProjectKey(null),
@@ -137,7 +137,7 @@ describe("main task workflows", () => {
       expect(moved).toMatchObject({
         title: "Refactor Worktodo safely",
         notes: "Keep behavior stable",
-        priority: "high",
+        priority: true,
         projectId: project.id,
         due: { kind: "allDay", date: "2026-09-01" },
       });

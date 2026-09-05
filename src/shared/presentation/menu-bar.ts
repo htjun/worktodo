@@ -1,4 +1,4 @@
-import type { Priority, Project, Task } from "../domain/model";
+import type { Project, Task } from "../domain/model";
 import { addCalendarDays, type ThisWeekResult } from "../domain/queries";
 import type { TaskLifecycleHistoryState } from "../application/task-lifecycle-interaction";
 import { taskLifecycleHistoryTitle } from "./task-lifecycle";
@@ -12,7 +12,7 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme
 export type MenuBarTask = {
   id: string;
   title: string;
-  priority: Priority;
+  priority: boolean;
   projectName: string | null;
   view: "thisWeek";
 };

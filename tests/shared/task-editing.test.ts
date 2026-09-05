@@ -43,7 +43,7 @@ function task(overrides: Partial<Task> = {}): Task {
     id: "00000000-0000-4000-8000-000000000004",
     title: "Review plan",
     notes: "Keep the behavior",
-    priority: "medium",
+    priority: true,
     position: 1_024,
     projectId: null,
     labelIds: [],
@@ -70,7 +70,7 @@ function values(overrides: Partial<TaskEditingValues> = {}): TaskEditingValues {
   return {
     title: "Review plan",
     notes: "Keep the behavior",
-    priority: "medium",
+    priority: true,
     dueDatePreset: "none",
     customDueAtMs: null,
     selectedProject: taskEditingProjectKey(null),
@@ -85,7 +85,7 @@ function mutations() {
       task({
         title: input.title,
         notes: input.notes ?? "",
-        priority: input.priority ?? "none",
+        priority: input.priority ?? false,
         labelIds: input.labelIds ?? [],
         projectId: input.projectId ?? null,
         due: input.due ?? { kind: "none" },
@@ -109,7 +109,7 @@ describe("Task editing interaction", () => {
     expect(taskEditingDefaults(undefined, project.id, referenceInstantMs, "Australia/Melbourne")).toEqual({
       title: "",
       notes: "",
-      priority: "none",
+      priority: false,
       dueDatePreset: "none",
       customDueAtMs: null,
       selectedProject: taskEditingProjectKey(project.id),

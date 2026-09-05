@@ -16,7 +16,7 @@ function task(overrides: Partial<Task> = {}): Task {
     id: "00000000-0000-4000-8000-000000000001",
     title: "Review lifecycle interaction",
     notes: "",
-    priority: "medium",
+    priority: true,
     position: 1_024,
     projectId: null,
     sectionId: null,

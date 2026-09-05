@@ -15,20 +15,14 @@ import {
   loadMenuBarModel,
 } from "./shared/application/menu-bar-workflows";
 import { openProductionWorktodo } from "./shared/application/worktodo";
-import type { Priority } from "./shared/domain/model";
 import { buildMenuBarTaskHistoryItem, menuBarTaskTitle, type MenuBarModel } from "./shared/presentation/menu-bar";
 import { taskLifecycleHistoryTitle, taskLifecycleMutationPresentation } from "./shared/presentation/task-lifecycle";
 import type { MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { taskLifecycleHistoryActionPresentation } from "./task-lifecycle-raycast";
+import { activeTaskIcon } from "./task-priority-raycast";
 
 const EMPTY_MODEL: MenuBarModel = { count: 0, title: undefined, sections: [] };
 const menuBarVisibilityCache = new Cache({ namespace: "menu-bar-visibility" });
-const PRIORITY_TINT: Record<Priority, Color> = {
-  none: Color.SecondaryText,
-  low: Color.Blue,
-  medium: Color.Orange,
-  high: Color.Red,
-};
 
 type MenuState = {
   isLoading: boolean;
@@ -38,10 +32,6 @@ type MenuState = {
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "An unexpected error occurred";
-}
-
-function priorityIcon(priority: Priority) {
-  return { source: Icon.Circle, tintColor: PRIORITY_TINT[priority] };
 }
 
 function menuIcon(source: Icon) {
@@ -230,7 +220,7 @@ export default function Command(props: LaunchProps) {
         state.model.sections.map((section) => (
           <MenuBarExtra.Section key={section.key} title={section.title}>
             {section.tasks.map((task) => (
-              <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={priorityIcon(task.priority)}>
+              <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={activeTaskIcon(task.priority)}>
                 <MenuBarExtra.Item
                   title="Complete"
                   icon={menuIcon(Icon.CheckCircle)}

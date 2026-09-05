@@ -30,7 +30,7 @@ async function createContext(now = Date.parse("2026-08-30T06:25:30.123Z")) {
   service.createTask({
     title: "Ship backup",
     notes: "Keep every field",
-    priority: "high",
+    priority: true,
     projectId: project.id,
     labelIds: [label.id],
     due: { kind: "allDay", date: "2026-08-31" },

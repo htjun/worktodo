@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { normalizeLabelName } from "../domain/validation";
 
-export const WORKTODO_SCHEMA_VERSION = 2;
+export const WORKTODO_SCHEMA_VERSION = 3;
 
 const PROJECTS_SQL = `
 CREATE TABLE projects (
@@ -25,6 +25,50 @@ CREATE TABLE labels (
 `;
 
 const TASK_COLUMNS_SQL = `
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+  notes TEXT NOT NULL DEFAULT '',
+  priority INTEGER NOT NULL DEFAULT 0 CHECK (priority IN (0, 1)),
+  position INTEGER NOT NULL CHECK (position >= 0),
+  project_id TEXT,
+  due_kind TEXT NOT NULL DEFAULT 'none'
+    CHECK (due_kind IN ('none', 'all_day', 'timed')),
+  due_date TEXT,
+  due_at_ms INTEGER,
+  due_timezone TEXT,
+  created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
+  updated_at_ms INTEGER NOT NULL CHECK (updated_at_ms >= created_at_ms),
+  completed_at_ms INTEGER CHECK (
+    completed_at_ms IS NULL OR
+    (completed_at_ms >= created_at_ms AND completed_at_ms <= updated_at_ms)
+  ),
+  trashed_at_ms INTEGER CHECK (
+    trashed_at_ms IS NULL OR
+    (trashed_at_ms >= created_at_ms AND trashed_at_ms <= updated_at_ms)
+  ),
+  CHECK (
+    (due_kind = 'none' AND due_date IS NULL AND due_at_ms IS NULL AND due_timezone IS NULL) OR
+    (
+      due_kind = 'all_day' AND
+      due_date IS NOT NULL AND
+      due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND
+      length(due_date) = 10 AND
+      due_at_ms IS NULL AND
+      due_timezone IS NULL
+    ) OR
+    (
+      due_kind = 'timed' AND
+      due_date IS NULL AND
+      due_at_ms IS NOT NULL AND
+      due_at_ms >= 0 AND
+      due_timezone IS NOT NULL AND
+      length(trim(due_timezone)) > 0
+    )
+  ),
+  FOREIGN KEY (project_id) REFERENCES projects (id) ON UPDATE RESTRICT ON DELETE RESTRICT
+`;
+
+const VERSION_2_TASK_COLUMNS_SQL = `
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL CHECK (length(trim(title)) > 0),
   notes TEXT NOT NULL DEFAULT '',
@@ -132,10 +176,19 @@ CREATE INDEX tasks_trashed_idx
 `;
 
 const VERSION_2_BODY = `${PROJECTS_SQL}${LABELS_SQL}
+CREATE TABLE tasks (${VERSION_2_TASK_COLUMNS_SQL}) STRICT;
+${TASK_LABELS_SQL}${INDEXES_SQL}`;
+
+const VERSION_3_BODY = `${PROJECTS_SQL}${LABELS_SQL}
 CREATE TABLE tasks (${TASK_COLUMNS_SQL}) STRICT;
 ${TASK_LABELS_SQL}${INDEXES_SQL}`;
 
-export const PRODUCTION_SCHEMA_SQL = `BEGIN IMMEDIATE;${VERSION_2_BODY}
+export const PRODUCTION_SCHEMA_SQL = `BEGIN IMMEDIATE;${VERSION_3_BODY}
+PRAGMA user_version = 3;
+COMMIT;
+`;
+
+export const WORKTODO_SCHEMA_VERSION_2_SQL = `BEGIN IMMEDIATE;${VERSION_2_BODY}
 PRAGMA user_version = 2;
 COMMIT;
 `;
@@ -228,7 +281,7 @@ function userVersion(db: DatabaseSync): number {
 
 function migrateVersion1(db: DatabaseSync): void {
   db.exec(`${LABELS_SQL}
-CREATE TABLE tasks_v2 (${TASK_COLUMNS_SQL}) STRICT;`);
+CREATE TABLE tasks_v2 (${VERSION_2_TASK_COLUMNS_SQL}) STRICT;`);
 
   const sections = db
     .prepare(
@@ -312,6 +365,29 @@ CREATE TABLE tasks_v2 (${TASK_COLUMNS_SQL}) STRICT;`);
   db.exec(INDEXES_SQL);
 }
 
+function migrateVersion2(db: DatabaseSync): void {
+  db.exec(`
+    CREATE TEMP TABLE task_labels_v2 AS
+      SELECT task_id, label_id FROM task_labels;
+    DROP TABLE task_labels;
+    CREATE TABLE tasks_v3 (${TASK_COLUMNS_SQL}) STRICT;
+    INSERT INTO tasks_v3
+    SELECT id, title, notes, CASE priority WHEN 'high' THEN 1 ELSE 0 END,
+           position, project_id, due_kind, due_date, due_at_ms, due_timezone,
+           created_at_ms, updated_at_ms, completed_at_ms, trashed_at_ms
+    FROM tasks;
+    DROP TABLE tasks;
+    ALTER TABLE tasks_v3 RENAME TO tasks;
+    ${TASK_LABELS_SQL}
+    INSERT INTO task_labels(task_id, label_id)
+      SELECT task_id, label_id FROM task_labels_v2;
+    DROP TABLE task_labels_v2;
+    DROP INDEX IF EXISTS projects_order_idx;
+    DROP INDEX IF EXISTS labels_order_idx;
+    ${INDEXES_SQL}
+  `);
+}
+
 export function applyMigrations(db: DatabaseSync, options: MigrationOptions = {}): MigrationResult {
   db.exec("BEGIN IMMEDIATE");
 
@@ -326,9 +402,12 @@ export function applyMigrations(db: DatabaseSync, options: MigrationOptions = {}
     }
 
     if (previousVersion === 0) {
-      db.exec(VERSION_2_BODY);
+      db.exec(VERSION_3_BODY);
     } else if (previousVersion === 1) {
       migrateVersion1(db);
+      migrateVersion2(db);
+    } else if (previousVersion === 2) {
+      migrateVersion2(db);
     } else {
       throw new UnsupportedSchemaVersionError(previousVersion);
     }

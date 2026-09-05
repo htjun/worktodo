@@ -75,7 +75,7 @@ export default function QuickAdd() {
       {
         title: values.title,
         notes: values.notes,
-        priority: "none",
+        priority: false,
         dueDatePreset,
         customDueAtMs: customDueDate?.getTime() ?? null,
         selectedProject,

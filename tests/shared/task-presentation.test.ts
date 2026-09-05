@@ -30,7 +30,7 @@ function task(overrides: Partial<Task> = {}): Task {
     id: "00000000-0000-4000-8000-000000000003",
     title: "Review plan",
     notes: "Open the planning workspace",
-    priority: "high",
+    priority: true,
     position: 1_024,
     projectId: project.id,
     labelIds: [],
@@ -128,13 +128,13 @@ describe("task presentation mapping", () => {
     ]);
   });
 
-  it("preserves query order and supplies due, priority, and project metadata", () => {
+  it("preserves query order without adding priority text to row accessories", () => {
     const first = task();
     const second = task({
       id: "00000000-0000-4000-8000-000000000004",
       title: "No-project task",
       projectId: null,
-      priority: "none",
+      priority: false,
       due: { kind: "none" },
     });
     const items = buildTaskListItems(
@@ -146,10 +146,7 @@ describe("task presentation mapping", () => {
     expect(items.map((item) => item.id)).toEqual([first.id, second.id]);
     expect(items[0]).toMatchObject({
       subtitle: "Personal",
-      accessories: [
-        { kind: "text", text: "high priority" },
-        { kind: "text", text: "Overdue 2026-10-04" },
-      ],
+      accessories: [{ kind: "text", text: "Overdue 2026-10-04" }],
       keywords: ["Personal", "Open the planning workspace"],
     });
     expect(items[1]).toMatchObject({ subtitle: undefined, accessories: [] });
@@ -166,18 +163,18 @@ describe("task presentation mapping", () => {
       task({
         id: "00000000-0000-4000-8000-000000000010",
         projectId: null,
-        priority: "none",
+        priority: false,
         due: { kind: "none" },
       }),
       task({
         id: "00000000-0000-4000-8000-000000000011",
         projectId: project.id,
-        priority: "low",
+        priority: true,
         due: { kind: "allDay", date: "2026-10-04" },
       }),
       task({
         id: "00000000-0000-4000-8000-000000000012",
-        priority: "medium",
+        priority: false,
         due: { kind: "timed", instantMs: timedAtMs, timeZone: "Australia/Melbourne" },
       }),
     ];
@@ -194,17 +191,17 @@ describe("task presentation mapping", () => {
     expect(first.map((item) => item.detail.metadata.slice(0, 3))).toEqual([
       [
         { title: "Project", text: "No project" },
-        { title: "Priority", text: "None" },
+        { title: "Priority", text: "No" },
         { title: "Due date", text: "None" },
       ],
       [
         { title: "Project", text: "Personal" },
-        { title: "Priority", text: "Low" },
+        { title: "Priority", text: "Yes" },
         { title: "Overdue", text: "2026-10-04" },
       ],
       [
         { title: "Project", text: "Personal" },
-        { title: "Priority", text: "Medium" },
+        { title: "Priority", text: "No" },
         { title: "Today", text: timedLabel },
       ],
     ]);
@@ -245,7 +242,7 @@ describe("task presentation mapping", () => {
     ],
   ])("shows a bounded row summary for %s Labels and every Label in details", (labelIds, accessories) => {
     const [item] = buildTaskListItems(
-      [{ task: task({ priority: "none", due: { kind: "none" }, labelIds }) }],
+      [{ task: task({ priority: false, due: { kind: "none" }, labelIds }) }],
       [project],
       labels,
       "Australia/Melbourne",
@@ -289,7 +286,7 @@ describe("task presentation mapping", () => {
   });
 
   it("shows completion acknowledgement without changing the task title or source item", () => {
-    const source = task({ priority: "medium", due: { kind: "none" } });
+    const source = task({ priority: true, due: { kind: "none" } });
     const [item] = buildTaskListItems([{ task: source }], [], [], "Australia/Melbourne");
     const before = structuredClone(item);
     const completed = { ...source, completedAtMs: 2_000, updatedAtMs: 2_000 };
@@ -301,7 +298,7 @@ describe("task presentation mapping", () => {
     });
     expect(taskListRowPresentation(item, undefined)).toEqual({
       title: source.title,
-      accessories: [{ kind: "text", text: "medium priority" }],
+      accessories: [],
       isCompletionAcknowledged: false,
     });
     expect(item).toEqual(before);
@@ -320,7 +317,7 @@ describe("task presentation mapping", () => {
       [
         {
           task: task({
-            priority: "none",
+            priority: false,
             due: { kind: "none" },
             completedAtMs,
             trashedAtMs,
@@ -338,7 +335,7 @@ describe("task presentation mapping", () => {
     ]);
     expect(item.detail.metadata).toEqual([
       { title: "Project", text: "Personal" },
-      { title: "Priority", text: "None" },
+      { title: "Priority", text: "No" },
       { title: "Due date", text: "None" },
       { title: "Created", text: format.format(new Date(1_000)) },
       { title: "Updated", text: format.format(new Date(1_000)) },

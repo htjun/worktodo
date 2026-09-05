@@ -68,10 +68,10 @@ describe("Worktodo application session", () => {
 
     const inspection = openWorktodoDatabase(databasePath);
     try {
-      expect(inspection.prepare("PRAGMA user_version").get()?.user_version).toBe(2);
+      expect(inspection.prepare("PRAGMA user_version").get()?.user_version).toBe(3);
       expect(migrations).toEqual([
-        { applied: true, previousVersion: 0, currentVersion: 2 },
-        { applied: false, previousVersion: 2, currentVersion: 2 },
+        { applied: true, previousVersion: 0, currentVersion: 3 },
+        { applied: false, previousVersion: 3, currentVersion: 3 },
       ]);
     } finally {
       inspection.close();

@@ -40,7 +40,7 @@ function completeDocument(): WorktodoBackupDocument {
         id: id(8),
         title: "Trashed and completed",
         notes: "Unicode note: café ☕",
-        priority: "high",
+        priority: true,
         position: 1_024,
         projectId: id(1),
         labelIds: [id(4), id(3)],
@@ -54,7 +54,7 @@ function completeDocument(): WorktodoBackupDocument {
         id: id(7),
         title: "Trashed incomplete",
         notes: "",
-        priority: "medium",
+        priority: false,
         position: 1_024,
         projectId: id(1),
         labelIds: [],
@@ -68,7 +68,7 @@ function completeDocument(): WorktodoBackupDocument {
         id: id(6),
         title: "Completed no-project task",
         notes: "Plain notes",
-        priority: "low",
+        priority: false,
         position: 1_024,
         projectId: null,
         labelIds: [],
@@ -82,7 +82,7 @@ function completeDocument(): WorktodoBackupDocument {
         id: id(5),
         title: "Active no-project task",
         notes: "",
-        priority: "none",
+        priority: false,
         position: 1_024,
         projectId: null,
         labelIds: [],
@@ -106,7 +106,7 @@ function expectCode(operation: () => unknown, code: PortabilityError["code"]): v
   }
 }
 
-function legacyTask(task: WorktodoBackupDocument["tasks"][number]): Record<string, unknown> {
+function version1Task(task: Record<string, unknown>): Record<string, unknown> {
   const converted: Record<string, unknown> = { ...task };
   delete converted.labelIds;
   return converted;
@@ -127,7 +127,7 @@ describe("Worktodo backup contract", () => {
 
   it("rejects malformed JSON and unsupported versions with bounded codes", () => {
     expectCode(() => parseBackupJson("{"), "INVALID_DOCUMENT");
-    expectCode(() => parseBackupDocument({ ...completeDocument(), version: 3 }), "UNSUPPORTED_VERSION");
+    expectCode(() => parseBackupDocument({ ...completeDocument(), version: 4 }), "UNSUPPORTED_VERSION");
     const missingVersion: Record<string, unknown> = { ...completeDocument() };
     delete missingVersion.version;
     expectCode(() => parseBackupDocument(missingVersion), "INVALID_MODEL");
@@ -230,29 +230,48 @@ describe("Worktodo backup contract", () => {
         { id: id(12), projectId: id(2), name: "ＷＡＩＴＩＮＧ", position: 1, createdAtMs: 12, updatedAtMs: 12 },
       ],
       tasks: [
-        { ...completeDocument().tasks[0], id: id(20), projectId: id(1), sectionId: null },
-        { ...completeDocument().tasks[1], id: id(21), projectId: id(1), sectionId: id(10) },
-        { ...completeDocument().tasks[2], id: id(22), projectId: id(2), sectionId: id(12) },
-      ].map(legacyTask),
+        { ...completeDocument().tasks[0], id: id(20), priority: "high", projectId: id(1), sectionId: null },
+        { ...completeDocument().tasks[1], id: id(21), priority: "medium", projectId: id(1), sectionId: id(10) },
+        { ...completeDocument().tasks[2], id: id(22), priority: "low", projectId: id(2), sectionId: id(12) },
+      ].map(version1Task),
     };
 
     const converted = parseBackupDocument(legacy);
-    expect(converted.version).toBe(2);
+    expect(converted.version).toBe(3);
     expect(converted.labels).toEqual([
       expect.objectContaining({ id: id(10), name: "Waiting", position: 1_024 }),
       expect.objectContaining({ id: id(11), name: "Empty", position: 2_048 }),
     ]);
-    expect(converted.tasks.find((task) => task.id === id(20))).toMatchObject({ position: 1_024, labelIds: [] });
+    expect(converted.tasks.find((task) => task.id === id(20))).toMatchObject({
+      priority: true,
+      position: 1_024,
+      labelIds: [],
+    });
     expect(converted.tasks.find((task) => task.id === id(21))).toMatchObject({
       position: 2_048,
+      priority: false,
       labelIds: [id(10)],
       completedAtMs: 200,
     });
     expect(converted.tasks.find((task) => task.id === id(22))).toMatchObject({
       position: 1_024,
+      priority: false,
       labelIds: [id(10)],
       trashedAtMs: 300,
     });
+  });
+
+  it("converts version 2 priority levels with only high enabled", () => {
+    const document = completeDocument();
+    const priorities = ["high", "medium", "low", "none"];
+    const converted = parseBackupDocument({
+      ...document,
+      version: 2,
+      tasks: document.tasks.map((task, index) => ({ ...task, priority: priorities[index] })),
+    });
+
+    expect(converted.version).toBe(3);
+    expect(converted.tasks.map((task) => task.priority)).toEqual([true, false, false, false]);
   });
 
   it("rejects duplicate normalized label names and duplicate task assignments", () => {

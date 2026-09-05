@@ -1,12 +1,6 @@
-import { DomainError, type Priority, type Task } from "./model";
+import { DomainError, type Task } from "./model";
 import { canonicalizeTimeZone, validateCalendarDate, validateNonNegativeInteger } from "./validation";
 
-const PRIORITY_RANK: Record<Priority, number> = {
-  none: 0,
-  low: 1,
-  medium: 2,
-  high: 3,
-};
 const MILLISECONDS_PER_DAY = 86_400_000;
 const MILLISECONDS_PER_HOUR = 3_600_000;
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
@@ -47,12 +41,7 @@ function compareId(left: string, right: string): number {
 }
 
 export function compareOrdinaryTasks(left: Task, right: Task): number {
-  return (
-    PRIORITY_RANK[right.priority] - PRIORITY_RANK[left.priority] ||
-    left.position - right.position ||
-    left.createdAtMs - right.createdAtMs ||
-    compareId(left.id, right.id)
-  );
+  return left.position - right.position || left.createdAtMs - right.createdAtMs || compareId(left.id, right.id);
 }
 
 export function queryAllTasks(tasks: readonly Task[], viewerTimeZone: string): Task[] {

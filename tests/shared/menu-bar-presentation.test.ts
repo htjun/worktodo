@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Priority, Project, Task } from "../../src/shared/domain/model";
+import type { Project, Task } from "../../src/shared/domain/model";
 import type { ThisWeekResult } from "../../src/shared/domain/queries";
 import {
   buildMenuBarModel,
@@ -9,7 +9,7 @@ import {
 } from "../../src/shared/presentation/menu-bar";
 import { parseMyTasksLaunchContext } from "../../src/shared/presentation/task-launch";
 
-function task(id: string, title: string, priority: Priority, projectId: string | null = null): Task {
+function task(id: string, title: string, priority: boolean, projectId: string | null = null): Task {
   return {
     id,
     title,
@@ -45,17 +45,17 @@ function project(id: string, name: string): Project {
 describe("menu-bar presentation", () => {
   it("groups tasks through Sunday and preserves query order, priorities, and project names", () => {
     const work = project("project-1", "Work");
-    const overdueHigh = task("1", "Submit report", "high", work.id);
-    const overdueLow = task("2", "Book appointment", "low");
-    const dueToday = task("3", "Buy groceries", "none");
-    const dueTomorrow = task("4", "Review proposal", "medium", work.id);
-    const dueFriday = task("5", "Plan launch", "high", work.id);
+    const overduePriority = task("1", "Submit report", true, work.id);
+    const overdue = task("2", "Book appointment", false);
+    const dueToday = task("3", "Buy groceries", false);
+    const dueTomorrow = task("4", "Review proposal", false, work.id);
+    const dueFriday = task("5", "Plan launch", true, work.id);
 
     expect(
       buildMenuBarModel(
         thisWeekResult([
-          { task: overdueHigh, status: "overdue", localDate: "2026-08-30", effectiveDueAtMs: 1_000 },
-          { task: overdueLow, status: "overdue", localDate: "2026-08-30", effectiveDueAtMs: 1_100 },
+          { task: overduePriority, status: "overdue", localDate: "2026-08-30", effectiveDueAtMs: 1_000 },
+          { task: overdue, status: "overdue", localDate: "2026-08-30", effectiveDueAtMs: 1_100 },
           { task: dueToday, status: "dueToday", localDate: "2026-08-31", effectiveDueAtMs: 1_200 },
           { task: dueTomorrow, status: "laterThisWeek", localDate: "2026-09-01", effectiveDueAtMs: 2_000 },
           { task: dueFriday, status: "laterThisWeek", localDate: "2026-09-04", effectiveDueAtMs: 3_000 },
@@ -73,14 +73,14 @@ describe("menu-bar presentation", () => {
             {
               id: "1",
               title: "Submit report",
-              priority: "high",
+              priority: true,
               projectName: "Work",
               view: "thisWeek",
             },
             {
               id: "2",
               title: "Book appointment",
-              priority: "low",
+              priority: false,
               projectName: null,
               view: "thisWeek",
             },
@@ -93,7 +93,7 @@ describe("menu-bar presentation", () => {
             {
               id: "3",
               title: "Buy groceries",
-              priority: "none",
+              priority: false,
               projectName: null,
               view: "thisWeek",
             },
@@ -106,7 +106,7 @@ describe("menu-bar presentation", () => {
             {
               id: "4",
               title: "Review proposal",
-              priority: "medium",
+              priority: false,
               projectName: "Work",
               view: "thisWeek",
             },
@@ -119,7 +119,7 @@ describe("menu-bar presentation", () => {
             {
               id: "5",
               title: "Plan launch",
-              priority: "high",
+              priority: true,
               projectName: "Work",
               view: "thisWeek",
             },
@@ -138,7 +138,7 @@ describe("menu-bar presentation", () => {
   });
 
   it("does not include later-this-week tasks in the menu title count", () => {
-    const tomorrow = task("1", "Review proposal", "medium");
+    const tomorrow = task("1", "Review proposal", false);
 
     expect(
       buildMenuBarModel(
@@ -156,7 +156,7 @@ describe("menu-bar presentation", () => {
             {
               id: "1",
               title: "Review proposal",
-              priority: "medium",
+              priority: false,
               projectName: null,
               view: "thisWeek",
             },
@@ -170,7 +170,7 @@ describe("menu-bar presentation", () => {
     const baseTask = {
       id: "task-1",
       title: "Submit report",
-      priority: "high" as const,
+      priority: true,
       view: "thisWeek" as const,
     };
     expect(menuBarTaskTitle({ ...baseTask, projectName: "Work" })).toBe("Submit report · Work");
@@ -180,7 +180,7 @@ describe("menu-bar presentation", () => {
   it("keeps task labels at the limit and truncates labels that exceed it", () => {
     const baseTask = {
       id: "task-1",
-      priority: "high" as const,
+      priority: true,
       projectName: null,
       view: "thisWeek" as const,
     };
@@ -195,7 +195,7 @@ describe("menu-bar presentation", () => {
       menuBarTaskTitle({
         id: "task-1",
         title: "a".repeat(100),
-        priority: "high",
+        priority: true,
         projectName: "Work",
         view: "thisWeek",
       }),
@@ -207,7 +207,7 @@ describe("menu-bar presentation", () => {
       menuBarTaskTitle({
         id: "task-1",
         title: "a".repeat(100),
-        priority: "high",
+        priority: true,
         projectName: "p".repeat(30),
         view: "thisWeek",
       }),
@@ -221,7 +221,7 @@ describe("menu-bar presentation", () => {
       menuBarTaskTitle({
         id: "task-1",
         title: family.repeat(73),
-        priority: "high",
+        priority: true,
         projectName: null,
         view: "thisWeek",
       }),

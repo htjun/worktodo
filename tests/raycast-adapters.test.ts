@@ -9,6 +9,10 @@ const raycast = vi.hoisted(() => ({
 }));
 
 vi.mock("@raycast/api", () => ({
+  Color: {
+    Red: "red",
+    SecondaryText: "secondary-text",
+  },
   Icon: {
     ArrowCounterClockwise: "arrow-counter-clockwise",
     CheckCircle: "check-circle",
@@ -33,6 +37,7 @@ import {
   taskLifecycleHistoryActionPresentation,
   taskLifecycleMutationActionPresentation,
 } from "../src/task-lifecycle-raycast";
+import { activeTaskIcon, taskListIcon } from "../src/task-priority-raycast";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -156,6 +161,29 @@ describe("interface copy", () => {
     expect(menuBar).not.toContain('title="Complete task"');
     expect(menuBar).not.toContain('title="Open task"');
     expect(menuBar).not.toContain('title="Edit task"');
+  });
+});
+
+describe("binary priority adapters", () => {
+  it("uses a checkbox and keeps Quick add unprioritized", () => {
+    const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
+    const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
+
+    expect(taskForm).toContain(
+      '<Form.Checkbox id="priority" label="Priority" value={priority} onChange={setPriority} />',
+    );
+    expect(taskForm).not.toContain('Form.Dropdown.Item value="high"');
+    expect(quickAdd).toContain("priority: false");
+  });
+
+  it("uses red only for prioritized active tasks and preserves lifecycle icons", () => {
+    expect(activeTaskIcon(false)).toBe("circle");
+    expect(activeTaskIcon(true)).toEqual({ source: "circle", tintColor: "red" });
+    expect(taskListIcon({ kind: "all" }, true, false)).toEqual({ source: "circle", tintColor: "red" });
+    expect(taskListIcon({ kind: "all" }, false, false)).toBe("circle");
+    expect(taskListIcon({ kind: "all" }, true, true)).toBe("check-circle");
+    expect(taskListIcon({ kind: "completed" }, true, false)).toBe("check-circle");
+    expect(taskListIcon({ kind: "trash" }, true, false)).toBe("trash");
   });
 });
 
