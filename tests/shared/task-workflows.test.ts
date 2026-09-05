@@ -375,7 +375,7 @@ describe("main task workflows", () => {
       );
       expect(() => resolveTaskView("all", undefined, id(99))).toThrow("labelId is valid only for the label view");
       expect(() => loadTaskView(session.service, { kind: "all" }, { ...context, evaluationInstantMs: -1 })).toThrow(
-        "Evaluation instant must be a non-negative safe integer",
+        "Evaluation instant must be a representable Unix-millisecond timestamp",
       );
     } finally {
       session.close();
