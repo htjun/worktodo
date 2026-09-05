@@ -1,7 +1,7 @@
 import { DomainError, type Label, type Project, type Task } from "../domain/model";
 import type { ThisWeekResult, TodayResult } from "../domain/queries";
 import type { TaskService } from "../domain/task-service";
-import { canonicalizeTimeZone, validateId, validateNonNegativeInteger } from "../domain/validation";
+import { canonicalizeTimeZone, validateId, validateTimestamp } from "../domain/validation";
 
 export const STATIC_TASK_VIEW_KINDS = ["all", "today", "thisWeek", "completed", "trash"] as const;
 export const TASK_VIEW_KINDS = [...STATIC_TASK_VIEW_KINDS, "project", "label"] as const;
@@ -103,7 +103,7 @@ export function loadTaskView(
 ): ThisWeekTaskViewResult;
 export function loadTaskView(source: TaskService, view: TaskView, context: TaskViewContext): TaskViewResult;
 export function loadTaskView(source: TaskService, view: TaskView, context: TaskViewContext): TaskViewResult {
-  const evaluatedAtMs = validateNonNegativeInteger(context.evaluationInstantMs, "Evaluation instant");
+  const evaluatedAtMs = validateTimestamp(context.evaluationInstantMs, "Evaluation instant");
   const viewerTimeZone = canonicalizeTimeZone(context.viewerTimeZone);
   const resultContext = { evaluatedAtMs, viewerTimeZone };
 

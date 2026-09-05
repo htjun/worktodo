@@ -5,6 +5,7 @@ import { Client, InMemoryTransport, type CallToolResult } from "@modelcontextpro
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "../../mcp/create-server";
 import { TaskService } from "../../src/shared/domain/task-service";
+import { MAX_REPRESENTABLE_TIMESTAMP_MS } from "../../src/shared/domain/validation";
 import { openWorktodoDatabase } from "../../src/shared/storage/database";
 import { applyMigrations } from "../../src/shared/storage/schema";
 import { SqliteTaskRepository } from "../../src/shared/storage/sqlite-task-repository";
@@ -367,6 +368,12 @@ describe("Worktodo MCP task tools", () => {
       expect(await callTool(context.client, "list_tasks", { view: "upcoming" })).toMatchObject({ isError: true });
       expect(
         await callTool(context.client, "create_task", { title: "Legacy priority", priority: "high" }),
+      ).toMatchObject({ isError: true });
+      expect(
+        await callTool(context.client, "create_task", {
+          title: "Invalid timed due",
+          due: { kind: "timed", instantMs: MAX_REPRESENTABLE_TIMESTAMP_MS + 1, timeZone: "UTC" },
+        }),
       ).toMatchObject({ isError: true });
 
       const invalidView = await callTool(context.client, "list_tasks", { view: "project" });

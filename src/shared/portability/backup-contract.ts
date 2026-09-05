@@ -1,6 +1,11 @@
 import { z } from "zod";
 import type { Label, Project, Task } from "../domain/model";
-import { canonicalizeTimeZone, normalizeLabelName, validateCalendarDate } from "../domain/validation";
+import {
+  canonicalizeTimeZone,
+  MAX_REPRESENTABLE_TIMESTAMP_MS,
+  normalizeLabelName,
+  validateCalendarDate,
+} from "../domain/validation";
 
 export const WORKTODO_BACKUP_FORMAT = "worktodo-backup";
 export const WORKTODO_BACKUP_VERSION = 3;
@@ -43,10 +48,11 @@ export class PortabilityError extends Error {
 
 const uuidV4 = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 const nonNegativeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const timestamp = z.number().int().nonnegative().max(MAX_REPRESENTABLE_TIMESTAMP_MS);
 const trimmedText = z.string().refine((value) => value.length > 0 && value === value.trim());
 const timestampedEntity = {
-  createdAtMs: nonNegativeInteger,
-  updatedAtMs: nonNegativeInteger,
+  createdAtMs: timestamp,
+  updatedAtMs: timestamp,
 };
 
 const projectSchema = z
@@ -91,7 +97,7 @@ const dueSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     kind: z.literal("timed"),
-    instantMs: nonNegativeInteger,
+    instantMs: timestamp,
     timeZone: z.string().refine((value) => {
       try {
         return canonicalizeTimeZone(value) === value;
@@ -104,8 +110,8 @@ const dueSchema = z.discriminatedUnion("kind", [
 
 const lifecycleFields = {
   ...timestampedEntity,
-  completedAtMs: nonNegativeInteger.nullable(),
-  trashedAtMs: nonNegativeInteger.nullable(),
+  completedAtMs: timestamp.nullable(),
+  trashedAtMs: timestamp.nullable(),
 };
 
 type LifecycleValue = {
@@ -149,7 +155,7 @@ const version1TaskSchema = legacyTaskSchemaBase
 const backupSchema = z.strictObject({
   format: z.literal(WORKTODO_BACKUP_FORMAT),
   version: z.literal(WORKTODO_BACKUP_VERSION),
-  exportedAtMs: nonNegativeInteger,
+  exportedAtMs: timestamp,
   projects: z.array(projectSchema),
   labels: z.array(labelSchema),
   tasks: z.array(taskSchema),
@@ -158,7 +164,7 @@ const backupSchema = z.strictObject({
 const version2BackupSchema = z.strictObject({
   format: z.literal(WORKTODO_BACKUP_FORMAT),
   version: z.literal(2),
-  exportedAtMs: nonNegativeInteger,
+  exportedAtMs: timestamp,
   projects: z.array(projectSchema),
   labels: z.array(labelSchema),
   tasks: z.array(version2TaskSchema),
@@ -167,7 +173,7 @@ const version2BackupSchema = z.strictObject({
 const version1BackupSchema = z.strictObject({
   format: z.literal(WORKTODO_BACKUP_FORMAT),
   version: z.literal(1),
-  exportedAtMs: nonNegativeInteger,
+  exportedAtMs: timestamp,
   projects: z.array(projectSchema),
   sections: z.array(legacySectionSchema),
   tasks: z.array(version1TaskSchema),

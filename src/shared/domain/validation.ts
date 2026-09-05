@@ -1,7 +1,8 @@
-import { DomainError, type DueValue } from "./model";
+import { DomainError, type DomainErrorCode, type DueValue } from "./model";
 
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+export const MAX_REPRESENTABLE_TIMESTAMP_MS = 8_640_000_000_000_000;
 
 export function validateId(value: unknown): string {
   if (typeof value !== "string" || !UUID_V4_PATTERN.test(value)) {
@@ -42,6 +43,13 @@ export function validatePriority(value: unknown): boolean {
 export function validateNonNegativeInteger(value: unknown, label: string): number {
   if (!Number.isSafeInteger(value) || Number(value) < 0) {
     throw new DomainError("INVALID_ARGUMENT", `${label} must be a non-negative safe integer`);
+  }
+  return Number(value);
+}
+
+export function validateTimestamp(value: unknown, label: string, code: DomainErrorCode = "INVALID_ARGUMENT"): number {
+  if (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) > MAX_REPRESENTABLE_TIMESTAMP_MS) {
+    throw new DomainError(code, `${label} must be a representable Unix-millisecond timestamp`);
   }
   return Number(value);
 }
@@ -92,7 +100,7 @@ export function validateDueValue(value: unknown): DueValue {
   if (value.kind === "timed" && "instantMs" in value && "timeZone" in value) {
     return {
       kind: "timed",
-      instantMs: validateNonNegativeInteger(value.instantMs, "Timed due instant"),
+      instantMs: validateTimestamp(value.instantMs, "Timed due instant", "INVALID_DUE_VALUE"),
       timeZone: canonicalizeTimeZone(value.timeZone),
     };
   }

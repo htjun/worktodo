@@ -2,7 +2,7 @@ import { type CallToolResult, McpServer, type ToolAnnotations } from "@modelcont
 import { z } from "zod";
 import { DomainError, type Task } from "../src/shared/domain/model";
 import type { TaskService } from "../src/shared/domain/task-service";
-import { normalizeLabelName } from "../src/shared/domain/validation";
+import { MAX_REPRESENTABLE_TIMESTAMP_MS, normalizeLabelName } from "../src/shared/domain/validation";
 import {
   loadTaskView,
   resolveTaskView,
@@ -15,6 +15,7 @@ const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 50;
 
 const nonNegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const timestampSchema = z.number().int().nonnegative().max(MAX_REPRESENTABLE_TIMESTAMP_MS);
 const prioritySchema = z.boolean();
 const dueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }).strict(),
@@ -22,7 +23,7 @@ const dueSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("timed"),
-      instantMs: nonNegativeSafeIntegerSchema.describe("Unix epoch milliseconds"),
+      instantMs: timestampSchema.describe("Unix epoch milliseconds"),
       timeZone: z.string().describe("IANA timezone identifier"),
     })
     .strict(),
@@ -37,10 +38,10 @@ const taskSchema = z
     projectId: z.string().nullable(),
     labelIds: z.array(z.string()),
     due: dueSchema,
-    createdAtMs: nonNegativeSafeIntegerSchema,
-    updatedAtMs: nonNegativeSafeIntegerSchema,
-    completedAtMs: nonNegativeSafeIntegerSchema.nullable(),
-    trashedAtMs: nonNegativeSafeIntegerSchema.nullable(),
+    createdAtMs: timestampSchema,
+    updatedAtMs: timestampSchema,
+    completedAtMs: timestampSchema.nullable(),
+    trashedAtMs: timestampSchema.nullable(),
   })
   .strict();
 const projectSchema = z
@@ -48,8 +49,8 @@ const projectSchema = z
     id: z.string(),
     name: z.string(),
     position: nonNegativeSafeIntegerSchema,
-    createdAtMs: nonNegativeSafeIntegerSchema,
-    updatedAtMs: nonNegativeSafeIntegerSchema,
+    createdAtMs: timestampSchema,
+    updatedAtMs: timestampSchema,
   })
   .strict();
 const labelSchema = z
@@ -57,8 +58,8 @@ const labelSchema = z
     id: z.string(),
     name: z.string(),
     position: nonNegativeSafeIntegerSchema,
-    createdAtMs: nonNegativeSafeIntegerSchema,
-    updatedAtMs: nonNegativeSafeIntegerSchema,
+    createdAtMs: timestampSchema,
+    updatedAtMs: timestampSchema,
   })
   .strict();
 const taskViewSchema = z.enum(TASK_VIEW_KINDS);
@@ -314,7 +315,7 @@ export function registerTaskTools(server: McpServer, dependencies: TaskToolDepen
         .object({
           view: taskViewSchema,
           query: z.string().nullable(),
-          evaluatedAtMs: nonNegativeSafeIntegerSchema,
+          evaluatedAtMs: timestampSchema,
           timeZone: z.string(),
           ...pageSchema,
           tasks: z.array(taskSchema),

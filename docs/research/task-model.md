@@ -31,6 +31,9 @@ zero or more Labels. Its Due value is independent of its Project.
 Label names are globally unique after Unicode NFKC normalization and locale-independent lowercase
 conversion. Labels are ordered by `(position ASC, createdAtMs ASC, id ASC)`.
 
+Every Unix-millisecond timestamp is a non-negative integer representable by JavaScript `Date`, from
+`0` through `8640000000000000`. Positions use the wider non-negative safe-integer range.
+
 ### Task
 
 | Field           | Required | Meaning                                                         |

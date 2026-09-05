@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DomainError, type DueValue } from "../../src/shared/domain/model";
 import { type TaskRepository } from "../../src/shared/domain/repository";
 import { TaskService } from "../../src/shared/domain/task-service";
+import { MAX_REPRESENTABLE_TIMESTAMP_MS } from "../../src/shared/domain/validation";
 import { openWorktodoDatabase } from "../../src/shared/storage/database";
 import { applyMigrations } from "../../src/shared/storage/schema";
 import { SqliteTaskRepository } from "../../src/shared/storage/sqlite-task-repository";
@@ -152,6 +153,14 @@ describe("shared domain operations", () => {
           }),
         "INVALID_DUE_VALUE",
       );
+      expectDomainError(
+        () =>
+          service.createTask({
+            title: "Bad timed date",
+            due: { kind: "timed", instantMs: MAX_REPRESENTABLE_TIMESTAMP_MS + 1, timeZone: "UTC" },
+          }),
+        "INVALID_DUE_VALUE",
+      );
       expectDomainError(() => service.createTask({ title: "  ", projectId: null }), "INVALID_ARGUMENT");
       expectDomainError(
         () => service.createTask({ title: "Legacy priority", priority: "high" as never, projectId: null }),
@@ -159,6 +168,27 @@ describe("shared domain operations", () => {
       );
       expect(firstProject.name).toBe("First");
       expect(repository.listTasks()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("accepts the representable timestamp boundary and rejects invalid operation time", async () => {
+    const context = await createContext();
+    const { service, repository, db } = context;
+    try {
+      context.setNow(MAX_REPRESENTABLE_TIMESTAMP_MS);
+      const boundary = service.createTask({
+        title: "Boundary",
+        due: { kind: "timed", instantMs: MAX_REPRESENTABLE_TIMESTAMP_MS, timeZone: "UTC" },
+      });
+      expect(boundary).toMatchObject({ createdAtMs: MAX_REPRESENTABLE_TIMESTAMP_MS });
+      expectDomainError(() => service.updateTask(boundary.id, { title: "Too late" }), "INVALID_ARGUMENT");
+      expect(service.getTask(boundary.id)).toEqual(boundary);
+
+      context.setNow(MAX_REPRESENTABLE_TIMESTAMP_MS + 1);
+      expectDomainError(() => service.createProject("Invalid time"), "INVALID_ARGUMENT");
+      expect(repository.listProjects()).toEqual([]);
     } finally {
       db.close();
     }

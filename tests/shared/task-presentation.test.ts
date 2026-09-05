@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { taskLifecycleActionKindForViewKind } from "../../src/shared/application/task-lifecycle-interaction";
 import type { Label, Project, Task } from "../../src/shared/domain/model";
+import { MAX_REPRESENTABLE_TIMESTAMP_MS } from "../../src/shared/domain/validation";
 import { taskLifecycleMutationPresentation } from "../../src/shared/presentation/task-lifecycle";
 import {
   buildAllTaskListSections,
@@ -207,6 +208,25 @@ describe("task presentation mapping", () => {
     ]);
     expect(second.map((item) => item.detail)).toEqual(first.map((item) => item.detail));
     expect(sourceTasks).toEqual(before);
+  });
+
+  it("renders the maximum representable task timestamp", () => {
+    expect(() =>
+      buildTaskListItems(
+        [
+          {
+            task: task({
+              due: { kind: "timed", instantMs: MAX_REPRESENTABLE_TIMESTAMP_MS, timeZone: "UTC" },
+              createdAtMs: MAX_REPRESENTABLE_TIMESTAMP_MS,
+              updatedAtMs: MAX_REPRESENTABLE_TIMESTAMP_MS,
+            }),
+          },
+        ],
+        [project],
+        [],
+        "UTC",
+      ),
+    ).not.toThrow();
   });
 
   it("renders notes literally and extracts distinct valid web links", () => {

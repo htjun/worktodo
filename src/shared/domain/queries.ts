@@ -1,5 +1,5 @@
 import { DomainError, type Task } from "./model";
-import { canonicalizeTimeZone, validateCalendarDate, validateNonNegativeInteger } from "./validation";
+import { canonicalizeTimeZone, validateCalendarDate, validateTimestamp } from "./validation";
 
 const MILLISECONDS_PER_DAY = 86_400_000;
 const MILLISECONDS_PER_HOUR = 3_600_000;
@@ -111,11 +111,9 @@ function calendarDateAtUnchecked(instantMs: number, timeZone: string): string {
 }
 
 export function calendarDateAt(instantMs: number, timeZone: string): string {
-  if (!Number.isSafeInteger(instantMs) || Number.isNaN(new Date(instantMs).getTime())) {
-    throw new DomainError("INVALID_ARGUMENT", "Calendar instant must be a valid safe integer");
-  }
+  const validInstant = validateTimestamp(instantMs, "Calendar instant");
   const canonicalTimeZone = canonicalizeTimeZone(timeZone);
-  return calendarDateAtUnchecked(instantMs, canonicalTimeZone);
+  return calendarDateAtUnchecked(validInstant, canonicalTimeZone);
 }
 
 function utcDateStart(date: string): number {
@@ -181,7 +179,7 @@ export function startOfCalendarDate(date: string, timeZone: string): number {
 }
 
 export function todayWindow(evaluationInstantMs: number, viewerTimeZone: string) {
-  const validInstant = validateNonNegativeInteger(evaluationInstantMs, "Evaluation instant");
+  const validInstant = validateTimestamp(evaluationInstantMs, "Evaluation instant");
   const canonicalTimeZone = canonicalizeTimeZone(viewerTimeZone);
   const localDate = calendarDateAtUnchecked(validInstant, canonicalTimeZone);
   return {

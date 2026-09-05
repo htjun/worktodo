@@ -15,7 +15,7 @@ import {
   validateDueValue,
   validateId,
   normalizeLabelName,
-  validateNonNegativeInteger,
+  validateTimestamp,
   validateNotes,
   validatePriority,
   validateText,
@@ -78,11 +78,7 @@ function sameDue(left: DueValue, right: DueValue): boolean {
 }
 
 function effectiveUpdate(previous: number, now: number): number {
-  const effective = Math.max(previous + 1, now);
-  if (!Number.isSafeInteger(effective)) {
-    throw new DomainError("INVALID_ARGUMENT", "Updated timestamp exceeds the safe integer range");
-  }
-  return effective;
+  return validateTimestamp(Math.max(previous + 1, now), "Updated timestamp");
 }
 
 function appendPosition<T extends OrderedEntity>(items: T[], update: (item: T) => void): number {
@@ -107,7 +103,7 @@ export class TaskService {
   ) {}
 
   private operationTime(): number {
-    return validateNonNegativeInteger(this.dependencies.now(), "Operation timestamp");
+    return validateTimestamp(this.dependencies.now(), "Operation timestamp");
   }
 
   private newId(existing: (id: string) => unknown): string {

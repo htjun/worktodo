@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ImportReplacementError } from "../../src/shared/portability/replace-backup";
+import { MAX_REPRESENTABLE_TIMESTAMP_MS } from "../../src/shared/domain/validation";
 import type { ImportPreview } from "../../src/shared/portability/import-preview";
 import {
   exportSuccessMarkdown,
@@ -39,9 +40,9 @@ describe("backup and restore presentation", () => {
     expect(markdown).toContain("| Completed in trash | 1 | 1 |");
   });
 
-  it("renders an allowed timestamp outside the JavaScript Date range without crashing", () => {
-    expect(importPreviewMarkdown({ ...preview, exportedAtMs: Number.MAX_SAFE_INTEGER })).toContain(
-      `${Number.MAX_SAFE_INTEGER} ms since Unix epoch`,
+  it("renders the maximum representable timestamp without crashing", () => {
+    expect(importPreviewMarkdown({ ...preview, exportedAtMs: MAX_REPRESENTABLE_TIMESTAMP_MS })).toContain(
+      "+275760-09-13T00:00:00.000Z",
     );
   });
 

@@ -27,6 +27,9 @@ ordered by ID, and each Task assignment ordered by canonical Label order. Import
 fields, malformed IDs, invalid timestamps or Due values, duplicate entity IDs, duplicate normalized
 Label names, duplicate Task Label IDs, and missing Project or Label relationships.
 
+Every Unix-millisecond timestamp, including `exportedAtMs` and timed Due instants, must be a
+non-negative integer representable by JavaScript `Date` (`0` through `8640000000000000`).
+
 ## Version 1 and version 2 compatibility
 
 Versions 1 and 2 are import-only. Their string priority values convert to the version 3 boolean:

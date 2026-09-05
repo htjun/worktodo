@@ -5,6 +5,7 @@ import { Client, type CallToolResult } from "@modelcontextprotocol/client";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterEach, describe, expect, it } from "vitest";
 import { WORKTODO_DATABASE_PATH_ENV } from "../../mcp/runtime-options";
+import { MAX_REPRESENTABLE_TIMESTAMP_MS } from "../../src/shared/domain/validation";
 import { openWorktodoAtPath } from "../../src/shared/application/worktodo";
 
 const temporaryDirectories: string[] = [];
@@ -125,6 +126,27 @@ describe("Worktodo MCP stdio server", () => {
     }
 
     await expect(stat(databasePath)).resolves.toMatchObject({ mode: expect.any(Number) });
+  });
+
+  it("rejects an unrepresentable timed due value before the compiled process writes it", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "worktodo-mcp-stdio-date-test-"));
+    temporaryDirectories.push(directory);
+    const databasePath = path.join(directory, "store", "worktodo.sqlite");
+    const context = await connect(databasePath);
+    try {
+      expect(
+        await context.client.callTool({
+          name: "create_task",
+          arguments: {
+            title: "Invalid timed due",
+            due: { kind: "timed", instantMs: MAX_REPRESENTABLE_TIMESTAMP_MS + 1, timeZone: "UTC" },
+          },
+        }),
+      ).toMatchObject({ isError: true });
+      expect(tasksFrom(await context.client.callTool({ name: "list_tasks", arguments: { view: "all" } }))).toEqual([]);
+    } finally {
+      await context.client.close();
+    }
   });
 
   it("rejects a relative database override without falling back to a home-directory store", async () => {

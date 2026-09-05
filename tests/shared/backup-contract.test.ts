@@ -8,6 +8,7 @@ import {
   serializeBackupDocument,
   type WorktodoBackupDocument,
 } from "../../src/shared/portability/backup-contract";
+import { MAX_REPRESENTABLE_TIMESTAMP_MS } from "../../src/shared/domain/validation";
 
 function id(index: number): string {
   return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
@@ -133,6 +134,23 @@ describe("Worktodo backup contract", () => {
     expectCode(() => parseBackupDocument(missingVersion), "INVALID_MODEL");
   });
 
+  it.each([1, 2, 3])("rejects an unrepresentable export timestamp in version %s", (version) => {
+    const document = completeDocument() as WorktodoBackupDocument & Record<string, unknown>;
+    const candidate: Record<string, unknown> = {
+      ...document,
+      version,
+      exportedAtMs: MAX_REPRESENTABLE_TIMESTAMP_MS + 1,
+    };
+    if (version === 1) {
+      candidate.sections = [];
+      candidate.tasks = [];
+      delete candidate.labels;
+    } else if (version === 2) {
+      candidate.tasks = [];
+    }
+    expectCode(() => parseBackupDocument(candidate), "INVALID_MODEL");
+  });
+
   it.each([
     ["unknown top-level fields", (document: WorktodoBackupDocument) => ({ ...document, unexpected: true })],
     [
@@ -171,6 +189,29 @@ describe("Worktodo backup contract", () => {
       (document: WorktodoBackupDocument) => ({
         ...document,
         tasks: [{ ...document.tasks[0], completedAtMs: 99 }, ...document.tasks.slice(1)],
+      }),
+    ],
+    [
+      "unrepresentable due instants",
+      (document: WorktodoBackupDocument) => ({
+        ...document,
+        tasks: [
+          {
+            ...document.tasks[0],
+            due: { kind: "timed", instantMs: MAX_REPRESENTABLE_TIMESTAMP_MS + 1, timeZone: "UTC" },
+          },
+          ...document.tasks.slice(1),
+        ],
+      }),
+    ],
+    [
+      "unrepresentable entity timestamps",
+      (document: WorktodoBackupDocument) => ({
+        ...document,
+        projects: [
+          { ...document.projects[0], updatedAtMs: MAX_REPRESENTABLE_TIMESTAMP_MS + 1 },
+          ...document.projects.slice(1),
+        ],
       }),
     ],
     [
