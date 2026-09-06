@@ -79,4 +79,4 @@ not claim protection from hardware or filesystem implementations that violate fl
 
 The backup contract, export, preview, replacement, recovery, file-stability, and presentation suites
 exercise version 3 round trips and version 1 and 2 compatibility. The repository-wide gate is
-`corepack pnpm run verify`.
+`npm run verify`.

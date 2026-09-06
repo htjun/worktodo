@@ -52,4 +52,4 @@ Raw temporary reports and databases were not retained in the repository. The mea
 
 The temporary Raycast command, coordinator, and synthetic spike tests were removed after production persistence and the shared task domain shipped. The measured results above remain the durable native evidence; the temporary session path may no longer exist.
 
-Run `corepack pnpm run verify` for current production database, migration, domain, query, presentation, and MCP regression coverage. The retained connection and migration tests enforce the approved policies against the shipped implementation. The Project, Label, Task, note, lifecycle, priority, due-value, Today, and relational contracts remain defined in the [shared task model](task-model.md).
+Run `npm run verify` for current production database, migration, domain, query, presentation, and MCP regression coverage. The retained connection and migration tests enforce the approved policies against the shipped implementation. The Project, Label, Task, note, lifecycle, priority, due-value, Today, and relational contracts remain defined in the [shared task model](task-model.md).

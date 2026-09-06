@@ -22,10 +22,8 @@ Worktodo is a local-first personal task manager for Raycast. It stores tasks in 
 git clone https://github.com/htjun/worktodo.git
 cd worktodo
 nvm use
-corepack enable
-corepack prepare pnpm@11.24.0 --activate
-corepack pnpm install --frozen-lockfile
-corepack pnpm run dev
+npm ci
+npm run dev
 ```
 
 Keep the development process running, then open `All tasks`, `Quick add`, `Backup & restore`, or `Worktodo menu bar` in Raycast.
@@ -35,8 +33,8 @@ Keep the development process running, then open `All tasks`, `Quick add`, `Backu
 ```sh
 git pull --ff-only
 nvm use
-corepack pnpm install --frozen-lockfile
-corepack pnpm run dev
+npm ci
+npm run dev
 ```
 
 Stop the previous development process before restarting it. Source installations do not update automatically; pull, install, and restart to use new code.
@@ -46,7 +44,7 @@ Stop the previous development process before restarting it. Source installations
 The MCP server is a separate local STDIO process. Build it and register its compiled entry point with a compatible client:
 
 ```sh
-corepack pnpm run build:mcp
+npm run build:mcp
 codex mcp add worktodo -- node /absolute/path/to/worktodo/dist/mcp/server.js
 ```
 
@@ -65,7 +63,7 @@ Restore validates a selected backup, shows a preview, and requires confirmation 
 Run the complete repository check before committing:
 
 ```sh
-corepack pnpm run verify
+npm run verify
 ```
 
 The command checks formatting, lint, TypeScript, tests, the Raycast build, and the MCP build.

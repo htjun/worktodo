@@ -3,7 +3,6 @@
   "name": "worktodo",
   "title": "Worktodo",
   "description": "A local-first personal task manager for Raycast.",
-  "version": "0.0.0",
   "private": true,
   "author": "jsn",
   "license": "MIT",
@@ -17,21 +16,21 @@
   "engines": {
     "node": ">=22.22.2 <25"
   },
-  "packageManager": "pnpm@11.24.0",
+  "packageManager": "npm@11.16.0",
   "scripts": {
     "dev": "ray develop",
-    "dev:mcp": "pnpm run build:mcp && node dist/mcp/server.js",
-    "build": "pnpm run build:raycast && pnpm run build:mcp",
+    "dev:mcp": "npm run build:mcp && node dist/mcp/server.js",
+    "build": "npm run build:raycast",
     "build:raycast": "ray build",
     "build:mcp": "tsc -p tsconfig.mcp.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.mcp.json",
-    "lint": "CI=false ray lint && eslint mcp tests",
+    "lint": "CI=true ray lint && eslint mcp tests",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "test": "pnpm run build:mcp && vitest run",
-    "verify": "pnpm run format && pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build",
-    "publish": "pnpm dlx @raycast/api@latest publish",
-    "prepublishOnly": "node -e \"throw new Error('Use pnpm run publish for the Raycast Store')\""
+    "test": "npm run build:mcp && vitest run",
+    "verify": "npm run format && npm run lint && npm run typecheck && npm test && npm run build && npm run build:mcp",
+    "publish": "npx @raycast/api@latest publish",
+    "prepublishOnly": "node -e \"throw new Error('Use npm run publish for the Raycast Store')\""
   },
   "commands": [
     {
@@ -61,18 +60,18 @@
     }
   ],
   "dependencies": {
-    "@modelcontextprotocol/server": "2.0.0",
-    "@raycast/api": "2.0.5",
-    "zod": "4.4.3"
+    "@raycast/api": "2.2.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@raycast/eslint-config": "2.2.0",
     "@types/node": "22.19.17",
     "@types/react": "19.0.10",
     "eslint": "10.9.0",
     "prettier": "3.9.6",
     "typescript": "6.0.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "zod": "4.4.3"
   }
 }

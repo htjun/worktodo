@@ -211,4 +211,4 @@ conversion, normalized collision merging, empty Sections, high-only priority con
 lifecycle preservation, rollback, concurrent startup, foreign keys, reopen, and future-version
 rejection.
 `tests/shared/domain-operations.test.ts` covers Label lifecycle and assignment through the
-production SQLite repository. The repository-wide gate is `corepack pnpm run verify`.
+production SQLite repository. The repository-wide gate is `npm run verify`.
