@@ -25,6 +25,11 @@ vi.mock("@raycast/api", () => ({
     Background: "background",
     UserInitiated: "userInitiated",
   },
+  Toast: {
+    Style: {
+      Failure: "failure",
+    },
+  },
   launchCommand: raycast.launchCommand,
   showHUD: raycast.showHUD,
   showToast: raycast.showToast,
@@ -79,6 +84,24 @@ describe("Raycast command launches", () => {
       type: LaunchType.UserInitiated,
       context: { view: "today", selectedTaskId: "task-1", editTask: true },
     });
+  });
+
+  it("shows one bounded failure when All Tasks cannot open", async () => {
+    raycast.launchCommand.mockRejectedValueOnce(new Error("Command unavailable"));
+
+    await expect(launchMyTasks({ view: "all" })).resolves.toBeUndefined();
+
+    expect(raycast.showToast).toHaveBeenCalledOnce();
+    expect(raycast.showToast).toHaveBeenCalledWith("failure", "Unable to open All Tasks");
+  });
+
+  it("keeps a failed background refresh silent", async () => {
+    raycast.launchCommand.mockRejectedValueOnce(new Error("Command unavailable"));
+
+    requestMenuBarRefresh();
+    await Promise.resolve();
+
+    expect(raycast.showToast).not.toHaveBeenCalled();
   });
 });
 
