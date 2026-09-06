@@ -19,7 +19,7 @@ import { buildMenuBarTaskHistoryItem, menuBarTaskTitle, type MenuBarModel } from
 import { taskLifecycleHistoryTitle, taskLifecycleMutationPresentation } from "./shared/presentation/task-lifecycle";
 import type { MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { taskLifecycleHistoryActionPresentation } from "./task-lifecycle-raycast";
-import { menuBarTaskIcon } from "./task-priority-raycast";
+import { MENU_ICON_TINT, menuBarTaskIcon } from "./task-priority-raycast";
 
 const EMPTY_MODEL: MenuBarModel = { count: 0, title: undefined, sections: [] };
 const menuBarVisibilityCache = new Cache({ namespace: "menu-bar-visibility" });
@@ -35,7 +35,7 @@ function messageFrom(error: unknown): string {
 }
 
 function menuIcon(source: Icon) {
-  return { source, tintColor: Color.SecondaryText };
+  return { source, tintColor: MENU_ICON_TINT };
 }
 
 export default function Command(props: LaunchProps) {

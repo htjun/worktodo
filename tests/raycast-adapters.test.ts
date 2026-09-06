@@ -177,7 +177,10 @@ describe("binary priority adapters", () => {
   });
 
   it("uses a thicker brand circle for priority in the menu bar and keeps list completion icons neutral", () => {
-    expect(menuBarTaskIcon(false)).toEqual({ source: "circle", tintColor: "secondary-text" });
+    expect(menuBarTaskIcon(false)).toEqual({
+      source: "circle",
+      tintColor: "#808080",
+    });
     expect(menuBarTaskIcon(true)).toEqual({
       source: "priority-circle.png",
       fallback: "circle",
