@@ -40,7 +40,7 @@ export type TaskDetailPresentation = {
   labels: string[];
 };
 
-export type TaskListAccessory = { kind: "text"; text: string } | { kind: "tag"; text: string };
+export type TaskListAccessory = { kind: "text"; text: string } | { kind: "tag"; text: string; style?: "priority" };
 
 type DuePresentation = {
   title: "Due date" | "Overdue" | "Today";
@@ -186,6 +186,9 @@ export function buildTaskListItems(
       return name ? [name] : [];
     });
     const labelAccessories: TaskListAccessory[] = labelNames.slice(0, 2).map((text) => ({ kind: "tag", text }));
+    const priorityAccessories: TaskListAccessory[] = entry.task.priority
+      ? [{ kind: "tag", text: "Priority", style: "priority" }]
+      : [];
     if (labelNames.length > 2) {
       labelAccessories.push({ kind: "text", text: `+${labelNames.length - 2}` });
     }
@@ -198,6 +201,7 @@ export function buildTaskListItems(
       subtitle: entry.task.projectId === null ? undefined : project,
       keywords: [project, entry.task.notes, ...labelNames],
       accessories: [
+        ...priorityAccessories,
         ...labelAccessories,
         ...[due ? `${due.title} ${due.text}` : null, completed, trashed]
           .filter((value): value is string => value !== null)

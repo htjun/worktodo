@@ -129,7 +129,7 @@ describe("task presentation mapping", () => {
     ]);
   });
 
-  it("preserves query order without adding priority text to row accessories", () => {
+  it("preserves query order and adds an explicit priority tag", () => {
     const first = task();
     const second = task({
       id: "00000000-0000-4000-8000-000000000004",
@@ -147,7 +147,10 @@ describe("task presentation mapping", () => {
     expect(items.map((item) => item.id)).toEqual([first.id, second.id]);
     expect(items[0]).toMatchObject({
       subtitle: "Personal",
-      accessories: [{ kind: "text", text: "Overdue 2026-10-04" }],
+      accessories: [
+        { kind: "tag", text: "Priority", style: "priority" },
+        { kind: "text", text: "Overdue 2026-10-04" },
+      ],
       keywords: ["Personal", "Open the planning workspace"],
     });
     expect(items[1]).toMatchObject({ subtitle: undefined, accessories: [] });
@@ -318,7 +321,7 @@ describe("task presentation mapping", () => {
     });
     expect(taskListRowPresentation(item, undefined)).toEqual({
       title: source.title,
-      accessories: [],
+      accessories: [{ kind: "tag", text: "Priority", style: "priority" }],
       isCompletionAcknowledged: false,
     });
     expect(item).toEqual(before);

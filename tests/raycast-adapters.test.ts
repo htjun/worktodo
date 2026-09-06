@@ -37,7 +37,7 @@ import {
   taskLifecycleHistoryActionPresentation,
   taskLifecycleMutationActionPresentation,
 } from "../src/task-lifecycle-raycast";
-import { activeTaskIcon, menuBarTaskIcon, taskListIcon } from "../src/task-priority-raycast";
+import { menuBarTaskIcon, taskListIcon } from "../src/task-priority-raycast";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -176,16 +176,17 @@ describe("binary priority adapters", () => {
     expect(quickAdd).toContain("priority: false");
   });
 
-  it("uses the brand green only for prioritized active tasks and preserves lifecycle icons", () => {
-    expect(activeTaskIcon(false)).toBe("circle");
-    expect(activeTaskIcon(true)).toEqual({ source: "circle", tintColor: "#6A9A1D" });
+  it("uses a thicker brand circle for priority in the menu bar and keeps list completion icons neutral", () => {
     expect(menuBarTaskIcon(false)).toEqual({ source: "circle", tintColor: "secondary-text" });
-    expect(menuBarTaskIcon(true)).toEqual({ source: "circle", tintColor: "#6A9A1D" });
-    expect(taskListIcon({ kind: "all" }, true, false)).toEqual({ source: "circle", tintColor: "#6A9A1D" });
-    expect(taskListIcon({ kind: "all" }, false, false)).toBe("circle");
-    expect(taskListIcon({ kind: "all" }, true, true)).toBe("check-circle");
-    expect(taskListIcon({ kind: "completed" }, true, false)).toBe("check-circle");
-    expect(taskListIcon({ kind: "trash" }, true, false)).toBe("trash");
+    expect(menuBarTaskIcon(true)).toEqual({
+      source: "priority-circle.png",
+      fallback: "circle",
+      tintColor: "#6A9A1D",
+    });
+    expect(taskListIcon({ kind: "all" }, false)).toBe("circle");
+    expect(taskListIcon({ kind: "all" }, true)).toBe("check-circle");
+    expect(taskListIcon({ kind: "completed" }, false)).toBe("check-circle");
+    expect(taskListIcon({ kind: "trash" }, false)).toBe("trash");
   });
 });
 

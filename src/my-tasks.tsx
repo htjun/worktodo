@@ -35,7 +35,7 @@ import {
   type TaskListSection,
 } from "./task-views";
 import { taskLifecycleHistoryActionPresentation } from "./task-lifecycle-raycast";
-import { taskListIcon } from "./task-priority-raycast";
+import { PRIORITY_TINT, taskListIcon } from "./task-priority-raycast";
 
 type ListState = {
   isLoading: boolean;
@@ -406,7 +406,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                   <List.Item
                     key={item.id}
                     id={item.id}
-                    icon={taskListIcon(view, item.task.priority, row.isCompletionAcknowledged)}
+                    icon={taskListIcon(view, row.isCompletionAcknowledged)}
                     title={row.title}
                     subtitle={item.subtitle}
                     keywords={item.keywords}
@@ -414,7 +414,14 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                       isShowingDetail && !row.isCompletionAcknowledged
                         ? undefined
                         : row.accessories.map((accessory) =>
-                            accessory.kind === "tag" ? { tag: accessory.text } : { text: accessory.text },
+                            accessory.kind === "tag"
+                              ? {
+                                  tag:
+                                    accessory.style === "priority"
+                                      ? { value: accessory.text, color: PRIORITY_TINT }
+                                      : accessory.text,
+                                }
+                              : { text: accessory.text },
                           )
                     }
                     detail={
