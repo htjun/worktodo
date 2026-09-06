@@ -20,14 +20,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24.18.0
-
-      - name: Activate pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@11.24.0 --activate
+          cache: npm
 
       - name: Install dependencies
-        run: corepack pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Verify
-        run: corepack pnpm run verify
+        run: npm run verify
