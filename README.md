@@ -2,8 +2,6 @@
 
 Worktodo is a local-first personal task manager for Raycast. It stores tasks in a local SQLite database and provides an optional local MCP server for agent access.
 
-![Worktodo All tasks view with synthetic tasks](docs/images/worktodo-my-tasks.jpg)
-
 ## Features
 
 - All tasks, Today, This week, Project, Label, Completed, and Trash views
