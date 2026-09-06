@@ -242,7 +242,7 @@ export default function Command(props: LaunchProps) {
                   onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id, editTask: true })}
                 />
                 <MenuBarExtra.Item
-                  title="Move to trash"
+                  title="Move to Trash"
                   icon={menuIcon(Icon.Trash)}
                   onAction={() => performLifecycleMutation("trash", task.id)}
                 />
@@ -266,19 +266,19 @@ export default function Command(props: LaunchProps) {
 
       <MenuBarExtra.Section>
         <MenuBarExtra.Item
-          title="New task"
+          title="New Task"
           icon={menuIcon(Icon.Plus)}
           onAction={() => openMyTasks({ view: "all", createTask: true })}
         />
         <MenuBarExtra.Item
-          title="Open all tasks"
+          title="Open All Tasks"
           icon={menuIcon(Icon.AppWindowList)}
           onAction={() => openMyTasks({ view: "all" })}
         />
       </MenuBarExtra.Section>
 
       <MenuBarExtra.Section>
-        <MenuBarExtra.Item title="Hide from menu bar" icon={menuIcon(Icon.EyeDisabled)} onAction={hideMenuBar} />
+        <MenuBarExtra.Item title="Hide from Menu Bar" icon={menuIcon(Icon.EyeDisabled)} onAction={hideMenuBar} />
       </MenuBarExtra.Section>
     </MenuBarExtra>
   );

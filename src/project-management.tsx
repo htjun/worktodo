@@ -115,7 +115,7 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
     <NameForm
       navigationTitle="New label"
       fieldTitle="Label name"
-      submitTitle="Create label"
+      submitTitle="Create Label"
       successTitle="Label created"
       failureTitle="Unable to create label"
       save={(name) => createLabel(service, name, changed)}
@@ -126,7 +126,7 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
     const confirmed = await confirmAlert({
       title: `Remove “${label.name}”?`,
       message: "Tasks keep their content and projects. The label and its assignments are removed.",
-      primaryAction: { title: "Remove label", style: Alert.ActionStyle.Destructive },
+      primaryAction: { title: "Remove Label", style: Alert.ActionStyle.Destructive },
     });
     if (!confirmed) {
       return;
@@ -150,7 +150,7 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
           description="Create a label to organize tasks across projects."
           actions={
             <ActionPanel>
-              <Action.Push title="New label" icon={Icon.Plus} target={createTarget} />
+              <Action.Push title="New Label" icon={Icon.Plus} target={createTarget} />
             </ActionPanel>
           }
         />
@@ -163,14 +163,14 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
             actions={
               <ActionPanel>
                 <Action.Push
-                  title="Rename label"
+                  title="Rename Label"
                   icon={Icon.Pencil}
                   shortcut={Keyboard.Shortcut.Common.Edit}
                   target={
                     <NameForm
                       navigationTitle="Rename label"
                       fieldTitle="Label name"
-                      submitTitle="Save label"
+                      submitTitle="Save Label"
                       successTitle="Label renamed"
                       failureTitle="Unable to rename label"
                       initialName={label.name}
@@ -179,13 +179,13 @@ export function LabelsView({ service, onChanged }: { service: TaskService; onCha
                   }
                 />
                 <Action.Push
-                  title="New label"
+                  title="New Label"
                   icon={Icon.Plus}
                   shortcut={Keyboard.Shortcut.Common.New}
                   target={createTarget}
                 />
                 <Action
-                  title="Remove label"
+                  title="Remove Label"
                   icon={Icon.Trash}
                   style={Action.Style.Destructive}
                   shortcut={Keyboard.Shortcut.Common.Remove}
@@ -222,7 +222,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
     <NameForm
       navigationTitle="New project"
       fieldTitle="Project name"
-      submitTitle="Create project"
+      submitTitle="Create Project"
       successTitle="Project created"
       failureTitle="Unable to create project"
       save={(name) => createProject(service, name, changed)}
@@ -233,7 +233,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
     const confirmed = await confirmAlert({
       title: `Remove “${project.name}”?`,
       message: "Tasks in this project will have no project.",
-      primaryAction: { title: "Remove project", style: Alert.ActionStyle.Destructive },
+      primaryAction: { title: "Remove Project", style: Alert.ActionStyle.Destructive },
     });
     if (!confirmed) {
       return;
@@ -257,7 +257,7 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
           description="Create a project to organize tasks."
           actions={
             <ActionPanel>
-              <Action.Push title="New project" icon={Icon.Plus} target={createTarget} />
+              <Action.Push title="New Project" icon={Icon.Plus} target={createTarget} />
             </ActionPanel>
           }
         />
@@ -271,14 +271,14 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
               actions={
                 <ActionPanel>
                   <Action.Push
-                    title="Rename project"
+                    title="Rename Project"
                     icon={Icon.Pencil}
                     shortcut={Keyboard.Shortcut.Common.Edit}
                     target={
                       <NameForm
                         navigationTitle="Rename project"
                         fieldTitle="Project name"
-                        submitTitle="Save project"
+                        submitTitle="Save Project"
                         successTitle="Project renamed"
                         failureTitle="Unable to rename project"
                         initialName={project.name}
@@ -287,13 +287,13 @@ export function ProjectsView({ service, onChanged }: { service: TaskService; onC
                     }
                   />
                   <Action.Push
-                    title="New project"
+                    title="New Project"
                     icon={Icon.Plus}
                     shortcut={Keyboard.Shortcut.Common.New}
                     target={createTarget}
                   />
                   <Action
-                    title="Remove project"
+                    title="Remove Project"
                     icon={Icon.Trash}
                     style={Action.Style.Destructive}
                     shortcut={Keyboard.Shortcut.Common.Remove}

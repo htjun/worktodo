@@ -96,28 +96,36 @@ describe("Backup & restore adapter boundary", () => {
 describe("All tasks entry points", () => {
   it("uses consistent task actions and opens the full list from the menu bar", () => {
     const manifest = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
-      commands: { name: string; title: string }[];
+      commands: { name: string; title: string; subtitle: string }[];
     };
     const menuBarSource = readFileSync(join(process.cwd(), "src/menu-bar.tsx"), "utf8");
 
-    expect(manifest.commands.find((command) => command.name === "my-tasks")?.title).toBe("All tasks");
-    expect(menuBarSource).toContain('title="New task"');
-    expect(menuBarSource).not.toContain('title="New task…"');
-    expect(menuBarSource).toContain('title="Open all tasks"');
+    expect(manifest.commands.find((command) => command.name === "my-tasks")?.title).toBe("All Tasks");
+    expect(menuBarSource).toContain('title="New Task"');
+    expect(menuBarSource).not.toContain('title="New Task…"');
+    expect(menuBarSource).toContain('title="Open All Tasks"');
     expect(menuBarSource).toContain('onAction={() => openMyTasks({ view: "all" })}');
   });
 
-  it("uses sentence case for every Raycast command title", () => {
+  it("uses the approved Store titles and subtitles", () => {
     const manifest = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
-      commands: { title: string }[];
+      commands: { title: string; subtitle: string }[];
     };
 
     expect(manifest.commands.map((command) => command.title)).toEqual([
-      "All tasks",
-      "Quick add",
-      "Backup & restore",
-      "Worktodo menu bar",
+      "All Tasks",
+      "Quick Add",
+      "Backup & Restore",
+      "Worktodo Menu Bar",
     ]);
+    expect(manifest.commands.map((command) => command.subtitle)).toEqual(Array(4).fill("Worktodo"));
+  });
+
+  it("includes the initial Store changelog entry", () => {
+    const changelog = readFileSync(join(process.cwd(), "CHANGELOG.md"), "utf8");
+
+    expect(changelog).toContain("## [Initial Release] - {PR_MERGE_DATE}");
+    expect(changelog).not.toMatch(/screenshot|MCP/iu);
   });
 });
 
@@ -145,9 +153,11 @@ describe("interface copy", () => {
     const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
     const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
 
-    expect(tasks).toContain('title="New task"');
-    expect(taskForm).toContain('title={task ? "Save task" : "Create task"}');
-    expect(quickAdd).toContain('title="Create task"');
+    expect(tasks).toContain('title="New Task"');
+    expect(taskForm).toContain('navigationTitle={task ? "Edit task" : "New task"}');
+    expect(taskForm).toContain('title={task ? "Save Task" : "Create Task"}');
+    expect(quickAdd).toContain('navigationTitle="Quick add"');
+    expect(quickAdd).toContain('title="Create Task"');
     expect(quickAdd).toContain('"Task created"');
   });
 
@@ -157,10 +167,10 @@ describe("interface copy", () => {
     expect(menuBar).toContain('title="Complete"');
     expect(menuBar).toContain('title="Open"');
     expect(menuBar).toContain('title="Edit"');
-    expect(menuBar).toContain('title="Move to trash"');
-    expect(menuBar).not.toContain('title="Complete task"');
-    expect(menuBar).not.toContain('title="Open task"');
-    expect(menuBar).not.toContain('title="Edit task"');
+    expect(menuBar).toContain('title="Move to Trash"');
+    expect(menuBar).not.toContain('title="Complete Task"');
+    expect(menuBar).not.toContain('title="Open Task"');
+    expect(menuBar).not.toContain('title="Edit Task"');
   });
 });
 
@@ -221,11 +231,11 @@ describe("Label UI adapters", () => {
     const tasks = readFileSync(join(process.cwd(), "src/my-tasks.tsx"), "utf8");
     const management = readFileSync(join(process.cwd(), "src/project-management.tsx"), "utf8");
 
-    expect(tasks).toContain('title="Manage labels"');
+    expect(tasks).toContain('title="Manage Labels"');
     expect(tasks).toContain("<LabelsView service={session.service} onChanged={refreshAfterUnrelatedMutation} />");
     expect(tasks).toContain("lifecycle.current?.refreshAfterExternalMutation()");
     expect(tasks).toContain('<List.Item.Detail.Metadata.TagList title="Labels">');
-    expect(tasks).toContain('title="Edit labels"');
+    expect(tasks).toContain('title="Edit Labels"');
     expect(tasks).toContain("item.task.trashedAtMs === null");
     expect(tasks).not.toContain("item.task.completedAtMs === null && item.task.trashedAtMs === null");
     expect(management).toContain('navigationTitle="Labels"');
@@ -303,10 +313,10 @@ describe("menu bar feedback", () => {
 
 describe("task lifecycle actions", () => {
   it.each([
-    ["undo", "complete", "Undo completion", "undo", ["cmd"]],
-    ["redo", "complete", "Redo completion", "redo", ["cmd", "shift"]],
-    ["undo", "trash", "Undo move to trash", "undo", ["cmd"]],
-    ["redo", "trash", "Redo move to trash", "redo", ["cmd", "shift"]],
+    ["undo", "complete", "Undo Completion", "undo", ["cmd"]],
+    ["redo", "complete", "Redo Completion", "redo", ["cmd", "shift"]],
+    ["undo", "trash", "Undo Move to Trash", "undo", ["cmd"]],
+    ["redo", "trash", "Redo Move to Trash", "redo", ["cmd", "shift"]],
   ] as const)("projects %s %s labels, icons, and shortcuts for Raycast", (direction, kind, title, icon, modifiers) => {
     expect(
       taskLifecycleHistoryActionPresentation({
@@ -324,21 +334,21 @@ describe("task lifecycle actions", () => {
 
   it("projects mutation labels and icons without binding persistence", () => {
     expect(taskLifecycleMutationActionPresentation("complete")).toEqual({
-      title: "Complete task",
+      title: "Complete Task",
       successTitle: "Task completed",
       failureTitle: "Unable to complete task",
       icon: "check-circle",
     });
     expect(taskLifecycleMutationActionPresentation("reopen")).toMatchObject({
-      title: "Reopen task",
+      title: "Reopen Task",
       icon: "circle",
     });
     expect(taskLifecycleMutationActionPresentation("trash")).toMatchObject({
-      title: "Move to trash",
+      title: "Move to Trash",
       icon: "trash",
     });
     expect(taskLifecycleMutationActionPresentation("restore")).toMatchObject({
-      title: "Restore task",
+      title: "Restore Task",
       icon: "arrow-counter-clockwise",
     });
   });

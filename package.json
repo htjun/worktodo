@@ -35,25 +35,29 @@
   "commands": [
     {
       "name": "my-tasks",
-      "title": "All tasks",
+      "title": "All Tasks",
+      "subtitle": "Worktodo",
       "description": "View all Worktodo tasks",
       "mode": "view"
     },
     {
       "name": "quick-add",
-      "title": "Quick add",
+      "title": "Quick Add",
+      "subtitle": "Worktodo",
       "description": "Create a task with optional details",
       "mode": "view"
     },
     {
       "name": "backup-restore",
-      "title": "Backup & restore",
+      "title": "Backup & Restore",
+      "subtitle": "Worktodo",
       "description": "Export and restore Worktodo JSON backups",
       "mode": "view"
     },
     {
       "name": "menu-bar",
-      "title": "Worktodo menu bar",
+      "title": "Worktodo Menu Bar",
+      "subtitle": "Worktodo",
       "description": "View and complete tasks due this week from the menu bar",
       "mode": "menu-bar",
       "interval": "1m"

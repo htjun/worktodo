@@ -287,7 +287,7 @@ describe("task presentation mapping", () => {
       const kind = taskLifecycleActionKindForViewKind(viewKind);
       expect({ kind, ...taskLifecycleMutationPresentation(kind) }).toEqual({
         kind: "complete",
-        title: "Complete task",
+        title: "Complete Task",
         successTitle: "Task completed",
         failureTitle: "Unable to complete task",
       });
@@ -295,14 +295,14 @@ describe("task presentation mapping", () => {
     const reopen = taskLifecycleActionKindForViewKind("completed");
     expect({ kind: reopen, ...taskLifecycleMutationPresentation(reopen) }).toEqual({
       kind: "reopen",
-      title: "Reopen task",
+      title: "Reopen Task",
       successTitle: "Task reopened",
       failureTitle: "Unable to reopen task",
     });
     const restore = taskLifecycleActionKindForViewKind("trash");
     expect({ kind: restore, ...taskLifecycleMutationPresentation(restore) }).toEqual({
       kind: "restore",
-      title: "Restore task",
+      title: "Restore Task",
       successTitle: "Task restored",
       failureTitle: "Unable to restore task",
     });

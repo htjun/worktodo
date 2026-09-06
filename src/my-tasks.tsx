@@ -378,11 +378,11 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
             actions={
               createTarget || projectsTarget || labelsTarget || taskHistoryState ? (
                 <ActionPanel>
-                  {createTarget ? <Action.Push title="New task" icon={Icon.Plus} target={createTarget} /> : null}
+                  {createTarget ? <Action.Push title="New Task" icon={Icon.Plus} target={createTarget} /> : null}
                   {projectsTarget ? (
-                    <Action.Push title="Manage projects" icon={Icon.Folder} target={projectsTarget} />
+                    <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
                   ) : null}
-                  {labelsTarget ? <Action.Push title="Manage labels" icon={Icon.Tag} target={labelsTarget} /> : null}
+                  {labelsTarget ? <Action.Push title="Manage Labels" icon={Icon.Tag} target={labelsTarget} /> : null}
                   {taskHistoryState ? (
                     <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} />
                   ) : null}
@@ -459,7 +459,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                       session && lifecycleAction ? (
                         <ActionPanel>
                           <Action
-                            title={isShowingDetail ? "Hide details" : "Show details"}
+                            title={isShowingDetail ? "Hide Details" : "Show Details"}
                             icon={isShowingDetail ? Icon.EyeDisabled : Icon.Eye}
                             onAction={() => setIsShowingDetail((current) => !current)}
                           />
@@ -475,13 +475,13 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                           {item.detail.links.map((url, index) => (
                             <Action.OpenInBrowser
                               key={url}
-                              title={index === 0 ? "Open link" : `Open link ${index + 1}`}
+                              title={index === 0 ? "Open Link" : `Open Link ${index + 1}`}
                               url={url}
                             />
                           ))}
                           {view.kind !== "trash" ? (
                             <Action.Push
-                              title="Edit task"
+                              title="Edit Task"
                               icon={Icon.Pencil}
                               shortcut={Keyboard.Shortcut.Common.Edit}
                               target={
@@ -499,7 +499,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                           ) : null}
                           {item.task.trashedAtMs === null ? (
                             <Action.Push
-                              title="Edit labels"
+                              title="Edit Labels"
                               icon={Icon.Tag}
                               target={
                                 <EditLabelsForm
@@ -513,7 +513,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                           ) : null}
                           {view.kind !== "trash" ? (
                             <Action.Push
-                              title="Move task"
+                              title="Move Task"
                               icon={Icon.ArrowRight}
                               target={
                                 <MoveTaskForm
@@ -527,21 +527,21 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                           ) : null}
                           {createTarget ? (
                             <Action.Push
-                              title="New task"
+                              title="New Task"
                               icon={Icon.Plus}
                               shortcut={Keyboard.Shortcut.Common.New}
                               target={createTarget}
                             />
                           ) : null}
                           {projectsTarget ? (
-                            <Action.Push title="Manage projects" icon={Icon.Folder} target={projectsTarget} />
+                            <Action.Push title="Manage Projects" icon={Icon.Folder} target={projectsTarget} />
                           ) : null}
                           {labelsTarget ? (
-                            <Action.Push title="Manage labels" icon={Icon.Tag} target={labelsTarget} />
+                            <Action.Push title="Manage Labels" icon={Icon.Tag} target={labelsTarget} />
                           ) : null}
                           {view.kind !== "trash" ? (
                             <Action
-                              title="Move to trash"
+                              title="Move to Trash"
                               icon={Icon.Trash}
                               style={Action.Style.Destructive}
                               shortcut={Keyboard.Shortcut.Common.Remove}

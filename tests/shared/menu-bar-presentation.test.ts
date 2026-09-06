@@ -293,7 +293,7 @@ describe("menu-bar presentation", () => {
         taskId: "task-1",
         taskTitle: "Submit report",
       }),
-    ).toEqual({ direction: "undo", title: "Undo completion", subtitle: "Submit report" });
+    ).toEqual({ direction: "undo", title: "Undo Completion", subtitle: "Submit report" });
     expect(
       buildMenuBarTaskHistoryItem({
         direction: "redo",
@@ -301,7 +301,7 @@ describe("menu-bar presentation", () => {
         taskId: "task-1",
         taskTitle: "Submit report",
       }),
-    ).toEqual({ direction: "redo", title: "Redo completion", subtitle: "Submit report" });
+    ).toEqual({ direction: "redo", title: "Redo Completion", subtitle: "Submit report" });
   });
 
   it("truncates a long Undo or Redo task title within the menu label budget", () => {
@@ -314,7 +314,7 @@ describe("menu-bar presentation", () => {
       }),
     ).toEqual({
       direction: "undo",
-      title: "Undo move to trash",
+      title: "Undo Move to Trash",
       subtitle: `${"a".repeat(52)}…`,
     });
   });
