@@ -207,7 +207,12 @@ export default function Command(props: LaunchProps) {
   const historyAction = taskHistoryState ? taskLifecycleHistoryActionPresentation(taskHistoryState) : null;
 
   return (
-    <MenuBarExtra icon="extension-icon.png" title={state.model.title} tooltip={tooltip} isLoading={state.isLoading}>
+    <MenuBarExtra
+      icon={{ source: "worktodo-menu-bar-icon.svg", tintColor: Color.PrimaryText }}
+      title={state.model.title}
+      tooltip={tooltip}
+      isLoading={state.isLoading}
+    >
       {state.error ? (
         <MenuBarExtra.Section title="Worktodo">
           <MenuBarExtra.Item title="Unable to load tasks" subtitle={state.error} icon={menuIcon(Icon.Warning)} />

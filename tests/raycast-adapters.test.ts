@@ -176,12 +176,12 @@ describe("binary priority adapters", () => {
     expect(quickAdd).toContain("priority: false");
   });
 
-  it("uses red only for prioritized active tasks and preserves lifecycle icons", () => {
+  it("uses the brand green only for prioritized active tasks and preserves lifecycle icons", () => {
     expect(activeTaskIcon(false)).toBe("circle");
-    expect(activeTaskIcon(true)).toEqual({ source: "circle", tintColor: "red" });
+    expect(activeTaskIcon(true)).toEqual({ source: "circle", tintColor: "#6A9A1D" });
     expect(menuBarTaskIcon(false)).toEqual({ source: "circle", tintColor: "secondary-text" });
-    expect(menuBarTaskIcon(true)).toEqual({ source: "circle", tintColor: "red" });
-    expect(taskListIcon({ kind: "all" }, true, false)).toEqual({ source: "circle", tintColor: "red" });
+    expect(menuBarTaskIcon(true)).toEqual({ source: "circle", tintColor: "#6A9A1D" });
+    expect(taskListIcon({ kind: "all" }, true, false)).toEqual({ source: "circle", tintColor: "#6A9A1D" });
     expect(taskListIcon({ kind: "all" }, false, false)).toBe("circle");
     expect(taskListIcon({ kind: "all" }, true, true)).toBe("check-circle");
     expect(taskListIcon({ kind: "completed" }, true, false)).toBe("check-circle");

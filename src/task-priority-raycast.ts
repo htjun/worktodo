@@ -1,8 +1,10 @@
 import { Color, Icon } from "@raycast/api";
 import type { TaskView } from "./shared/application/task-views";
 
+const PRIORITY_TINT = "#6A9A1D";
+
 export function activeTaskIcon(priority: boolean) {
-  return priority ? { source: Icon.Circle, tintColor: Color.Red } : Icon.Circle;
+  return priority ? { source: Icon.Circle, tintColor: PRIORITY_TINT } : Icon.Circle;
 }
 
 export function menuBarTaskIcon(priority: boolean) {

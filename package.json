@@ -7,7 +7,7 @@
   "private": true,
   "author": "jsn",
   "license": "MIT",
-  "icon": "extension-icon.png",
+  "icon": "worktodo-icon.png",
   "platforms": [
     "macOS"
   ],

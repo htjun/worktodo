@@ -3,26 +3,25 @@
 - Reviewed: 2026-09-05
 - Reconciled: 2026-09-06
 - Baseline: `da2e890679ff1f1e1e8f01acd9e18892ff49b836`
-- Implementation endpoint reviewed here: `96f6c4d`
+- Public-readiness implementation baseline: `6ca6947`
 - Scope: source publication, documentation, tracked assets, reachable Git history, dependency checks, and local data handling.
 
 ## Current conclusion
 
 The code and documentation work in the agreed public-source scope is complete. The repository passes its complete verification gate and a fresh install from a generated source archive. Repository visibility was not changed.
 
-Two known publication risks remain because the owner explicitly excluded them from this implementation:
+One known publication risk remains because the owner explicitly excluded it from this implementation:
 
-- the reachable Git history contains a company author and committer email; and
-- the Raycast extension still uses the Create Extension template icon.
+- the reachable Git history contains a company author and committer email.
 
-Those exclusions are decisions for the owner when changing repository visibility. No Git history was rewritten, no icon was changed, and no publication or Store submission was performed.
+That exclusion is a decision for the owner when changing repository visibility. No Git history was rewritten, and no publication or Store submission was performed. A later visual-identity update replaced the template icon with a Worktodo-specific extension icon and a separate theme-aware menu-bar icon.
 
 ## Findings and resolution
 
 | Finding                                                                  | Resolution                                                                                                                                                                                          | Evidence                                |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | Historical author-email disclosure                                       | Excluded from implementation. Reachable history was left unchanged.                                                                                                                                 | Baseline history review; owner decision |
-| Default Raycast template icon                                            | Excluded from implementation. The asset was left unchanged.                                                                                                                                         | Baseline asset comparison               |
+| Default Raycast template icon                                            | Resolved after the original implementation scope. The manifest now uses a 512 × 512 Worktodo PNG, and the menu-bar command uses a separate tintable SVG.                                            | Current assets, manifest, and native UI |
 | Unrepresentable timestamps could persist and break presentation          | Resolved. Domain, backup, MCP, and presentation boundaries now accept only Unix-millisecond values representable by JavaScript `Date`.                                                              | `b79e95b`, `96f6c4d`                    |
 | A stale restore preview could replace newer data                         | Resolved. Preparation records a canonical snapshot fingerprint and replacement compares it inside the transaction before publishing recovery or changing rows.                                      | `ed6bb9b`                               |
 | Recovery publication lacked directory durability barriers                | Resolved. Publication synchronizes the candidate file and relevant directories, and failure preserves the current database.                                                                         | `7f122d0`                               |
@@ -37,6 +36,7 @@ Those exclusions are decisions for the owner when changing repository visibility
 - `corepack pnpm audit --json` reported zero known vulnerabilities across 263 dependency entries at reconciliation time.
 - Every local Markdown link and image target resolved. The tracked screenshot is a 750 × 475 JPEG containing only three synthetic tasks, one synthetic Project, and one synthetic Label.
 - The screenshot rows were deleted by their recorded IDs immediately after capture. Follow-up queries returned zero matching Tasks, Projects, and Labels, and SQLite `integrity_check` returned `ok`.
+- Raycast lint accepts the replacement extension icon, and native Raycast inspection shows the Worktodo icon in command results and the theme-aware icon in the macOS menu bar.
 - Ignore checks covered root and nested generated backup final names and hidden candidates. Ordinary JSON, example backup, and unrelated temporary names remained visible to Git.
 - Focused suites exercise timestamp boundaries, stale-preview rejection across two database connections, synchronization ordering and failure injection, rollback, and recovery content.
 - Raycast lint still reports four non-blocking title-case warnings. Sentence case is an intentional product convention.
