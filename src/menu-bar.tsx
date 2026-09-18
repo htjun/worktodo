@@ -225,7 +225,7 @@ export default function Command(props: LaunchProps) {
         state.model.sections.map((section) => (
           <MenuBarExtra.Section key={section.key} title={section.title}>
             {section.tasks.map((task) => (
-              <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={menuBarTaskIcon(task.priority)}>
+              <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={menuBarTaskIcon()}>
                 <MenuBarExtra.Item
                   title="Complete"
                   icon={menuIcon(Icon.CheckCircle)}

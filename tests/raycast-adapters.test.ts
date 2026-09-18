@@ -209,15 +209,10 @@ describe("binary priority adapters", () => {
     expect(quickAdd).toContain("priority: false");
   });
 
-  it("uses a thicker brand circle for priority in the menu bar and keeps list completion icons neutral", () => {
-    expect(menuBarTaskIcon(false)).toEqual({
+  it("uses a neutral menu-bar circle for every incomplete task and keeps list completion icons neutral", () => {
+    expect(menuBarTaskIcon()).toEqual({
       source: "circle",
       tintColor: "#808080",
-    });
-    expect(menuBarTaskIcon(true)).toEqual({
-      source: "priority-circle.png",
-      fallback: "circle",
-      tintColor: "#6A9A1D",
     });
     expect(taskListIcon({ kind: "all" }, false)).toBe("circle");
     expect(taskListIcon({ kind: "all" }, true)).toBe("check-circle");

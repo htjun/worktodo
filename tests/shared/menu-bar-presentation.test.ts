@@ -43,7 +43,7 @@ function project(id: string, name: string): Project {
 }
 
 describe("menu-bar presentation", () => {
-  it("groups tasks through Sunday and preserves query order, priorities, and project names", () => {
+  it("shows priority tasks first once, preserves due order, and counts overdue and today tasks", () => {
     const work = project("project-1", "Work");
     const overduePriority = task("1", "Submit report", true, work.id);
     const overdue = task("2", "Book appointment", false);
@@ -67,21 +67,37 @@ describe("menu-bar presentation", () => {
       title: "3",
       sections: [
         {
-          key: "overdue",
-          title: "Overdue",
+          key: "priority",
+          title: "Priority",
           tasks: [
             {
               id: "1",
               title: "Submit report",
               priority: true,
               projectName: "Work",
+              dueLabel: "Overdue",
               view: "thisWeek",
             },
+            {
+              id: "5",
+              title: "Plan launch",
+              priority: true,
+              projectName: "Work",
+              dueLabel: "Fri",
+              view: "thisWeek",
+            },
+          ],
+        },
+        {
+          key: "overdue",
+          title: "Overdue",
+          tasks: [
             {
               id: "2",
               title: "Book appointment",
               priority: false,
               projectName: null,
+              dueLabel: null,
               view: "thisWeek",
             },
           ],
@@ -95,6 +111,7 @@ describe("menu-bar presentation", () => {
               title: "Buy groceries",
               priority: false,
               projectName: null,
+              dueLabel: null,
               view: "thisWeek",
             },
           ],
@@ -108,19 +125,42 @@ describe("menu-bar presentation", () => {
               title: "Review proposal",
               priority: false,
               projectName: "Work",
+              dueLabel: null,
               view: "thisWeek",
             },
           ],
         },
+      ],
+    });
+  });
+
+  it("keeps a priority-only menu and labels tasks due today or tomorrow", () => {
+    const dueToday = task("1", "Review notes", true);
+    const dueTomorrow = task("2", "Send proposal", true);
+
+    expect(
+      buildMenuBarModel(
+        thisWeekResult([
+          { task: dueToday, status: "dueToday", localDate: "2026-08-31", effectiveDueAtMs: 1_000 },
+          { task: dueTomorrow, status: "laterThisWeek", localDate: "2026-09-01", effectiveDueAtMs: 2_000 },
+        ]),
+        [],
+      ),
+    ).toEqual({
+      count: 1,
+      title: "1",
+      sections: [
         {
-          key: "laterThisWeek",
-          title: "Later this week",
+          key: "priority",
+          title: "Priority",
           tasks: [
+            { id: "1", title: "Review notes", priority: true, projectName: null, dueLabel: "Today", view: "thisWeek" },
             {
-              id: "5",
-              title: "Plan launch",
+              id: "2",
+              title: "Send proposal",
               priority: true,
-              projectName: "Work",
+              projectName: null,
+              dueLabel: "Tomorrow",
               view: "thisWeek",
             },
           ],
@@ -158,6 +198,7 @@ describe("menu-bar presentation", () => {
               title: "Review proposal",
               priority: false,
               projectName: null,
+              dueLabel: null,
               view: "thisWeek",
             },
           ],
@@ -171,6 +212,7 @@ describe("menu-bar presentation", () => {
       id: "task-1",
       title: "Submit report",
       priority: true,
+      dueLabel: null,
       view: "thisWeek" as const,
     };
     expect(menuBarTaskTitle({ ...baseTask, projectName: "Work" })).toBe("Submit report · Work");
@@ -182,6 +224,7 @@ describe("menu-bar presentation", () => {
       id: "task-1",
       priority: true,
       projectName: null,
+      dueLabel: null,
       view: "thisWeek" as const,
     };
     const exactTitle = "a".repeat(72);
@@ -197,6 +240,7 @@ describe("menu-bar presentation", () => {
         title: "a".repeat(100),
         priority: true,
         projectName: "Work",
+        dueLabel: null,
         view: "thisWeek",
       }),
     ).toBe(`${"a".repeat(64)}… · Work`);
@@ -209,9 +253,26 @@ describe("menu-bar presentation", () => {
         title: "a".repeat(100),
         priority: true,
         projectName: "p".repeat(30),
+        dueLabel: null,
         view: "thisWeek",
       }),
     ).toBe(`${"a".repeat(44)}… · ${"p".repeat(23)}…`);
+  });
+
+  it("preserves the project and due label within the task label limit", () => {
+    const priorityTask = {
+      id: "task-1",
+      title: "a".repeat(100),
+      priority: true,
+      projectName: "Work",
+      dueLabel: "Overdue",
+      view: "thisWeek" as const,
+    };
+
+    expect(menuBarTaskTitle(priorityTask)).toBe(`${"a".repeat(54)}… · Work · Overdue`);
+    expect(menuBarTaskTitle({ ...priorityTask, title: "Submit report", projectName: null, dueLabel: "Today" })).toBe(
+      "Submit report · Today",
+    );
   });
 
   it("does not split composed emoji when truncating task labels", () => {
@@ -223,6 +284,7 @@ describe("menu-bar presentation", () => {
         title: family.repeat(73),
         priority: true,
         projectName: null,
+        dueLabel: null,
         view: "thisWeek",
       }),
     ).toBe(`${family.repeat(71)}…`);

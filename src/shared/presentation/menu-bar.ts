@@ -1,5 +1,5 @@
 import type { Project, Task } from "../domain/model";
-import { addCalendarDays, type ThisWeekResult } from "../domain/queries";
+import { addCalendarDays, type ThisWeekResult, type ThisWeekTask } from "../domain/queries";
 import type { TaskLifecycleHistoryState } from "../application/task-lifecycle-interaction";
 import { taskLifecycleHistoryTitle } from "./task-lifecycle";
 
@@ -7,6 +7,7 @@ const MENU_BAR_TASK_LABEL_MAX_GRAPHEMES = 72;
 const MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES = 24;
 const MENU_BAR_PROJECT_SEPARATOR = " · ";
 const MENU_BAR_HISTORY_TITLE_GAP_GRAPHEMES = 1;
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 export type MenuBarTask = {
@@ -14,12 +15,13 @@ export type MenuBarTask = {
   title: string;
   priority: boolean;
   projectName: string | null;
+  dueLabel: string | null;
   view: "thisWeek";
 };
 
 export type MenuBarTaskSection = {
-  key: "overdue" | "today" | "tomorrow" | "laterThisWeek";
-  title: "Overdue" | "Today" | "Tomorrow" | "Later this week";
+  key: "priority" | "overdue" | "today" | "tomorrow" | "laterThisWeek";
+  title: "Priority" | "Overdue" | "Today" | "Tomorrow" | "Later this week";
   tasks: MenuBarTask[];
 };
 
@@ -58,14 +60,28 @@ export function resolveMenuBarVisibility(storedHidden: boolean, userInitiated: b
   };
 }
 
-function menuBarTask(task: Task, projects: ReadonlyMap<string, Project>, view: MenuBarTask["view"]): MenuBarTask {
+function menuBarTask(task: Task, projects: ReadonlyMap<string, Project>, dueLabel: string | null): MenuBarTask {
   return {
     id: task.id,
     title: task.title,
     priority: task.priority,
     projectName: task.projectId === null ? null : (projects.get(task.projectId)?.name ?? null),
-    view,
+    dueLabel,
+    view: "thisWeek",
   };
+}
+
+function priorityDueLabel(entry: ThisWeekTask, tomorrowDate: string): string {
+  if (entry.status === "overdue") {
+    return "Overdue";
+  }
+  if (entry.status === "dueToday") {
+    return "Today";
+  }
+  if (entry.localDate === tomorrowDate) {
+    return "Tomorrow";
+  }
+  return WEEKDAY_LABELS[new Date(`${entry.localDate}T00:00:00.000Z`).getUTCDay()];
 }
 
 function graphemes(value: string): string[] {
@@ -81,17 +97,18 @@ function truncateGraphemes(value: string, maximum: number): string {
 }
 
 export function menuBarTaskTitle(task: MenuBarTask): string {
-  if (task.projectName === null) {
-    return truncateGraphemes(task.title, MENU_BAR_TASK_LABEL_MAX_GRAPHEMES);
-  }
-
-  const projectName = truncateGraphemes(task.projectName, MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES);
+  const projectSuffix =
+    task.projectName === null
+      ? ""
+      : `${MENU_BAR_PROJECT_SEPARATOR}${truncateGraphemes(task.projectName, MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES)}`;
+  const dueSuffix = task.dueLabel === null ? "" : `${MENU_BAR_PROJECT_SEPARATOR}${task.dueLabel}`;
   const taskTitleMaximum =
-    MENU_BAR_TASK_LABEL_MAX_GRAPHEMES - graphemes(MENU_BAR_PROJECT_SEPARATOR).length - graphemes(projectName).length;
-  return `${truncateGraphemes(task.title, taskTitleMaximum)}${MENU_BAR_PROJECT_SEPARATOR}${projectName}`;
+    MENU_BAR_TASK_LABEL_MAX_GRAPHEMES - graphemes(projectSuffix).length - graphemes(dueSuffix).length;
+  return `${truncateGraphemes(task.title, taskTitleMaximum)}${projectSuffix}${dueSuffix}`;
 }
 
 export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: readonly Project[]): MenuBarModel {
+  const priority: MenuBarTask[] = [];
   const overdue: MenuBarTask[] = [];
   const today: MenuBarTask[] = [];
   const tomorrow: MenuBarTask[] = [];
@@ -99,8 +116,17 @@ export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: read
   const projectMap = new Map(projects.map((project) => [project.id, project]));
 
   const tomorrowDate = addCalendarDays(thisWeekResult.localDate, 1);
-  for (const { task, status, localDate } of thisWeekResult.tasks) {
-    const item = menuBarTask(task, projectMap, "thisWeek");
+  let count = 0;
+  for (const entry of thisWeekResult.tasks) {
+    const { task, status, localDate } = entry;
+    if (status === "overdue" || status === "dueToday") {
+      count += 1;
+    }
+    const item = menuBarTask(task, projectMap, task.priority ? priorityDueLabel(entry, tomorrowDate) : null);
+    if (task.priority) {
+      priority.push(item);
+      continue;
+    }
     if (status === "overdue") {
       overdue.push(item);
     } else if (status === "dueToday") {
@@ -113,6 +139,9 @@ export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: read
   }
 
   const sections: MenuBarTaskSection[] = [];
+  if (priority.length > 0) {
+    sections.push({ key: "priority", title: "Priority", tasks: priority });
+  }
   if (overdue.length > 0) {
     sections.push({ key: "overdue", title: "Overdue", tasks: overdue });
   }
@@ -125,7 +154,5 @@ export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: read
   if (laterThisWeek.length > 0) {
     sections.push({ key: "laterThisWeek", title: "Later this week", tasks: laterThisWeek });
   }
-
-  const count = overdue.length + today.length;
   return { count, title: count === 0 ? undefined : String(count), sections };
 }
