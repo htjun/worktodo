@@ -126,7 +126,7 @@ describe("All tasks entry points", () => {
     expect(manifest.commands.find((command) => command.name === "my-tasks")?.title).toBe("All Tasks");
     expect(menuBarSource).toContain('title="New Task"');
     expect(menuBarSource).not.toContain('title="New Task…"');
-    expect(menuBarSource).toContain('title="Open All Tasks"');
+    expect(menuBarSource).toContain('title="All Tasks"');
     expect(menuBarSource).toContain('onAction={() => openMyTasks({ view: "all" })}');
   });
 
