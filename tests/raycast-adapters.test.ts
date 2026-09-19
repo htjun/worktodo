@@ -136,10 +136,10 @@ describe("All tasks entry points", () => {
     };
 
     expect(manifest.commands.map((command) => command.title)).toEqual([
+      "Menu Bar",
       "All Tasks",
       "Quick Add",
       "Backup & Restore",
-      "Worktodo Menu Bar",
     ]);
     expect(manifest.commands.map((command) => command.subtitle)).toEqual(Array(4).fill("Worktodo"));
   });

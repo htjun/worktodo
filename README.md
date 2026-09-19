@@ -9,7 +9,7 @@ After installing Worktodo from the Raycast Store, open any of its commands. No a
 - **All Tasks** manages All tasks, Today, This week, Project, Label, Completed, and Trash views. Tasks support notes, priority, due dates, one Project, and multiple Labels.
 - **Quick Add** creates a task with optional details without opening the full task list.
 - **Backup & Restore** exports a complete versioned JSON backup, validates a selected backup, and previews a restore before any data is replaced.
-- **Worktodo Menu Bar** shows overdue and upcoming work for the current week and supports task actions without opening the main list.
+- **Menu Bar** shows overdue and upcoming work for the current week and supports task actions without opening the main list.
 
 Worktodo keeps its product model deliberately local and concrete: SQLite storage without an account, Projects and multiple Labels, recoverable Trash, atomic backup replacement with a recovery copy, and Raycast-native list, form, action, and menu-bar workflows.
 
@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-Keep the development process running, then open `All Tasks`, `Quick Add`, `Backup & Restore`, or `Worktodo Menu Bar` in Raycast. Source installations do not update automatically; stop the development process, pull the latest source, run `npm ci`, and restart `npm run dev` to update them.
+Keep the development process running, then open `All Tasks`, `Quick Add`, `Backup & Restore`, or `Menu Bar` in Raycast. Source installations do not update automatically; stop the development process, pull the latest source, run `npm ci`, and restart `npm run dev` to update them.
 
 Run the complete repository check before committing:
 
