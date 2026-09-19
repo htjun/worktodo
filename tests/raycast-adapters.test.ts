@@ -153,6 +153,12 @@ describe("All tasks entry points", () => {
 });
 
 describe("interface copy", () => {
+  it("hides task subtitles when the detail pane is visible", () => {
+    const tasks = readFileSync(join(process.cwd(), "src/my-tasks.tsx"), "utf8");
+
+    expect(tasks).toContain("subtitle={isShowingDetail ? undefined : item.subtitle}");
+  });
+
   it("reserves ellipses for truncated content", () => {
     const files = [
       "backup-restore.tsx",

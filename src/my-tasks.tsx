@@ -408,7 +408,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                     id={item.id}
                     icon={taskListIcon(view, row.isCompletionAcknowledged)}
                     title={row.title}
-                    subtitle={item.subtitle}
+                    subtitle={isShowingDetail ? undefined : item.subtitle}
                     keywords={item.keywords}
                     accessories={
                       isShowingDetail && !row.isCompletionAcknowledged
