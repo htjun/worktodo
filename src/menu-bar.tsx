@@ -208,7 +208,7 @@ export default function Command(props: LaunchProps) {
 
   return (
     <MenuBarExtra
-      icon={{ source: "worktodo-menu-bar-icon.svg", tintColor: Color.PrimaryText }}
+      icon={{ source: "worktodo-menu-bar-template.png", tintColor: Color.PrimaryText }}
       title={state.model.title}
       tooltip={tooltip}
       isLoading={state.isLoading}
