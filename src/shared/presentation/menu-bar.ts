@@ -4,8 +4,7 @@ import type { TaskLifecycleHistoryState } from "../application/task-lifecycle-in
 import { taskLifecycleHistoryTitle } from "./task-lifecycle";
 
 const MENU_BAR_TASK_LABEL_MAX_GRAPHEMES = 72;
-const MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES = 24;
-const MENU_BAR_PROJECT_SEPARATOR = " · ";
+const MENU_BAR_DUE_SEPARATOR = " · ";
 const MENU_BAR_HISTORY_TITLE_GAP_GRAPHEMES = 1;
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -97,14 +96,9 @@ function truncateGraphemes(value: string, maximum: number): string {
 }
 
 export function menuBarTaskTitle(task: MenuBarTask): string {
-  const projectSuffix =
-    task.projectName === null
-      ? ""
-      : `${MENU_BAR_PROJECT_SEPARATOR}${truncateGraphemes(task.projectName, MENU_BAR_PROJECT_NAME_MAX_GRAPHEMES)}`;
-  const dueSuffix = task.dueLabel === null ? "" : `${MENU_BAR_PROJECT_SEPARATOR}${task.dueLabel}`;
-  const taskTitleMaximum =
-    MENU_BAR_TASK_LABEL_MAX_GRAPHEMES - graphemes(projectSuffix).length - graphemes(dueSuffix).length;
-  return `${truncateGraphemes(task.title, taskTitleMaximum)}${projectSuffix}${dueSuffix}`;
+  const dueSuffix = task.dueLabel === null ? "" : `${MENU_BAR_DUE_SEPARATOR}${task.dueLabel}`;
+  const taskTitleMaximum = MENU_BAR_TASK_LABEL_MAX_GRAPHEMES - graphemes(dueSuffix).length;
+  return `${truncateGraphemes(task.title, taskTitleMaximum)}${dueSuffix}`;
 }
 
 export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: readonly Project[]): MenuBarModel {

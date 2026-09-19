@@ -207,7 +207,7 @@ describe("menu-bar presentation", () => {
     });
   });
 
-  it("shows the project as a compact suffix while leaving no-project task titles unchanged", () => {
+  it("keeps project names out of the main task label", () => {
     const baseTask = {
       id: "task-1",
       title: "Submit report",
@@ -215,7 +215,7 @@ describe("menu-bar presentation", () => {
       dueLabel: null,
       view: "thisWeek" as const,
     };
-    expect(menuBarTaskTitle({ ...baseTask, projectName: "Work" })).toBe("Submit report · Work");
+    expect(menuBarTaskTitle({ ...baseTask, projectName: "Work" })).toBe("Submit report");
     expect(menuBarTaskTitle({ ...baseTask, projectName: null })).toBe("Submit report");
   });
 
@@ -233,7 +233,7 @@ describe("menu-bar presentation", () => {
     expect(menuBarTaskTitle({ ...baseTask, title: `${exactTitle}a` })).toBe(`${"a".repeat(71)}…`);
   });
 
-  it("truncates a long task title while preserving its project suffix", () => {
+  it("truncates a long task title without reserving space for its project", () => {
     expect(
       menuBarTaskTitle({
         id: "task-1",
@@ -243,10 +243,10 @@ describe("menu-bar presentation", () => {
         dueLabel: null,
         view: "thisWeek",
       }),
-    ).toBe(`${"a".repeat(64)}… · Work`);
+    ).toBe(`${"a".repeat(71)}…`);
   });
 
-  it("caps long task and project names within the combined label limit", () => {
+  it("does not let long project names consume the task label budget", () => {
     expect(
       menuBarTaskTitle({
         id: "task-1",
@@ -256,10 +256,10 @@ describe("menu-bar presentation", () => {
         dueLabel: null,
         view: "thisWeek",
       }),
-    ).toBe(`${"a".repeat(44)}… · ${"p".repeat(23)}…`);
+    ).toBe(`${"a".repeat(71)}…`);
   });
 
-  it("preserves the project and due label within the task label limit", () => {
+  it("preserves the due label within the task label limit", () => {
     const priorityTask = {
       id: "task-1",
       title: "a".repeat(100),
@@ -269,7 +269,7 @@ describe("menu-bar presentation", () => {
       view: "thisWeek" as const,
     };
 
-    expect(menuBarTaskTitle(priorityTask)).toBe(`${"a".repeat(54)}… · Work · Overdue`);
+    expect(menuBarTaskTitle(priorityTask)).toBe(`${"a".repeat(61)}… · Overdue`);
     expect(menuBarTaskTitle({ ...priorityTask, title: "Submit report", projectName: null, dueLabel: "Today" })).toBe(
       "Submit report · Today",
     );

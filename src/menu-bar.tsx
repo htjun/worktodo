@@ -226,26 +226,28 @@ export default function Command(props: LaunchProps) {
           <MenuBarExtra.Section key={section.key} title={section.title}>
             {section.tasks.map((task) => (
               <MenuBarExtra.Submenu key={task.id} title={menuBarTaskTitle(task)} icon={menuBarTaskIcon()}>
-                <MenuBarExtra.Item
-                  title="Complete"
-                  icon={menuIcon(Icon.CheckCircle)}
-                  onAction={() => performLifecycleMutation("complete", task.id)}
-                />
-                <MenuBarExtra.Item
-                  title="Open"
-                  icon={menuIcon(Icon.AppWindowList)}
-                  onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id })}
-                />
-                <MenuBarExtra.Item
-                  title="Edit"
-                  icon={menuIcon(Icon.Pencil)}
-                  onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id, editTask: true })}
-                />
-                <MenuBarExtra.Item
-                  title="Move to Trash"
-                  icon={menuIcon(Icon.Trash)}
-                  onAction={() => performLifecycleMutation("trash", task.id)}
-                />
+                <MenuBarExtra.Section title={task.projectName ?? undefined}>
+                  <MenuBarExtra.Item
+                    title="Complete"
+                    icon={menuIcon(Icon.CheckCircle)}
+                    onAction={() => performLifecycleMutation("complete", task.id)}
+                  />
+                  <MenuBarExtra.Item
+                    title="Open"
+                    icon={menuIcon(Icon.AppWindowList)}
+                    onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id })}
+                  />
+                  <MenuBarExtra.Item
+                    title="Edit"
+                    icon={menuIcon(Icon.Pencil)}
+                    onAction={() => openMyTasks({ view: task.view, selectedTaskId: task.id, editTask: true })}
+                  />
+                  <MenuBarExtra.Item
+                    title="Move to Trash"
+                    icon={menuIcon(Icon.Trash)}
+                    onAction={() => performLifecycleMutation("trash", task.id)}
+                  />
+                </MenuBarExtra.Section>
               </MenuBarExtra.Submenu>
             ))}
           </MenuBarExtra.Section>
