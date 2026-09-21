@@ -190,6 +190,19 @@ describe("interface copy", () => {
     expect(quickAdd).toContain('"Task created"');
   });
 
+  it("places Due date directly after Title in every task form", () => {
+    const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
+    const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
+
+    for (const source of [quickAdd, taskForm]) {
+      const orderedMarkers = ["<Form.TextField", "<DueDateFields", "<ProjectDropdown", "<LabelPicker"];
+      const positions = orderedMarkers.map((marker) => source.indexOf(marker));
+
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    }
+  });
+
   it("omits Task when the parent menu already names it", () => {
     const menuBar = readFileSync(join(process.cwd(), "src/menu-bar.tsx"), "utf8");
 

@@ -107,6 +107,19 @@ export function TaskForm({
         autoFocus
         onChange={() => setTitleError(undefined)}
       />
+      <DueDateFields
+        preset={dueDatePreset}
+        customDate={customDueDate}
+        error={dueError}
+        onPresetChange={(preset) => {
+          setDueDatePreset(preset);
+          setDueError(undefined);
+        }}
+        onCustomDateChange={(date) => {
+          setCustomDueDate(date);
+          setDueError(undefined);
+        }}
+      />
       {!task ? (
         <ProjectDropdown
           projects={projects}
@@ -125,19 +138,6 @@ export function TaskForm({
         onChange={(value) => {
           setSelectedLabelIds(value);
           setLabelError(undefined);
-        }}
-      />
-      <DueDateFields
-        preset={dueDatePreset}
-        customDate={customDueDate}
-        error={dueError}
-        onPresetChange={(preset) => {
-          setDueDatePreset(preset);
-          setDueError(undefined);
-        }}
-        onCustomDateChange={(date) => {
-          setCustomDueDate(date);
-          setDueError(undefined);
         }}
       />
       <Form.TextArea id="notes" title="Notes" defaultValue={defaults.notes} />

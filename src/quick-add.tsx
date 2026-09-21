@@ -116,6 +116,19 @@ export default function QuickAdd() {
       }
     >
       <Form.TextField id="title" title="Title" autoFocus error={titleError} onChange={() => setTitleError(undefined)} />
+      <DueDateFields
+        preset={dueDatePreset}
+        customDate={customDueDate}
+        error={dueError}
+        onPresetChange={(preset) => {
+          setDueDatePreset(preset);
+          setDueError(undefined);
+        }}
+        onCustomDateChange={(date) => {
+          setCustomDueDate(date);
+          setDueError(undefined);
+        }}
+      />
       <ProjectDropdown
         projects={state.projects}
         value={selectedProject}
@@ -132,19 +145,6 @@ export default function QuickAdd() {
         onChange={(value) => {
           setSelectedLabelIds(value);
           setLabelError(undefined);
-        }}
-      />
-      <DueDateFields
-        preset={dueDatePreset}
-        customDate={customDueDate}
-        error={dueError}
-        onPresetChange={(preset) => {
-          setDueDatePreset(preset);
-          setDueError(undefined);
-        }}
-        onCustomDateChange={(date) => {
-          setCustomDueDate(date);
-          setDueError(undefined);
         }}
       />
       <Form.TextArea id="notes" title="Notes" />
