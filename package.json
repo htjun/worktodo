@@ -49,10 +49,10 @@
       "mode": "view"
     },
     {
-      "name": "quick-add",
-      "title": "Quick Add",
+      "name": "new-task",
+      "title": "New Task",
       "subtitle": "Worktodo",
-      "description": "Capture a task without opening the full list. Start with a title, then add a project, labels, a due date, or notes as needed.",
+      "description": "Create a task without opening the full list. Start with a title and due date, then add a project, labels, notes, or priority as needed.",
       "mode": "view"
     },
     {

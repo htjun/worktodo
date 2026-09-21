@@ -41,7 +41,7 @@ afterEach(async () => {
 });
 
 describe("main task workflows", () => {
-  it("runs Quick add through completion, undo, redo, trash, and restore against one real store", async () => {
+  it("runs standalone creation through completion, undo, redo, trash, and restore against one real store", async () => {
     vi.useFakeTimers();
     const directory = await mkdtemp(join(tmpdir(), "worktodo-task-workflow-test-"));
     temporaryDirectories.push(directory);
@@ -64,21 +64,21 @@ describe("main task workflows", () => {
           session.service.listLabels(),
         );
       const events: string[] = [];
-      let quickSessionCloseCount = 0;
-      const quickEditing = new TaskEditingInteraction(
+      let standaloneSessionCloseCount = 0;
+      const standaloneEditing = new TaskEditingInteraction(
         createOperationScopedTaskEditingMutations(() => {
-          const quickSession = openWorktodoAtPath(databasePath, options);
+          const standaloneSession = openWorktodoAtPath(databasePath, options);
           return {
-            service: quickSession.service,
+            service: standaloneSession.service,
             close: () => {
-              quickSession.close();
-              quickSessionCloseCount += 1;
-              events.push("quick session closed");
+              standaloneSession.close();
+              standaloneSessionCloseCount += 1;
+              events.push("standalone session closed");
             },
           };
         }),
       );
-      const quickOutcome = quickEditing.save(
+      const standaloneOutcome = standaloneEditing.save(
         undefined,
         {
           title: "Refactor safely",
@@ -91,26 +91,26 @@ describe("main task workflows", () => {
         },
         { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [project], labels: [] },
       );
-      if (quickOutcome.status !== "succeeded") {
-        throw new Error(quickOutcome.message);
+      if (standaloneOutcome.status !== "succeeded") {
+        throw new Error(standaloneOutcome.message);
       }
       events.push("menu refreshed");
-      const quickTask = quickOutcome.task;
+      const standaloneTask = standaloneOutcome.task;
 
-      expect(events).toEqual(["quick session closed", "menu refreshed"]);
-      expect(quickSessionCloseCount).toBe(1);
-      expect(session.service.getTask(quickTask.id)).toMatchObject({
+      expect(events).toEqual(["standalone session closed", "menu refreshed"]);
+      expect(standaloneSessionCloseCount).toBe(1);
+      expect(session.service.getTask(standaloneTask.id)).toMatchObject({
         notes: "Protect the user workflow",
         priority: false,
         projectId: null,
         due: { kind: "allDay", date: "2026-08-31" },
       });
-      expect(buildSections({ kind: "today" })[0].items).toEqual([expect.objectContaining({ id: quickTask.id })]);
+      expect(buildSections({ kind: "today" })[0].items).toEqual([expect.objectContaining({ id: standaloneTask.id })]);
 
       now = 2_000;
       const editing = new TaskEditingInteraction(session.service);
       const savedOutcome = editing.save(
-        quickTask,
+        standaloneTask,
         {
           title: "Refactor Worktodo safely",
           notes: "Keep behavior stable",
@@ -143,10 +143,10 @@ describe("main task workflows", () => {
       });
       expect(buildSections({ kind: "all" }).map((section) => section.title)).toEqual(["Work"]);
       expect(buildSections({ kind: "project", projectId: project.id })[0].items.map((item) => item.id)).toEqual([
-        quickTask.id,
+        standaloneTask.id,
       ]);
       expect(buildSections({ kind: "thisWeek" })).toMatchObject([
-        { key: "thisWeek:2026-09-01", title: "Tomorrow", items: [{ id: quickTask.id }] },
+        { key: "thisWeek:2026-09-01", title: "Tomorrow", items: [{ id: standaloneTask.id }] },
       ]);
 
       const acknowledgementSizes: number[] = [];
@@ -161,13 +161,13 @@ describe("main task workflows", () => {
         onHistoryChanged: (state) => historyStates.push(state?.direction ?? null),
       });
       now = 4_000;
-      const completed = lifecycle.runMutation("complete", quickTask.id);
+      const completed = lifecycle.runMutation("complete", standaloneTask.id);
       expect(completed.status).toBe("succeeded");
-      expect(lifecycle.runMutation("complete", quickTask.id).status).toBe("duplicate");
+      expect(lifecycle.runMutation("complete", standaloneTask.id).status).toBe("duplicate");
       if (completed.status !== "succeeded" || !completed.history) {
         throw new Error("Expected completed lifecycle action");
       }
-      expect(session.service.listCompleted().map((task) => task.id)).toEqual([quickTask.id]);
+      expect(session.service.listCompleted().map((task) => task.id)).toEqual([standaloneTask.id]);
       expect(menuRefresh).toHaveBeenCalledOnce();
 
       vi.advanceTimersByTime(1_000);
@@ -177,27 +177,27 @@ describe("main task workflows", () => {
       now = 5_000;
       const undone = lifecycle.runHistory(completed.history);
       expect(undone).toMatchObject({ status: "succeeded", history: { direction: "redo" } });
-      expect(session.service.getTask(quickTask.id).completedAtMs).toBeNull();
+      expect(session.service.getTask(standaloneTask.id).completedAtMs).toBeNull();
 
       now = 6_000;
       const redone = undone.status === "succeeded" && undone.history ? lifecycle.runHistory(undone.history) : undone;
       expect(redone).toMatchObject({ status: "succeeded", history: { direction: "undo" } });
-      expect(session.service.getTask(quickTask.id).completedAtMs).toBe(6_000);
+      expect(session.service.getTask(standaloneTask.id).completedAtMs).toBe(6_000);
 
       now = 7_000;
-      const trashed = lifecycle.runMutation("trash", quickTask.id);
+      const trashed = lifecycle.runMutation("trash", standaloneTask.id);
       if (trashed.status !== "succeeded" || !trashed.history) {
         throw new Error("Expected trashed lifecycle action");
       }
-      expect(buildSections({ kind: "trash" })[0].items).toEqual([expect.objectContaining({ id: quickTask.id })]);
+      expect(buildSections({ kind: "trash" })[0].items).toEqual([expect.objectContaining({ id: standaloneTask.id })]);
       now = 8_000;
       expect(lifecycle.runHistory(trashed.history)).toMatchObject({
         status: "succeeded",
         history: { direction: "redo" },
       });
-      expect(session.service.getTask(quickTask.id)).toMatchObject({ completedAtMs: 6_000, trashedAtMs: null });
+      expect(session.service.getTask(standaloneTask.id)).toMatchObject({ completedAtMs: 6_000, trashedAtMs: null });
       expect(historyStates).toEqual(["undo", "redo", "undo", "undo", "redo"]);
-      expect(events).toEqual(["quick session closed", "menu refreshed", "task saved", "task moved"]);
+      expect(events).toEqual(["standalone session closed", "menu refreshed", "task saved", "task moved"]);
       lifecycle.dispose();
     } finally {
       session.close();

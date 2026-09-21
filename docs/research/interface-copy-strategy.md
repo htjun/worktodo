@@ -34,9 +34,8 @@ Worktodo is direct, calm, and compact. Copy should describe the state or next ac
 
 ## Terminology
 
-- `New task` opens the creation form. `Create task` commits it.
+- `New Task` is the standalone creation command; `New task` opens the same form inside All Tasks. `Create Task` commits it.
 - A menu under a named task uses `Complete`, `Open`, and `Edit`. A mixed action panel uses `Complete task`, `Edit task`, and `Move task` to distinguish selected-task actions from app-level actions.
-- `Quick add` remains the command name; its submission action is `Create task`.
 - Tasks are moved to `Trash` because the operation is recoverable. Do not call this remove or delete.
 - Projects and labels are removed because their definitions are deleted. Confirmations explain what happens to their tasks or assignments.
 - Use `Export backup` and `Restore backup` for the backup workflow. Use `Replace Worktodo data` only at the destructive confirmation step.

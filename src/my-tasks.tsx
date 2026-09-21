@@ -80,7 +80,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   const lifecycle = useRef<TaskLifecycleInteraction | null>(null);
   const refreshRef = useRef<() => void>(() => undefined);
   const performTaskHistoryRef = useRef<(state: TaskLifecycleHistoryState) => Promise<void>>(async () => undefined);
-  const didOpenCreateTask = useRef(false);
   const didOpenEditTask = useRef(false);
   const { push } = useNavigation();
   const [state, setState] = useState<ListState>({
@@ -261,33 +260,6 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   );
 
   useEffect(() => {
-    if (!launchContext.createTask || didOpenCreateTask.current || !session || state.isLoading || state.error) {
-      return;
-    }
-    didOpenCreateTask.current = true;
-    push(
-      <TaskForm
-        service={session.service}
-        projects={state.projects}
-        labels={state.labels}
-        initialProjectId={null}
-        viewerTimeZone={viewerTimeZone}
-        onSaved={refreshAfterUnrelatedMutation}
-      />,
-    );
-  }, [
-    launchContext.createTask,
-    push,
-    refreshAfterUnrelatedMutation,
-    session,
-    state.error,
-    state.isLoading,
-    state.labels,
-    state.projects,
-    viewerTimeZone,
-  ]);
-
-  useEffect(() => {
     const taskId = launchContext.selectedTaskId;
     if (!launchContext.editTask || !taskId || didOpenEditTask.current || !session || state.isLoading || state.error) {
       return;
@@ -301,7 +273,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
       }
       push(
         <TaskForm
-          service={session.service}
+          mutations={session.service}
           task={task}
           projects={state.projects}
           labels={state.labels}
@@ -330,7 +302,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   const taskCount = state.taskSections.reduce((count, section) => count + section.items.length, 0);
   const createTarget = session ? (
     <TaskForm
-      service={session.service}
+      mutations={session.service}
       projects={state.projects}
       labels={state.labels}
       initialProjectId={initialProjectIdForTaskView(view)}
@@ -486,7 +458,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                               shortcut={Keyboard.Shortcut.Common.Edit}
                               target={
                                 <TaskForm
-                                  service={session.service}
+                                  mutations={session.service}
                                   task={item.task}
                                   projects={state.projects}
                                   labels={state.labels}

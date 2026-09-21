@@ -6,7 +6,7 @@
 
 This is a research record, not an implementation plan. It separates current platform guarantees from observations, inferences, and questions that require a prototype. It uses only first-party Raycast, MCP, OpenAI, Node.js, SQLite, and Apple sources.
 
-**Current-contract notice (2026-09-06):** The product assumptions below are historical. The implemented product has no Inbox or Sections and includes global Labels. For current behavior, use the [task model](task-model.md), [JSON backup format](json-backup-format.md), and [MCP task-tool contract](mcp-task-tools.md).
+**Current-contract notice (updated 2026-09-21):** The product assumptions below are historical. The implemented product has no Inbox or Sections and includes global Labels. The former Quick Add split is also superseded: New Task is the single creation command and uses the same full form as creation inside All Tasks. For current behavior, use the [task model](task-model.md), [JSON backup format](json-backup-format.md), [MCP task-tool contract](mcp-task-tools.md), and current source.
 
 ## Reading key
 

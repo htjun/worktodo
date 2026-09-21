@@ -37,7 +37,7 @@ vi.mock("@raycast/api", () => ({
 
 import { LaunchType } from "@raycast/api";
 import { showMenuBarFeedback } from "../src/menu-bar-feedback";
-import { launchMyTasks, requestMenuBarRefresh } from "../src/raycast-commands";
+import { launchMyTasks, launchNewTask, requestMenuBarRefresh } from "../src/raycast-commands";
 import {
   taskLifecycleHistoryActionPresentation,
   taskLifecycleMutationActionPresentation,
@@ -86,6 +86,15 @@ describe("Raycast command launches", () => {
     });
   });
 
+  it("opens New Task as user-initiated", async () => {
+    await launchNewTask();
+
+    expect(raycast.launchCommand).toHaveBeenCalledWith({
+      name: "new-task",
+      type: LaunchType.UserInitiated,
+    });
+  });
+
   it("shows one bounded failure when All Tasks cannot open", async () => {
     raycast.launchCommand.mockRejectedValueOnce(new Error("Command unavailable"));
 
@@ -93,6 +102,15 @@ describe("Raycast command launches", () => {
 
     expect(raycast.showToast).toHaveBeenCalledOnce();
     expect(raycast.showToast).toHaveBeenCalledWith("failure", "Unable to open All Tasks");
+  });
+
+  it("shows one bounded failure when New Task cannot open", async () => {
+    raycast.launchCommand.mockRejectedValueOnce(new Error("Command unavailable"));
+
+    await expect(launchNewTask()).resolves.toBeUndefined();
+
+    expect(raycast.showToast).toHaveBeenCalledOnce();
+    expect(raycast.showToast).toHaveBeenCalledWith("failure", "Unable to open New Task");
   });
 
   it("keeps a failed background refresh silent", async () => {
@@ -117,7 +135,7 @@ describe("Backup & restore adapter boundary", () => {
 });
 
 describe("All tasks entry points", () => {
-  it("uses consistent task actions and opens the full list from the menu bar", () => {
+  it("uses consistent task actions and opens standalone commands from the menu bar", () => {
     const manifest = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
       commands: { name: string; title: string; subtitle: string }[];
     };
@@ -126,6 +144,7 @@ describe("All tasks entry points", () => {
     expect(manifest.commands.find((command) => command.name === "my-tasks")?.title).toBe("All Tasks");
     expect(menuBarSource).toContain('title="New Task"');
     expect(menuBarSource).not.toContain('title="New Task…"');
+    expect(menuBarSource).toContain("onAction={launchNewTask}");
     expect(menuBarSource).toContain('title="All Tasks"');
     expect(menuBarSource).toContain('onAction={() => openMyTasks({ view: "all" })}');
   });
@@ -138,7 +157,7 @@ describe("All tasks entry points", () => {
     expect(manifest.commands.map((command) => command.title)).toEqual([
       "Menu Bar",
       "All Tasks",
-      "Quick Add",
+      "New Task",
       "Backup & Restore",
     ]);
     expect(manifest.commands.map((command) => command.subtitle)).toEqual(Array(4).fill("Worktodo"));
@@ -164,8 +183,8 @@ describe("interface copy", () => {
       "backup-restore.tsx",
       "menu-bar.tsx",
       "my-tasks.tsx",
+      "new-task.tsx",
       "project-management.tsx",
-      "quick-add.tsx",
       "task-form.tsx",
       "task-form-controls.tsx",
       "task-views.tsx",
@@ -180,27 +199,23 @@ describe("interface copy", () => {
   it("distinguishes opening a new-task form from creating the task", () => {
     const tasks = readFileSync(join(process.cwd(), "src/my-tasks.tsx"), "utf8");
     const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
-    const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
+    const newTask = readFileSync(join(process.cwd(), "src/new-task.tsx"), "utf8");
 
     expect(tasks).toContain('title="New Task"');
     expect(taskForm).toContain('navigationTitle={task ? "Edit task" : "New task"}');
     expect(taskForm).toContain('title={task ? "Save Task" : "Create Task"}');
-    expect(quickAdd).toContain('navigationTitle="Quick add"');
-    expect(quickAdd).toContain('title="Create Task"');
-    expect(quickAdd).toContain('"Task created"');
+    expect(newTask).toContain("<TaskForm");
+    expect(newTask).toContain("createOperationScopedTaskEditingMutations(openProductionWorktodo)");
+    expect(newTask).toContain("closeMainWindow({ clearRootSearch: true");
   });
 
-  it("places Due date directly after Title in every task form", () => {
-    const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
+  it("places Due date directly after Title in the shared task form", () => {
     const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
+    const orderedMarkers = ["<Form.TextField", "<DueDateFields", "<ProjectDropdown", "<LabelPicker"];
+    const positions = orderedMarkers.map((marker) => taskForm.indexOf(marker));
 
-    for (const source of [quickAdd, taskForm]) {
-      const orderedMarkers = ["<Form.TextField", "<DueDateFields", "<ProjectDropdown", "<LabelPicker"];
-      const positions = orderedMarkers.map((marker) => source.indexOf(marker));
-
-      expect(positions.every((position) => position >= 0)).toBe(true);
-      expect(positions).toEqual([...positions].sort((left, right) => left - right));
-    }
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
   });
 
   it("omits Task when the parent menu already names it", () => {
@@ -217,15 +232,16 @@ describe("interface copy", () => {
 });
 
 describe("binary priority adapters", () => {
-  it("uses a checkbox and keeps Quick add unprioritized", () => {
+  it("uses the shared priority checkbox for every creation route", () => {
     const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
-    const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
+    const newTask = readFileSync(join(process.cwd(), "src/new-task.tsx"), "utf8");
 
     expect(taskForm).toContain(
       '<Form.Checkbox id="priority" label="Priority" value={priority} onChange={setPriority} />',
     );
     expect(taskForm).not.toContain('Form.Dropdown.Item value="high"');
-    expect(quickAdd).toContain("priority: false");
+    expect(newTask).toContain("<TaskForm");
+    expect(newTask).not.toContain("priority: false");
   });
 
   it("uses a neutral menu-bar circle for every incomplete task and keeps list completion icons neutral", () => {
@@ -251,13 +267,12 @@ describe("Label UI adapters", () => {
     expect(source).not.toContain("Section");
   });
 
-  it("submits selected labels from Quick add and the full task form", () => {
-    const quickAdd = readFileSync(join(process.cwd(), "src/quick-add.tsx"), "utf8");
+  it("loads labels for standalone creation and submits them through the shared task form", () => {
+    const newTask = readFileSync(join(process.cwd(), "src/new-task.tsx"), "utf8");
     const taskForm = readFileSync(join(process.cwd(), "src/task-form.tsx"), "utf8");
 
-    expect(quickAdd).toContain("labels: session.service.listLabels()");
-    expect(quickAdd).toContain("selectedLabelIds,");
-    expect(quickAdd).toContain("labels={state.labels}");
+    expect(newTask).toContain("labels: session.service.listLabels()");
+    expect(newTask).toContain("labels={state.labels}");
     expect(taskForm).toContain("taskEditingDefaults(task, initialProjectId");
     expect(taskForm).toContain("useState(defaults.selectedLabelIds)");
     expect(taskForm).toContain("editing.assignLabels(task.id, selectedLabelIds)");

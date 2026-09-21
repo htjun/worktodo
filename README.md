@@ -1,6 +1,6 @@
 # Worktodo
 
-Worktodo is an account-free, local-first task manager built for Raycast. It keeps tasks in a local SQLite database and combines full task management, Quick Add, and a due-this-week menu-bar workflow.
+Worktodo is an account-free, local-first task manager built for Raycast. It keeps tasks in a local SQLite database and combines direct task creation, full task management, and a due-this-week menu-bar workflow.
 
 ![Worktodo menu bar](media/menu-bar.png)
 
@@ -9,7 +9,7 @@ Worktodo is an account-free, local-first task manager built for Raycast. It keep
 After installing Worktodo from the Raycast Store, open any of its commands. No account, external service, Node.js, npm, or MCP setup is required for the Store extension.
 
 - **All Tasks** manages All tasks, Today, This week, Project, Label, Completed, and Trash views. Tasks support notes, priority, due dates, one Project, and multiple Labels.
-- **Quick Add** creates a task with optional details without opening the full task list.
+- **New Task** creates a task with an optional due date, project, labels, notes, and priority without opening the full task list.
 - **Backup & Restore** exports a complete versioned JSON backup, validates a selected backup, and previews a restore before any data is replaced.
 - **Menu Bar** shows overdue and upcoming work for the current week and supports task actions without opening the main list.
 
@@ -35,7 +35,7 @@ npm ci
 npm run dev
 ```
 
-Keep the development process running, then open `All Tasks`, `Quick Add`, `Backup & Restore`, or `Menu Bar` in Raycast. Source installations do not update automatically; stop the development process, pull the latest source, run `npm ci`, and restart `npm run dev` to update them.
+Keep the development process running, then open `All Tasks`, `New Task`, `Backup & Restore`, or `Menu Bar` in Raycast. Source installations do not update automatically; stop the development process, pull the latest source, run `npm ci`, and restart `npm run dev` to update them.
 
 Run the complete repository check before committing:
 

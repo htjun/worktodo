@@ -1,7 +1,7 @@
 import { Cache, Color, Icon, LaunchType, MenuBarExtra, Toast, type LaunchProps } from "@raycast/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { showMenuBarFeedback } from "./menu-bar-feedback";
-import { launchMyTasks } from "./raycast-commands";
+import { launchMyTasks, launchNewTask } from "./raycast-commands";
 import {
   createOperationScopedTaskLifecycleMutations,
   IMMEDIATE_COMPLETION_POLICY,
@@ -267,11 +267,7 @@ export default function Command(props: LaunchProps) {
       ) : null}
 
       <MenuBarExtra.Section>
-        <MenuBarExtra.Item
-          title="New Task"
-          icon={menuIcon(Icon.Plus)}
-          onAction={() => openMyTasks({ view: "all", createTask: true })}
-        />
+        <MenuBarExtra.Item title="New Task" icon={menuIcon(Icon.Plus)} onAction={launchNewTask} />
         <MenuBarExtra.Item
           title="All Tasks"
           icon={menuIcon(Icon.AppWindowList)}

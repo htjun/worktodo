@@ -5,6 +5,7 @@ import {
   taskEditingDefaults,
   taskEditingProjectKey,
   type TaskEditingFailureField,
+  type TaskEditingMutations,
 } from "./shared/application/task-editing";
 import type { Label, Project, Task } from "./shared/domain/model";
 import type { TaskService } from "./shared/domain/task-service";
@@ -16,25 +17,27 @@ type FormValues = {
 };
 
 export function TaskForm({
-  service,
+  mutations,
   task,
   projects,
   labels,
   initialProjectId,
   viewerTimeZone,
   onSaved,
+  onFinished,
 }: {
-  service: TaskService;
+  mutations: TaskEditingMutations;
   task?: Task;
   projects: readonly Project[];
   labels: readonly Label[];
   initialProjectId: string | null;
   viewerTimeZone: string;
   onSaved: () => void;
+  onFinished?: () => void | Promise<void>;
 }) {
   const { pop } = useNavigation();
   const [referenceInstantMs] = useState(Date.now);
-  const editing = useMemo(() => new TaskEditingInteraction(service), [service]);
+  const editing = useMemo(() => new TaskEditingInteraction(mutations), [mutations]);
   const defaults = useMemo(
     () => taskEditingDefaults(task, initialProjectId, referenceInstantMs, viewerTimeZone),
     [initialProjectId, referenceInstantMs, task, viewerTimeZone],
@@ -51,6 +54,7 @@ export function TaskForm({
   const [projectError, setProjectError] = useState<string>();
   const [labelError, setLabelError] = useState<string>();
   const [formError, setFormError] = useState<string>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit(values: FormValues): Promise<boolean> {
     setTitleError(undefined);
@@ -58,6 +62,7 @@ export function TaskForm({
     setProjectError(undefined);
     setLabelError(undefined);
     setFormError(undefined);
+    setIsSubmitting(true);
     const outcome = editing.save(
       task,
       {
@@ -72,6 +77,7 @@ export function TaskForm({
       { referenceInstantMs, viewerTimeZone, projects, labels },
     );
     if (outcome.status === "failed") {
+      setIsSubmitting(false);
       const setFieldError: Record<TaskEditingFailureField, (message: string) => void> = {
         title: setTitleError,
         due: setDueError,
@@ -86,13 +92,18 @@ export function TaskForm({
 
     onSaved();
     await showToast(Toast.Style.Success, task ? "Task updated" : "Task created");
-    pop();
+    if (onFinished) {
+      await onFinished();
+    } else {
+      pop();
+    }
     return true;
   }
 
   return (
     <Form
       navigationTitle={task ? "Edit task" : "New task"}
+      isLoading={isSubmitting}
       actions={
         <ActionPanel>
           <Action.SubmitForm title={task ? "Save Task" : "Create Task"} icon={Icon.Check} onSubmit={submit} />

@@ -9,6 +9,14 @@ export async function launchMyTasks(context: MyTasksLaunchContext): Promise<void
   }
 }
 
+export async function launchNewTask(): Promise<void> {
+  try {
+    await launchCommand({ name: "new-task", type: LaunchType.UserInitiated });
+  } catch {
+    await showToast(Toast.Style.Failure, "Unable to open New Task").catch(() => undefined);
+  }
+}
+
 export function requestMenuBarRefresh(): void {
   void launchCommand({ name: "menu-bar", type: LaunchType.Background }).catch(() => undefined);
 }

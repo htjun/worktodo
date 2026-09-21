@@ -294,48 +294,38 @@ describe("menu-bar presentation", () => {
     expect(parseMyTasksLaunchContext({ view: "all" })).toEqual({
       view: "all",
       selectedTaskId: undefined,
-      createTask: false,
       editTask: false,
       isShowingDetail: false,
     });
-    expect(parseMyTasksLaunchContext({ view: "thisWeek", selectedTaskId: "task-1", createTask: true })).toEqual({
+    expect(parseMyTasksLaunchContext({ view: "thisWeek", selectedTaskId: "task-1" })).toEqual({
       view: "thisWeek",
       selectedTaskId: "task-1",
-      createTask: true,
       editTask: false,
       isShowingDetail: true,
     });
-    expect(
-      parseMyTasksLaunchContext({ view: "project", selectedTaskId: "", createTask: "yes", editTask: "yes" }),
-    ).toEqual({
+    expect(parseMyTasksLaunchContext({ view: "project", selectedTaskId: "", editTask: "yes" })).toEqual({
       view: "all",
       selectedTaskId: undefined,
-      createTask: false,
       editTask: false,
       isShowingDetail: false,
     });
     expect(parseMyTasksLaunchContext(null)).toEqual({
       view: "all",
       selectedTaskId: undefined,
-      createTask: false,
       editTask: false,
       isShowingDetail: false,
     });
   });
 
-  it("accepts edit intent only with a selected task and without create intent", () => {
+  it("accepts edit intent only with a selected task", () => {
     expect(parseMyTasksLaunchContext({ view: "today", selectedTaskId: "task-1", editTask: true })).toEqual({
       view: "today",
       selectedTaskId: "task-1",
-      createTask: false,
       editTask: true,
       isShowingDetail: true,
     });
     expect(parseMyTasksLaunchContext({ view: "today", editTask: true })).toMatchObject({ editTask: false });
-    expect(parseMyTasksLaunchContext({ selectedTaskId: "task-1", createTask: true, editTask: true })).toMatchObject({
-      createTask: true,
-      editTask: false,
-    });
+    expect(parseMyTasksLaunchContext({ selectedTaskId: "task-1", editTask: true })).toMatchObject({ editTask: true });
   });
 
   it("keeps a stored hidden state during background refresh", () => {
