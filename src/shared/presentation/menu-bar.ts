@@ -26,6 +26,7 @@ export type MenuBarTaskSection = {
 
 export type MenuBarModel = {
   count: number;
+  allTasksCount: number;
   title: string | undefined;
   sections: MenuBarTaskSection[];
 };
@@ -101,7 +102,11 @@ export function menuBarTaskTitle(task: MenuBarTask): string {
   return `${truncateGraphemes(task.title, taskTitleMaximum)}${dueSuffix}`;
 }
 
-export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: readonly Project[]): MenuBarModel {
+export function buildMenuBarModel(
+  thisWeekResult: ThisWeekResult,
+  projects: readonly Project[],
+  allTasksCount: number,
+): MenuBarModel {
   const priority: MenuBarTask[] = [];
   const overdue: MenuBarTask[] = [];
   const today: MenuBarTask[] = [];
@@ -148,5 +153,5 @@ export function buildMenuBarModel(thisWeekResult: ThisWeekResult, projects: read
   if (laterThisWeek.length > 0) {
     sections.push({ key: "laterThisWeek", title: "Later this week", tasks: laterThisWeek });
   }
-  return { count, title: count === 0 ? undefined : String(count), sections };
+  return { count, allTasksCount, title: count === 0 ? undefined : String(count), sections };
 }

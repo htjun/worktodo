@@ -93,6 +93,16 @@ describe("secondary human workflows", () => {
       projectId: null,
       due: { kind: "allDay", date: "2026-08-31" },
     });
+    setup.service.createTask({ title: "Undated task", projectId: null });
+    setup.service.createTask({
+      title: "Task due next week",
+      projectId: null,
+      due: { kind: "allDay", date: "2026-09-07" },
+    });
+    const completedTask = setup.service.createTask({ title: "Completed task", projectId: null });
+    setup.service.completeTask(completedTask.id);
+    const trashedTask = setup.service.createTask({ title: "Trashed task", projectId: null });
+    setup.service.trashTask(trashedTask.id);
     setup.close();
     const openSession = () => {
       const session = openWorktodoAtPath(databasePath, options);
@@ -112,6 +122,7 @@ describe("secondary human workflows", () => {
 
     expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
       count: 1,
+      allTasksCount: 3,
       sections: [{ tasks: [{ id: task.id }] }],
     });
     now = 2_000;
@@ -119,6 +130,7 @@ describe("secondary human workflows", () => {
     expect(completed).toMatchObject({ status: "succeeded", task: { id: task.id, completedAtMs: 2_000 } });
     expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
       count: 0,
+      allTasksCount: 2,
       sections: [],
     });
     now = 3_000;
@@ -126,17 +138,26 @@ describe("secondary human workflows", () => {
       throw new Error("Expected completed menu-bar lifecycle action");
     }
     lifecycle.runHistory(completed.history);
-    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(1);
+    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+      count: 1,
+      allTasksCount: 3,
+    });
     now = 4_000;
     const trashed = lifecycle.runMutation("trash", task.id);
     expect(trashed).toMatchObject({ status: "succeeded", task: { id: task.id, trashedAtMs: 4_000 } });
-    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(0);
+    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+      count: 0,
+      allTasksCount: 2,
+    });
     now = 5_000;
     if (trashed.status !== "succeeded" || !trashed.history) {
       throw new Error("Expected trashed menu-bar lifecycle action");
     }
     lifecycle.runHistory(trashed.history);
-    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z")).count).toBe(1);
+    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+      count: 1,
+      allTasksCount: 3,
+    });
     expect(closeCount).toBe(9);
     lifecycle.dispose();
 

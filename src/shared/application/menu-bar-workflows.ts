@@ -21,7 +21,8 @@ export function loadMenuBarModel(
   try {
     const context = { evaluationInstantMs, viewerTimeZone };
     const thisWeek = loadTaskView(session.service, { kind: "thisWeek" }, context);
-    return buildMenuBarModel(thisWeek.result, session.service.listProjects());
+    const allTasksCount = session.service.listAllTasks(viewerTimeZone).length;
+    return buildMenuBarModel(thisWeek.result, session.service.listProjects(), allTasksCount);
   } finally {
     session.close();
   }

@@ -21,7 +21,7 @@ import type { MyTasksLaunchContext } from "./shared/presentation/task-launch";
 import { taskLifecycleHistoryActionPresentation } from "./task-lifecycle-raycast";
 import { MENU_ICON_TINT, menuBarTaskIcon } from "./task-priority-raycast";
 
-const EMPTY_MODEL: MenuBarModel = { count: 0, title: undefined, sections: [] };
+const EMPTY_MODEL: MenuBarModel = { count: 0, allTasksCount: 0, title: undefined, sections: [] };
 const menuBarVisibilityCache = new Cache({ namespace: "menu-bar-visibility" });
 
 type MenuState = {
@@ -269,7 +269,7 @@ export default function Command(props: LaunchProps) {
       <MenuBarExtra.Section>
         <MenuBarExtra.Item title="New Task" icon={menuIcon(Icon.Plus)} onAction={launchNewTask} />
         <MenuBarExtra.Item
-          title="All Tasks"
+          title={state.error || state.isLoading ? "All Tasks" : `All Tasks (${state.model.allTasksCount})`}
           icon={menuIcon(Icon.AppWindowList)}
           onAction={() => openMyTasks({ view: "all" })}
         />

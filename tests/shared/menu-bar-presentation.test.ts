@@ -61,9 +61,11 @@ describe("menu-bar presentation", () => {
           { task: dueFriday, status: "laterThisWeek", localDate: "2026-09-04", effectiveDueAtMs: 3_000 },
         ]),
         [work],
+        8,
       ),
     ).toEqual({
       count: 3,
+      allTasksCount: 8,
       title: "3",
       sections: [
         {
@@ -145,9 +147,11 @@ describe("menu-bar presentation", () => {
           { task: dueTomorrow, status: "laterThisWeek", localDate: "2026-09-01", effectiveDueAtMs: 2_000 },
         ]),
         [],
+        2,
       ),
     ).toEqual({
       count: 1,
+      allTasksCount: 2,
       title: "1",
       sections: [
         {
@@ -170,8 +174,9 @@ describe("menu-bar presentation", () => {
   });
 
   it("hides the menu title and task sections when nothing is due", () => {
-    expect(buildMenuBarModel(thisWeekResult([]), [])).toEqual({
+    expect(buildMenuBarModel(thisWeekResult([]), [], 0)).toEqual({
       count: 0,
+      allTasksCount: 0,
       title: undefined,
       sections: [],
     });
@@ -184,9 +189,11 @@ describe("menu-bar presentation", () => {
       buildMenuBarModel(
         thisWeekResult([{ task: tomorrow, status: "laterThisWeek", localDate: "2026-09-01", effectiveDueAtMs: 2_000 }]),
         [],
+        1,
       ),
     ).toEqual({
       count: 0,
+      allTasksCount: 1,
       title: undefined,
       sections: [
         {

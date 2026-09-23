@@ -145,7 +145,7 @@ describe("All tasks entry points", () => {
     expect(menuBarSource).toContain('title="New Task"');
     expect(menuBarSource).not.toContain('title="New Task…"');
     expect(menuBarSource).toContain("onAction={launchNewTask}");
-    expect(menuBarSource).toContain('title="All Tasks"');
+    expect(menuBarSource).toContain("`All Tasks (${state.model.allTasksCount})`");
     expect(menuBarSource).toContain('onAction={() => openMyTasks({ view: "all" })}');
   });
 
