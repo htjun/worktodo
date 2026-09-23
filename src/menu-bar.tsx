@@ -1,4 +1,4 @@
-import { Cache, Color, Icon, LaunchType, MenuBarExtra, Toast, type LaunchProps } from "@raycast/api";
+import { Cache, Icon, LaunchType, MenuBarExtra, Toast, type LaunchProps } from "@raycast/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { showMenuBarFeedback } from "./menu-bar-feedback";
 import { launchMyTasks, launchNewTask } from "./raycast-commands";
@@ -208,7 +208,7 @@ export default function Command(props: LaunchProps) {
 
   return (
     <MenuBarExtra
-      icon={{ source: "worktodo-menu-bar-template.png", tintColor: Color.PrimaryText }}
+      icon={{ source: { light: "worktodo-menu-bar-light.png", dark: "worktodo-menu-bar-dark.png" } }}
       title={state.model.title}
       tooltip={tooltip}
       isLoading={state.isLoading}
