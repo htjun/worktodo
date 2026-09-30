@@ -34,6 +34,7 @@ function snapshot(offset: number): WorktodoSnapshot {
   const projectId = id(offset + 1);
   const labelId = id(offset + 2);
   return {
+    manualTaskOrder: [id(offset + 6), id(offset + 3)],
     projects: [{ id: projectId, name: `Project ${offset}`, position: 1_024, createdAtMs: 100, updatedAtMs: 100 }],
     labels: [
       {
@@ -115,6 +116,7 @@ async function createContext(initial: WorktodoSnapshot) {
     initial.projects.forEach((project) => repository.insertProject(project));
     initial.labels.forEach((label) => repository.insertLabel(label));
     initial.tasks.forEach((task) => repository.insertTask(task));
+    repository.replaceManualTaskOrder(initial.manualTaskOrder);
   });
   return { db, directory, repository, recoveryDirectory: join(directory, "Backups") };
 }
@@ -275,7 +277,7 @@ describe("Worktodo backup replacement", () => {
     ["label content", (service: TaskService) => service.renameLabel(id(2), "Renamed label")],
   ])("rejects a stale preview after %s through a second connection", async (_label, mutate) => {
     const initial = snapshot(0);
-    const incoming = createBackupDocument(8_000, { projects: [], labels: [], tasks: [] });
+    const incoming = createBackupDocument(8_000, { projects: [], labels: [], tasks: [], manualTaskOrder: [] });
     const { db, directory, repository, recoveryDirectory } = await createContext(initial);
     const inputPath = join(directory, "incoming.json");
     await writeFile(inputPath, serializeBackupDocument(incoming), "utf8");
@@ -309,7 +311,7 @@ describe("Worktodo backup replacement", () => {
 
   it("allows replacement after a stale import is previewed again", async () => {
     const initial = snapshot(0);
-    const incoming = createBackupDocument(8_000, { projects: [], labels: [], tasks: [] });
+    const incoming = createBackupDocument(8_000, { projects: [], labels: [], tasks: [], manualTaskOrder: [] });
     const { db, directory, repository, recoveryDirectory } = await createContext(initial);
     const inputPath = join(directory, "incoming.json");
     await writeFile(inputPath, serializeBackupDocument(incoming), "utf8");

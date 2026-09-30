@@ -8,12 +8,13 @@ import {
 } from "../domain/validation";
 
 export const WORKTODO_BACKUP_FORMAT = "worktodo-backup";
-export const WORKTODO_BACKUP_VERSION = 3;
+export const WORKTODO_BACKUP_VERSION = 4;
 
 export type WorktodoSnapshot = {
   projects: Project[];
   labels: Label[];
   tasks: Task[];
+  manualTaskOrder: string[];
 };
 
 export type WorktodoBackupDocument = WorktodoSnapshot & {
@@ -153,13 +154,18 @@ const version1TaskSchema = legacyTaskSchemaBase
   .refine(validLifecycle)
   .refine((value) => value.sectionId === null || value.projectId !== null);
 
-const backupSchema = z.strictObject({
+const version3BackupSchema = z.strictObject({
   format: z.literal(WORKTODO_BACKUP_FORMAT),
-  version: z.literal(WORKTODO_BACKUP_VERSION),
+  version: z.literal(3),
   exportedAtMs: timestamp,
   projects: z.array(projectSchema),
   labels: z.array(labelSchema),
   tasks: z.array(taskSchema),
+});
+
+const backupSchema = version3BackupSchema.extend({
+  version: z.literal(WORKTODO_BACKUP_VERSION),
+  manualTaskOrder: z.array(uuidV4),
 });
 
 const version2BackupSchema = z.strictObject({
@@ -197,11 +203,12 @@ function rejectUnsupportedVersion(value: unknown): void {
     Number.isInteger(candidate.version) &&
     candidate.version !== 1 &&
     candidate.version !== 2 &&
+    candidate.version !== 3 &&
     candidate.version !== WORKTODO_BACKUP_VERSION
   ) {
     throw new PortabilityError(
       "UNSUPPORTED_VERSION",
-      `This Worktodo backup uses version ${String(candidate.version)}. This version of Worktodo supports versions 1, 2, and 3.`,
+      `This Worktodo backup uses version ${String(candidate.version)}. This version of Worktodo supports versions 1, 2, 3, and 4.`,
     );
   }
 }
@@ -252,6 +259,11 @@ function validateRelationships(document: WorktodoBackupDocument): void {
 
   const projects = new Set(document.projects.map((project) => project.id));
   const labels = new Set(document.labels.map((label) => label.id));
+  const taskIds = new Set(document.tasks.map((task) => task.id));
+  rejectDuplicates("manual task order", document.manualTaskOrder);
+  if (document.manualTaskOrder.some((id) => !taskIds.has(id))) {
+    throw new PortabilityError("BROKEN_RELATIONSHIP", "The manual task order references a missing task.");
+  }
   for (const task of document.tasks) {
     if (task.projectId !== null && !projects.has(task.projectId)) {
       throw new PortabilityError("BROKEN_RELATIONSHIP", "A backup task references a missing project.");
@@ -372,6 +384,7 @@ function convertVersion1Document(document: Version1BackupDocument): WorktodoBack
     exportedAtMs: document.exportedAtMs,
     projects: document.projects,
     labels,
+    manualTaskOrder: [],
     tasks: document.tasks.map((task) => {
       const convertedTask = converted.get(task.id);
       if (!convertedTask) {
@@ -387,6 +400,7 @@ function convertVersion2Document(document: Version2BackupDocument): WorktodoBack
     ...document,
     version: WORKTODO_BACKUP_VERSION,
     tasks: document.tasks.map((task) => ({ ...task, priority: task.priority === "high" })),
+    manualTaskOrder: [],
   };
 }
 
@@ -400,6 +414,7 @@ export function canonicalBackupDocument(document: WorktodoBackupDocument): Workt
     ...document,
     projects: [...document.projects].sort(compareId),
     labels: [...document.labels].sort(compareId),
+    manualTaskOrder: [...document.manualTaskOrder],
     tasks: [...document.tasks]
       .map((task) => ({
         ...task,
@@ -412,7 +427,7 @@ export function canonicalBackupDocument(document: WorktodoBackupDocument): Workt
   };
 }
 
-function parseVersion3(value: unknown): WorktodoBackupDocument {
+function parseCurrentDocument(value: unknown): WorktodoBackupDocument {
   const parsed = backupSchema.safeParse(value);
   if (!parsed.success) {
     throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
@@ -430,16 +445,23 @@ export function parseBackupDocument(value: unknown): WorktodoBackupDocument {
     if (!parsed.success) {
       throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
     }
-    return parseVersion3(convertVersion1Document(parsed.data));
+    return parseCurrentDocument(convertVersion1Document(parsed.data));
   }
   if (candidate?.format === WORKTODO_BACKUP_FORMAT && candidate.version === 2) {
     const parsed = version2BackupSchema.safeParse(value);
     if (!parsed.success) {
       throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
     }
-    return parseVersion3(convertVersion2Document(parsed.data));
+    return parseCurrentDocument(convertVersion2Document(parsed.data));
   }
-  return parseVersion3(value);
+  if (candidate?.format === WORKTODO_BACKUP_FORMAT && candidate.version === 3) {
+    const parsed = version3BackupSchema.safeParse(value);
+    if (!parsed.success) {
+      throw new PortabilityError("INVALID_MODEL", "This file is not a valid Worktodo backup.", parsed.error);
+    }
+    return parseCurrentDocument({ ...parsed.data, version: WORKTODO_BACKUP_VERSION, manualTaskOrder: [] });
+  }
+  return parseCurrentDocument(value);
 }
 
 export function parseBackupJson(value: string): WorktodoBackupDocument {
@@ -453,7 +475,7 @@ export function parseBackupJson(value: string): WorktodoBackupDocument {
 }
 
 export function createBackupDocument(exportedAtMs: number, snapshot: WorktodoSnapshot): WorktodoBackupDocument {
-  return parseVersion3({
+  return parseCurrentDocument({
     format: WORKTODO_BACKUP_FORMAT,
     version: WORKTODO_BACKUP_VERSION,
     exportedAtMs,
@@ -462,5 +484,5 @@ export function createBackupDocument(exportedAtMs: number, snapshot: WorktodoSna
 }
 
 export function serializeBackupDocument(document: WorktodoBackupDocument): string {
-  return `${JSON.stringify(parseVersion3(document), null, 2)}\n`;
+  return `${JSON.stringify(parseCurrentDocument(document), null, 2)}\n`;
 }

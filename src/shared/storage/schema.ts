@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { normalizeLabelName } from "../domain/validation";
 
-export const WORKTODO_SCHEMA_VERSION = 3;
+export const WORKTODO_SCHEMA_VERSION = 4;
 
 const PROJECTS_SQL = `
 CREATE TABLE projects (
@@ -123,6 +123,14 @@ CREATE TABLE task_labels (
 ) STRICT;
 `;
 
+const TASK_MANUAL_ORDER_SQL = `
+CREATE TABLE task_manual_order (
+  task_id TEXT PRIMARY KEY,
+  position INTEGER NOT NULL UNIQUE CHECK (position >= 0),
+  FOREIGN KEY (task_id) REFERENCES tasks (id) ON UPDATE RESTRICT ON DELETE CASCADE
+) STRICT;
+`;
+
 const INDEXES_SQL = `
 CREATE INDEX projects_order_idx
   ON projects (position, created_at_ms, id);
@@ -183,8 +191,15 @@ const VERSION_3_BODY = `${PROJECTS_SQL}${LABELS_SQL}
 CREATE TABLE tasks (${TASK_COLUMNS_SQL}) STRICT;
 ${TASK_LABELS_SQL}${INDEXES_SQL}`;
 
-export const PRODUCTION_SCHEMA_SQL = `BEGIN IMMEDIATE;${VERSION_3_BODY}
+export const WORKTODO_SCHEMA_VERSION_3_SQL = `BEGIN IMMEDIATE;${VERSION_3_BODY}
 PRAGMA user_version = 3;
+COMMIT;
+`;
+
+const VERSION_4_BODY = `${VERSION_3_BODY}${TASK_MANUAL_ORDER_SQL}`;
+
+export const PRODUCTION_SCHEMA_SQL = `BEGIN IMMEDIATE;${VERSION_4_BODY}
+PRAGMA user_version = 4;
 COMMIT;
 `;
 
@@ -402,12 +417,16 @@ export function applyMigrations(db: DatabaseSync, options: MigrationOptions = {}
     }
 
     if (previousVersion === 0) {
-      db.exec(VERSION_3_BODY);
+      db.exec(VERSION_4_BODY);
     } else if (previousVersion === 1) {
       migrateVersion1(db);
       migrateVersion2(db);
+      db.exec(TASK_MANUAL_ORDER_SQL);
     } else if (previousVersion === 2) {
       migrateVersion2(db);
+      db.exec(TASK_MANUAL_ORDER_SQL);
+    } else if (previousVersion === 3) {
+      db.exec(TASK_MANUAL_ORDER_SQL);
     } else {
       throw new UnsupportedSchemaVersionError(previousVersion);
     }

@@ -1,5 +1,6 @@
 import { isStaticTaskViewKind, type TaskView, type TaskViewResult } from "../application/task-views";
 import type { Label, Project } from "../domain/model";
+import { applyManualTaskOrder } from "../domain/task-order";
 import { addCalendarDays, startOfCalendarDate } from "../domain/queries";
 import { buildAllTaskListSections, buildTaskListItems, type TaskListEntry, type TaskListSection } from "./task-list";
 
@@ -130,7 +131,10 @@ export function buildTaskViewSections(
         key: "today",
         title: taskViewContent(taskView.view, projects, labels).title,
         items: buildTaskListItems(
-          taskView.result.tasks.map(({ task, status }) => ({ task, todayStatus: status })),
+          applyManualTaskOrder(
+            taskView.result.tasks.map(({ task, status }) => ({ id: task.id, task, todayStatus: status })),
+            taskView.manualTaskOrder ?? [],
+          ),
           projects,
           labels,
           taskView.viewerTimeZone,

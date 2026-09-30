@@ -11,6 +11,7 @@ import {
   type ThisWeekResult,
 } from "./queries";
 import type { TaskRepository } from "./repository";
+import { applyManualTaskOrder, type TaskOrderDirection } from "./task-order";
 import {
   validateDueValue,
   validateId,
@@ -486,6 +487,38 @@ export class TaskService {
 
   listAllTasks(viewerTimeZone: string): Task[] {
     return queryAllTasks(this.repository.listTasks(), viewerTimeZone);
+  }
+
+  listManualTaskOrder(): string[] {
+    return this.repository.listManualTaskOrder();
+  }
+
+  reorderTask(id: string, direction: TaskOrderDirection, groupIds: readonly string[]): boolean {
+    const taskId = validateId(id);
+    const validIds = groupIds.map(validateId);
+    if ((direction !== "up" && direction !== "down") || new Set(validIds).size !== validIds.length) {
+      throw new DomainError("INVALID_ARGUMENT", "Task order requires a direction and unique group IDs");
+    }
+    return this.repository.transaction(() => {
+      const tasks = validIds.map((groupId) => this.requireActiveTask(groupId));
+      if (tasks.some((task) => task.completedAtMs !== null) || !validIds.includes(taskId)) {
+        throw new DomainError("INVALID_ARGUMENT", "Reorder an active task within its current group");
+      }
+      const savedOrder = this.repository.listManualTaskOrder();
+      const group = applyManualTaskOrder(tasks, savedOrder).map((task) => task.id);
+      const index = group.indexOf(taskId);
+      const neighbor = index + (direction === "up" ? -1 : 1);
+      if (neighbor < 0 || neighbor >= group.length) {
+        return false;
+      }
+      [group[index], group[neighbor]] = [group[neighbor], group[index]];
+      const registered = new Set(savedOrder);
+      const order = [...savedOrder, ...validIds.filter((groupId) => !registered.has(groupId))];
+      const members = new Set(group);
+      let next = 0;
+      this.repository.replaceManualTaskOrder(order.map((groupId) => (members.has(groupId) ? group[next++] : groupId)));
+      return true;
+    });
   }
 
   listProjectTasks(projectId: string): Task[] {

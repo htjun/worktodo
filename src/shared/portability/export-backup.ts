@@ -19,5 +19,6 @@ export function readSnapshot(repository: TaskRepository): WorktodoSnapshot {
     projects: repository.listProjects(),
     labels: repository.listLabels(),
     tasks: repository.listTasks(),
+    manualTaskOrder: repository.listManualTaskOrder(),
   };
 }

@@ -82,7 +82,7 @@ blocked while a Task is in Trash. Restore preserves completion state, Project, a
 
 ## Schema migration
 
-Fresh databases are created directly at version 3. Opening version 1 or 2 performs one atomic
+Fresh databases are created directly at version 4. Opening version 1, 2, or 3 performs one atomic
 migration under `BEGIN IMMEDIATE`:
 
 - Projects and Sections are read in canonical Project and Section order.
@@ -198,7 +198,13 @@ CREATE INDEX tasks_trashed_idx
   ON tasks (trashed_at_ms DESC, id)
   WHERE trashed_at_ms IS NOT NULL;
 
-PRAGMA user_version = 3;
+CREATE TABLE task_manual_order (
+  task_id TEXT PRIMARY KEY,
+  position INTEGER NOT NULL UNIQUE CHECK (position >= 0),
+  FOREIGN KEY (task_id) REFERENCES tasks (id) ON UPDATE RESTRICT ON DELETE CASCADE
+) STRICT;
+
+PRAGMA user_version = 4;
 COMMIT;
 ```
 

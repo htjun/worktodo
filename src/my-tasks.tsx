@@ -19,6 +19,8 @@ import {
   type TaskLifecycleMutationKind,
 } from "./shared/application/task-lifecycle-interaction";
 import { loadTaskView, normalizeTaskView, type TaskView } from "./shared/application/task-views";
+import { canReorderTask, reorderTaskInView } from "./shared/application/task-ordering";
+import type { TaskOrderDirection } from "./shared/domain/task-order";
 import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
 import type { Label, Project, Task } from "./shared/domain/model";
 import { taskLifecycleHistoryTitle, taskLifecycleMutationPresentation } from "./shared/presentation/task-lifecycle";
@@ -36,6 +38,7 @@ import {
 } from "./task-views";
 import { taskLifecycleHistoryActionPresentation } from "./task-lifecycle-raycast";
 import { PRIORITY_TINT, taskListIcon } from "./task-priority-raycast";
+import { taskOrderActionPresentation } from "./task-order-raycast";
 
 type ListState = {
   isLoading: boolean;
@@ -72,6 +75,7 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
   const [launchContext] = useState(() => parseMyTasksLaunchContext(props.launchContext));
   const [view, setView] = useState<TaskView>(() => ({ kind: launchContext.view }));
   const [selectedTaskId, setSelectedTaskId] = useState(launchContext.selectedTaskId);
+  const [searchText, setSearchText] = useState("");
   const [isShowingDetail, setIsShowingDetail] = useState(launchContext.isShowingDetail);
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [session, setSession] = useState<WorktodoSession | null>(null);
@@ -181,6 +185,28 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
     setState((current) => ({ ...current, isLoading: false, mutationError: message }));
     await showToast(Toast.Style.Failure, title, message);
   }, []);
+
+  const reorderTask = useCallback(
+    async (taskId: string, direction: TaskOrderDirection) => {
+      if (!session) {
+        return;
+      }
+      const result = reorderTaskInView(
+        session.service,
+        taskId,
+        direction,
+        { view, searchText, isLoading: state.isLoading, evaluationInstantMs: Date.now(), viewerTimeZone },
+        (selectedId) => {
+          setSelectedTaskId(selectedId);
+          refreshAfterUnrelatedMutation();
+        },
+      );
+      if (result.status === "failed") {
+        await reportMutationFailure("Unable to reorder task", result.error);
+      }
+    },
+    [session, view, searchText, state.isLoading, viewerTimeZone, refreshAfterUnrelatedMutation, reportMutationFailure],
+  );
 
   const showHistoryToast = useCallback(async (title: string, message: string, nextState: TaskLifecycleHistoryState) => {
     await showToast({
@@ -335,6 +361,8 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
         }
       }}
       searchBarPlaceholder={content.searchPlaceholder}
+      filtering={true}
+      onSearchTextChange={setSearchText}
       searchBarAccessory={
         <TaskViewDropdown view={view} projects={state.projects} labels={state.labels} onChange={changeView} />
       }
@@ -444,6 +472,22 @@ export default function Command(props: LaunchProps<{ launchContext?: MyTasksLaun
                           {taskHistoryState ? (
                             <TaskHistoryAction state={taskHistoryState} onAction={performTaskHistory} />
                           ) : null}
+                          {canReorderTask(acknowledgedTasks.get(item.id) ?? item.task, {
+                            view,
+                            searchText,
+                            isLoading: state.isLoading,
+                          })
+                            ? (["up", "down"] as const).map((direction) => {
+                                const presentation = taskOrderActionPresentation(direction);
+                                return (
+                                  <Action
+                                    key={direction}
+                                    {...presentation}
+                                    onAction={() => reorderTask(item.id, direction)}
+                                  />
+                                );
+                              })
+                            : null}
                           {item.detail.links.map((url, index) => (
                             <Action.OpenInBrowser
                               key={url}

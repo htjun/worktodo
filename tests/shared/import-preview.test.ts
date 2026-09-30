@@ -21,6 +21,7 @@ function id(index: number): string {
 
 function populatedSnapshot(): WorktodoSnapshot {
   return {
+    manualTaskOrder: [],
     projects: [{ id: id(1), name: "Work", position: 1_024, createdAtMs: 100, updatedAtMs: 100 }],
     labels: [
       {
@@ -75,6 +76,7 @@ function serviceFor(current: WorktodoSnapshot, transaction = vi.fn(<Result>(oper
     listProjects: () => current.projects,
     listLabels: () => current.labels,
     listTasks: () => current.tasks,
+    listManualTaskOrder: () => current.manualTaskOrder,
   } as unknown as ReplaceableTaskRepository;
   return { service: new PortabilityService(repository, "/tmp/recovery", () => 10_000), transaction };
 }
@@ -89,11 +91,13 @@ describe("Worktodo import validation and preview", () => {
     const document = createBackupDocument(9_000, populatedSnapshot());
     await writeFile(path, serializeBackupDocument(document), "utf8");
 
-    const prepared = serviceFor({ projects: [], labels: [], tasks: [] }).service.prepare(path);
+    const prepared = serviceFor({ projects: [], labels: [], tasks: [], manualTaskOrder: [] }).service.prepare(path);
     expect(prepared.document).toEqual(document);
-    expect(prepared.currentFingerprint).toBe(snapshotFingerprint({ projects: [], labels: [], tasks: [] }));
+    expect(prepared.currentFingerprint).toBe(
+      snapshotFingerprint({ projects: [], labels: [], tasks: [], manualTaskOrder: [] }),
+    );
     expect(prepared.preview).toEqual({
-      formatVersion: 3,
+      formatVersion: 4,
       exportedAtMs: 9_000,
       incoming: {
         projects: 1,
@@ -159,7 +163,7 @@ describe("Worktodo import validation and preview", () => {
   it.each([
     [
       "unsupported versions",
-      (document: WorktodoBackupDocument) => ({ ...document, version: 4 }),
+      (document: WorktodoBackupDocument) => ({ ...document, version: 5 }),
       "UNSUPPORTED_VERSION",
     ],
     [
@@ -185,7 +189,7 @@ describe("Worktodo import validation and preview", () => {
   it("calls the current snapshot reader only after a valid document", async () => {
     const path = await temporaryPath("backup.json");
     await writeFile(path, serializeBackupDocument(createBackupDocument(9_000, populatedSnapshot())), "utf8");
-    const current = { projects: [], labels: [], tasks: [] };
+    const current = { projects: [], labels: [], tasks: [], manualTaskOrder: [] };
     const { service, transaction } = serviceFor(current);
 
     const prepared = service.prepare(path);
@@ -199,6 +203,7 @@ describe("Worktodo import validation and preview", () => {
     const original = snapshotFingerprint(current);
     expect(
       snapshotFingerprint({
+        manualTaskOrder: current.manualTaskOrder,
         projects: [...current.projects].reverse(),
         labels: [...current.labels].reverse(),
         tasks: [...current.tasks].reverse(),
@@ -206,6 +211,7 @@ describe("Worktodo import validation and preview", () => {
     ).toBe(original);
 
     const mutations: WorktodoSnapshot[] = [
+      { ...current, manualTaskOrder: [current.tasks[0].id] },
       { ...current, projects: [{ ...current.projects[0], name: "Personal" }] },
       { ...current, labels: [{ ...current.labels[0], name: "Later" }] },
       { ...current, tasks: [{ ...current.tasks[0], title: "Changed" }, ...current.tasks.slice(1)] },

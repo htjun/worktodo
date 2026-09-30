@@ -27,6 +27,7 @@ type OrdinaryTaskView = Exclude<TaskView, TodayTaskView | ThisWeekTaskView>;
 type TaskViewResultContext = {
   evaluatedAtMs: number;
   viewerTimeZone: string;
+  manualTaskOrder?: readonly string[];
 };
 
 export type TodayTaskViewResult = TaskViewResultContext & {
@@ -105,7 +106,7 @@ export function loadTaskView(source: TaskService, view: TaskView, context: TaskV
 export function loadTaskView(source: TaskService, view: TaskView, context: TaskViewContext): TaskViewResult {
   const evaluatedAtMs = validateTimestamp(context.evaluationInstantMs, "Evaluation instant");
   const viewerTimeZone = canonicalizeTimeZone(context.viewerTimeZone);
-  const resultContext = { evaluatedAtMs, viewerTimeZone };
+  const resultContext = { evaluatedAtMs, viewerTimeZone, manualTaskOrder: source.listManualTaskOrder() };
 
   switch (view.kind) {
     case "today":

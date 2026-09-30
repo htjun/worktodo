@@ -16,6 +16,7 @@ function id(index: number): string {
 
 function completeDocument(): WorktodoBackupDocument {
   return createBackupDocument(9_000, {
+    manualTaskOrder: [],
     projects: [
       { id: id(2), name: "Personal", position: 1_024, createdAtMs: 100, updatedAtMs: 200 },
       { id: id(1), name: "Work", position: 1_024, createdAtMs: 100, updatedAtMs: 100 },
@@ -126,21 +127,39 @@ describe("Worktodo backup contract", () => {
     expect(parseBackupJson(serialized).tasks.map((task) => task.id)).toEqual([id(5), id(6), id(7), id(8)]);
   });
 
+  it("preserves manual sequence and rejects duplicate or missing task references", () => {
+    const document = { ...completeDocument(), manualTaskOrder: [id(8), id(5)] };
+    expect(parseBackupJson(serializeBackupDocument(document)).manualTaskOrder).toEqual([id(8), id(5)]);
+    expectCode(() => parseBackupDocument({ ...document, manualTaskOrder: [id(5), id(5)] }), "DUPLICATE_ID");
+    expectCode(() => parseBackupDocument({ ...document, manualTaskOrder: [id(99)] }), "BROKEN_RELATIONSHIP");
+    expectCode(() => parseBackupDocument({ ...document, manualTaskOrder: ["invalid"] }), "INVALID_MODEL");
+  });
+
+  it("imports version 3 with an empty manual sequence and unchanged task values", () => {
+    const document = completeDocument();
+    const legacy: Record<string, unknown> = { ...document, version: 3 };
+    delete legacy.manualTaskOrder;
+    expect(parseBackupDocument(legacy)).toEqual(document);
+  });
+
   it("rejects malformed JSON and unsupported versions with bounded codes", () => {
     expectCode(() => parseBackupJson("{"), "INVALID_DOCUMENT");
-    expectCode(() => parseBackupDocument({ ...completeDocument(), version: 4 }), "UNSUPPORTED_VERSION");
+    expectCode(() => parseBackupDocument({ ...completeDocument(), version: 5 }), "UNSUPPORTED_VERSION");
     const missingVersion: Record<string, unknown> = { ...completeDocument() };
     delete missingVersion.version;
     expectCode(() => parseBackupDocument(missingVersion), "INVALID_MODEL");
   });
 
-  it.each([1, 2, 3])("rejects an unrepresentable export timestamp in version %s", (version) => {
+  it.each([1, 2, 3, 4])("rejects an unrepresentable export timestamp in version %s", (version) => {
     const document = completeDocument() as WorktodoBackupDocument & Record<string, unknown>;
     const candidate: Record<string, unknown> = {
       ...document,
       version,
       exportedAtMs: MAX_REPRESENTABLE_TIMESTAMP_MS + 1,
     };
+    if (version !== 4) {
+      delete candidate.manualTaskOrder;
+    }
     if (version === 1) {
       candidate.sections = [];
       candidate.tasks = [];
@@ -278,7 +297,7 @@ describe("Worktodo backup contract", () => {
     };
 
     const converted = parseBackupDocument(legacy);
-    expect(converted.version).toBe(3);
+    expect(converted.version).toBe(4);
     expect(converted.labels).toEqual([
       expect.objectContaining({ id: id(10), name: "Waiting", position: 1_024 }),
       expect.objectContaining({ id: id(11), name: "Empty", position: 2_048 }),
@@ -305,13 +324,15 @@ describe("Worktodo backup contract", () => {
   it("converts version 2 priority levels with only high enabled", () => {
     const document = completeDocument();
     const priorities = ["high", "medium", "low", "none"];
+    const legacy: Record<string, unknown> = { ...document };
+    delete legacy.manualTaskOrder;
     const converted = parseBackupDocument({
-      ...document,
+      ...legacy,
       version: 2,
       tasks: document.tasks.map((task, index) => ({ ...task, priority: priorities[index] })),
     });
 
-    expect(converted.version).toBe(3);
+    expect(converted.version).toBe(4);
     expect(converted.tasks.map((task) => task.priority)).toEqual([true, false, false, false]);
   });
 

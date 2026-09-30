@@ -1,4 +1,5 @@
 import type { Project, Task } from "../domain/model";
+import { applyManualTaskOrder } from "../domain/task-order";
 import { addCalendarDays, type ThisWeekResult, type ThisWeekTask } from "../domain/queries";
 import type { TaskLifecycleHistoryState } from "../application/task-lifecycle-interaction";
 import { taskLifecycleHistoryTitle } from "./task-lifecycle";
@@ -106,6 +107,7 @@ export function buildMenuBarModel(
   thisWeekResult: ThisWeekResult,
   projects: readonly Project[],
   allTasksCount: number,
+  manualTaskOrder: readonly string[] = [],
 ): MenuBarModel {
   const priority: MenuBarTask[] = [];
   const overdue: MenuBarTask[] = [];
@@ -153,5 +155,10 @@ export function buildMenuBarModel(
   if (laterThisWeek.length > 0) {
     sections.push({ key: "laterThisWeek", title: "Later this week", tasks: laterThisWeek });
   }
-  return { count, allTasksCount, title: count === 0 ? undefined : String(count), sections };
+  return {
+    count,
+    allTasksCount,
+    title: count === 0 ? undefined : String(count),
+    sections: sections.map((section) => ({ ...section, tasks: applyManualTaskOrder(section.tasks, manualTaskOrder) })),
+  };
 }

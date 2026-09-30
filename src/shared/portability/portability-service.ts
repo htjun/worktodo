@@ -38,6 +38,7 @@ function replaceRows(repository: ReplaceableTaskRepository, document: WorktodoBa
   document.projects.forEach((project) => repository.insertProject(project));
   document.labels.forEach((label) => repository.insertLabel(label));
   document.tasks.forEach((task) => repository.insertTask(task));
+  repository.replaceManualTaskOrder(document.manualTaskOrder);
 }
 
 function assertExactReplacement(repository: ReplaceableTaskRepository, document: WorktodoBackupDocument): void {

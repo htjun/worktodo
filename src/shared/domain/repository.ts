@@ -19,4 +19,7 @@ export interface TaskRepository {
   listTasks(): Task[];
   insertTask(task: Task): void;
   updateTask(task: Task): void;
+
+  listManualTaskOrder(): string[];
+  replaceManualTaskOrder(taskIds: readonly string[]): void;
 }

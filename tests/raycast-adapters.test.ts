@@ -14,12 +14,22 @@ vi.mock("@raycast/api", () => ({
     SecondaryText: "secondary-text",
   },
   Icon: {
+    ArrowUp: "arrow-up",
+    ArrowDown: "arrow-down",
     ArrowCounterClockwise: "arrow-counter-clockwise",
     CheckCircle: "check-circle",
     Circle: "circle",
     Redo: "redo",
     Trash: "trash",
     Undo: "undo",
+  },
+  Keyboard: {
+    Shortcut: {
+      Common: {
+        MoveUp: { modifiers: ["cmd", "opt"], key: "arrowUp" },
+        MoveDown: { modifiers: ["cmd", "opt"], key: "arrowDown" },
+      },
+    },
   },
   LaunchType: {
     Background: "background",
@@ -35,7 +45,7 @@ vi.mock("@raycast/api", () => ({
   showToast: raycast.showToast,
 }));
 
-import { LaunchType } from "@raycast/api";
+import { Keyboard, LaunchType } from "@raycast/api";
 import { showMenuBarFeedback } from "../src/menu-bar-feedback";
 import { launchMyTasks, launchNewTask, requestMenuBarRefresh } from "../src/raycast-commands";
 import {
@@ -43,6 +53,7 @@ import {
   taskLifecycleMutationActionPresentation,
 } from "../src/task-lifecycle-raycast";
 import { menuBarTaskIcon, taskListIcon } from "../src/task-priority-raycast";
+import { taskOrderActionPresentation } from "../src/task-order-raycast";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -53,6 +64,19 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("task order shortcuts", () => {
+  it("uses Raycast's common move shortcuts for the corresponding direction", () => {
+    expect(taskOrderActionPresentation("up")).toMatchObject({
+      title: "Move Up",
+      shortcut: Keyboard.Shortcut.Common.MoveUp,
+    });
+    expect(taskOrderActionPresentation("down")).toMatchObject({
+      title: "Move Down",
+      shortcut: Keyboard.Shortcut.Common.MoveDown,
+    });
+  });
 });
 
 describe("Raycast command launches", () => {

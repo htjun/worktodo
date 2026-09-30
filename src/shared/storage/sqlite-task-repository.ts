@@ -279,6 +279,18 @@ export class SqliteTaskRepository implements TaskRepository {
     this.db.exec("DELETE FROM tasks");
   }
 
+  listManualTaskOrder(): string[] {
+    return (this.db.prepare("SELECT task_id FROM task_manual_order ORDER BY position").all() as Row[]).map((row) =>
+      requiredString(row, "task_id"),
+    );
+  }
+
+  replaceManualTaskOrder(taskIds: readonly string[]): void {
+    this.db.exec("DELETE FROM task_manual_order");
+    const insert = this.db.prepare("INSERT INTO task_manual_order(task_id, position) VALUES (?, ?)");
+    taskIds.forEach((id, index) => insert.run(id, index));
+  }
+
   deleteAllLabels(): void {
     this.db.exec("DELETE FROM labels");
   }

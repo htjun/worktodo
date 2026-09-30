@@ -47,6 +47,7 @@ export function snapshotFingerprint(snapshot: WorktodoSnapshot): string {
       projects: snapshot.projects,
       labels: snapshot.labels,
       tasks: snapshot.tasks,
+      manualTaskOrder: snapshot.manualTaskOrder,
     }),
   );
   return createHash("sha256").update(canonical, "utf8").digest("hex");

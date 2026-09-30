@@ -58,7 +58,7 @@ describe("replacement recovery durability", () => {
     const repository = new SqliteTaskRepository(db);
     repository.transaction(() => repository.insertTask(initialTask));
     const before = readSnapshot(repository);
-    const incoming = createBackupDocument(2_000, { projects: [], labels: [], tasks: [] });
+    const incoming = createBackupDocument(2_000, { projects: [], labels: [], tasks: [], manualTaskOrder: [] });
     const prepared: PreparedImport = {
       path: join(directory, "incoming.json"),
       document: incoming,

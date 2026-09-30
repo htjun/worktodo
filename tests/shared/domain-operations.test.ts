@@ -97,7 +97,7 @@ describe("shared domain operations", () => {
 
     const reopened = openWorktodoDatabase(databasePath);
     try {
-      expect(applyMigrations(reopened)).toEqual({ applied: false, previousVersion: 3, currentVersion: 3 });
+      expect(applyMigrations(reopened)).toEqual({ applied: false, previousVersion: 4, currentVersion: 4 });
       const repository = new SqliteTaskRepository(reopened);
       expect(repository.getTask(noProject.id)).toMatchObject({
         projectId: null,
