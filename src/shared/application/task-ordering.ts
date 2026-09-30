@@ -15,9 +15,13 @@ export type TaskOrderingResult =
   | { status: "unavailable" | "unchanged" }
   | { status: "failed"; error: unknown };
 
+function supportsTaskOrdering(view: TaskView): boolean {
+  return view.kind !== "completed" && view.kind !== "trash";
+}
+
 export function canReorderTask(task: Task, context: Pick<TaskOrderingContext, "view" | "searchText" | "isLoading">) {
   return (
-    context.view.kind === "today" &&
+    supportsTaskOrdering(context.view) &&
     context.searchText.length === 0 &&
     !context.isLoading &&
     task.completedAtMs === null &&
@@ -32,7 +36,7 @@ export function reorderTaskInView(
   context: TaskOrderingContext,
   onMoved: (taskId: string) => void,
 ): TaskOrderingResult {
-  if (context.view.kind !== "today" || context.searchText.length > 0 || context.isLoading) {
+  if (!supportsTaskOrdering(context.view) || context.searchText.length > 0 || context.isLoading) {
     return { status: "unavailable" };
   }
   try {

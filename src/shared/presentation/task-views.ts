@@ -120,7 +120,7 @@ function laterThisWeekSectionTitle(date: string, localDate: string, viewerTimeZo
   return new Intl.DateTimeFormat(undefined, options).format(new Date(startOfCalendarDate(date, viewerTimeZone)));
 }
 
-export function buildTaskViewSections(
+function buildUnorderedTaskViewSections(
   taskView: TaskViewResult,
   projects: readonly Project[],
   labels: readonly Label[],
@@ -131,10 +131,7 @@ export function buildTaskViewSections(
         key: "today",
         title: taskViewContent(taskView.view, projects, labels).title,
         items: buildTaskListItems(
-          applyManualTaskOrder(
-            taskView.result.tasks.map(({ task, status }) => ({ id: task.id, task, todayStatus: status })),
-            taskView.manualTaskOrder ?? [],
-          ),
+          taskView.result.tasks.map(({ task, status }) => ({ task, todayStatus: status })),
           projects,
           labels,
           taskView.viewerTimeZone,
@@ -182,6 +179,21 @@ export function buildTaskViewSections(
       ),
     },
   ];
+}
+
+export function buildTaskViewSections(
+  taskView: TaskViewResult,
+  projects: readonly Project[],
+  labels: readonly Label[],
+): TaskListSection[] {
+  const sections = buildUnorderedTaskViewSections(taskView, projects, labels);
+  if (taskView.view.kind === "completed" || taskView.view.kind === "trash") {
+    return sections;
+  }
+  return sections.map((section) => ({
+    ...section,
+    items: applyManualTaskOrder(section.items, taskView.manualTaskOrder ?? []),
+  }));
 }
 
 export type { TaskListSection } from "./task-list";

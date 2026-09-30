@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadMenuBarModel } from "../../src/shared/application/menu-bar-workflows";
 import { canReorderTask, reorderTaskInView } from "../../src/shared/application/task-ordering";
-import { loadTaskView } from "../../src/shared/application/task-views";
+import { loadTaskView, type TaskView } from "../../src/shared/application/task-views";
 import { openWorktodoAtPath } from "../../src/shared/application/worktodo";
 import type { TaskRepository } from "../../src/shared/domain/repository";
 import { TaskService } from "../../src/shared/domain/task-service";
@@ -35,9 +35,9 @@ async function openContext() {
     recoveryDirectory: join(directory, "recovery"),
   };
   const session = openWorktodoAtPath(databasePath, options);
-  const sections = () =>
+  const sections = (view: TaskView = context.view) =>
     buildTaskViewSections(
-      loadTaskView(session.service, context.view, context),
+      loadTaskView(session.service, view, context),
       session.service.listProjects(),
       session.service.listLabels(),
     );
@@ -48,7 +48,7 @@ async function openContext() {
       context.viewerTimeZone,
       context.evaluationInstantMs,
     );
-  return { directory, databasePath, options, session, ids, menu };
+  return { directory, databasePath, options, session, ids, sections, menu };
 }
 
 afterEach(async () => {
@@ -149,7 +149,6 @@ describe("manual task ordering", () => {
         { ...context, isLoading: true },
         { ...context, view: { kind: "completed" as const } },
         { ...context, view: { kind: "trash" as const } },
-        { ...context, view: { kind: "all" as const } },
       ]) {
         expect(canReorderTask(first, blocked)).toBe(false);
         expect(reorderTaskInView(session.service, first.id, "down", blocked, moved)).toEqual({ status: "unavailable" });
@@ -269,6 +268,107 @@ describe("manual task ordering", () => {
       session.portability.replace(session.portability.prepare(legacyPath));
       expect(session.service.listManualTaskOrder()).toEqual([]);
       expect(ids()).toEqual([first.id, second.id, third.id]);
+    } finally {
+      session.close();
+    }
+  });
+
+  it("reorders project sections and overlapping labels without crossing All tasks groups", async () => {
+    const { session, sections } = await openContext();
+    try {
+      const work = session.service.createProject("Work");
+      const home = session.service.createProject("Home");
+      const next = session.service.createLabel("Next");
+      const shared = session.service.createLabel("Shared");
+      const noProject = [
+        session.service.createTask({ title: "No project first", due }),
+        session.service.createTask({ title: "No project second", due }),
+      ];
+      const workTasks = [
+        session.service.createTask({ title: "Work first", due, projectId: work.id, labelIds: [next.id, shared.id] }),
+        session.service.createTask({ title: "Work second", due, projectId: work.id, labelIds: [next.id] }),
+      ];
+      const homeTasks = [
+        session.service.createTask({ title: "Home first", due, projectId: home.id, labelIds: [next.id, shared.id] }),
+        session.service.createTask({ title: "Home second", due, projectId: home.id, labelIds: [next.id] }),
+      ];
+      const all: TaskView = { kind: "all" };
+      const project: TaskView = { kind: "project", projectId: work.id };
+      const label: TaskView = { kind: "label", labelId: next.id };
+      const moved = vi.fn();
+      const move = (view: TaskView, taskId: string, direction: "up" | "down") =>
+        reorderTaskInView(session.service, taskId, direction, { ...context, view }, moved);
+      const groupIds = () => sections(all).map((section) => section.items.map((item) => item.id));
+      const headings = sections(all).map((section) => [section.key, section.title]);
+      expect(move(all, workTasks[1].id, "up").status).toBe("moved");
+      expect(groupIds()).toEqual([
+        noProject.map((task) => task.id),
+        [workTasks[1].id, workTasks[0].id],
+        homeTasks.map((task) => task.id),
+      ]);
+      expect(move(all, workTasks[1].id, "up")).toEqual({ status: "unchanged" });
+      expect(sections(project)[0].items.map((item) => item.id)).toEqual([workTasks[1].id, workTasks[0].id]);
+      expect(move(project, workTasks[1].id, "down").status).toBe("moved");
+      expect(sections(project)[0].items.map((item) => item.id)).toEqual(workTasks.map((task) => task.id));
+      expect(move(label, homeTasks[0].id, "up")).toEqual({ status: "moved", selectedTaskId: homeTasks[0].id });
+      expect(move(label, homeTasks[0].id, "up")).toEqual({ status: "moved", selectedTaskId: homeTasks[0].id });
+      const sharedView: TaskView = { kind: "label", labelId: shared.id };
+      expect(sections(sharedView)[0].items.map((item) => item.id)).toEqual([homeTasks[0].id, workTasks[0].id]);
+      expect(move(all, noProject[1].id, "up").status).toBe("moved");
+      expect(groupIds()[0]).toEqual([noProject[1].id, noProject[0].id]);
+      expect(sections(all).map((section) => [section.key, section.title])).toEqual(headings);
+      expect([...workTasks, ...homeTasks, ...noProject].map((task) => session.service.getTask(task.id))).toEqual([
+        ...workTasks,
+        ...homeTasks,
+        ...noProject,
+      ]);
+      session.service.completeTask(workTasks[0].id);
+      session.service.completeTask(workTasks[1].id);
+      expect(sections({ kind: "completed" })[0].items.map((item) => item.id)).toEqual(workTasks.map((task) => task.id));
+      session.service.trashTask(workTasks[0].id);
+      session.service.trashTask(workTasks[1].id);
+      expect(sections({ kind: "trash" })[0].items.map((item) => item.id)).toEqual(workTasks.map((task) => task.id));
+    } finally {
+      session.close();
+    }
+  });
+
+  it("keeps This week date boundaries and headings while updating every menu-bar group", async () => {
+    const { session, sections, menu } = await openContext();
+    try {
+      const dates = ["2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03"];
+      const groups = dates.map((date, index) => [
+        session.service.createTask({ title: `First ${date}`, due: { ...due, date }, priority: index === 4 }),
+        session.service.createTask({ title: `Second ${date}`, due: { ...due, date }, priority: index === 3 }),
+      ]);
+      const view: TaskView = { kind: "thisWeek" };
+      const headings = sections(view).map((section) => [section.key, section.title]);
+      const selected: string[] = [];
+      const move = (taskId: string, direction: "up" | "down") =>
+        reorderTaskInView(session.service, taskId, direction, { ...context, view }, (id) => selected.push(id));
+      for (const [first, second] of groups) {
+        expect(move(first.id, "up")).toEqual({ status: "unchanged" });
+        expect(move(second.id, "up")).toEqual({ status: "moved", selectedTaskId: second.id });
+        expect(move(second.id, "up")).toEqual({ status: "unchanged" });
+        expect(move(first.id, "down")).toEqual({ status: "unchanged" });
+      }
+      expect(selected).toEqual(groups.map((tasks) => tasks[1].id));
+      expect(sections(view).map((section) => [section.key, section.title])).toEqual(headings);
+      expect(sections(view).map((section) => section.items.map((item) => item.id))).toEqual(
+        groups.map(([first, second]) => [second.id, first.id]),
+      );
+      expect(menu().count).toBe(4);
+      expect(menu().allTasksCount).toBe(10);
+      expect(menu().sections.map((section) => [section.key, section.tasks.map((task) => task.id)])).toEqual([
+        ["priority", [groups[3][1].id, groups[4][0].id]],
+        ["overdue", [groups[0][1].id, groups[0][0].id]],
+        ["today", [groups[1][1].id, groups[1][0].id]],
+        ["tomorrow", [groups[2][1].id, groups[2][0].id]],
+        ["laterThisWeek", [groups[3][0].id, groups[4][1].id]],
+      ]);
+      for (const task of groups.flat()) {
+        expect(session.service.getTask(task.id)).toEqual(task);
+      }
     } finally {
       session.close();
     }
