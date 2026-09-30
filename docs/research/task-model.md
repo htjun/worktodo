@@ -1,7 +1,7 @@
 # Worktodo Task Model
 
 Status: implemented
-Last verified: 2026-09-05
+Last verified: 2026-09-30
 
 ## Model
 
@@ -74,8 +74,20 @@ that day. This week includes the same overdue and Today Tasks plus active incomp
 through Sunday in the viewer's timezone. Completed excludes Trash; Trash includes trashed Tasks
 whether complete or incomplete.
 
-Ordinary Task order is `position`, `createdAtMs`, and `id` ascending. Priority never changes order.
-All tasks places dated Tasks first by effective due instant and undated Tasks last.
+Fallback Task order is `position`, `createdAtMs`, and `id` ascending. Priority never changes order.
+All tasks places dated Tasks first by effective due instant and undated Tasks last before applying
+manual order within its Project groups.
+
+All tasks, Today, This week, Project, and Label use one saved manual sequence within their existing
+groups. Command-Option-Up/Down moves the selected active Task one place within its displayed group
+and keeps it selected. Reordering is unavailable during search or loading and in Completed or Trash.
+The menu bar follows the same sequence within its existing groups after each move.
+
+Manual order is stored separately from `Task.position` and does not change Task content, timestamps,
+or associations. Saved members precede unsaved members; unsaved members retain their fallback order.
+A successful move registers the group's current members. New Tasks remain unsaved until their group
+is reordered. Completion and Trash retain saved ranks, but Completed and Trash keep their existing
+presentation order. Backup and restore preserve the sequence.
 
 Completion, reopening, Trash, and restore are idempotent. Content, Project, and Label changes are
 blocked while a Task is in Trash. Restore preserves completion state, Project, and Labels.
@@ -83,7 +95,7 @@ blocked while a Task is in Trash. Restore preserves completion state, Project, a
 ## Schema migration
 
 Fresh databases are created directly at version 4. Opening version 1, 2, or 3 performs one atomic
-migration under `BEGIN IMMEDIATE`:
+migration under `BEGIN IMMEDIATE`. Version 1 conversion follows these rules:
 
 - Projects and Sections are read in canonical Project and Section order.
 - The first Section for each normalized name retains its ID, name, and timestamps as a global
@@ -93,9 +105,13 @@ migration under `BEGIN IMMEDIATE`:
 - Task identity, content, Due values, lifecycle values, and timestamps are preserved.
 - The Task table is rebuilt without Section assignment, foreign keys are checked, and
   `user_version` advances only when the transaction succeeds.
-- The version 3 Task table stores priority as constrained integer `0` or `1`. Legacy `high` values
-  become `1`; `medium`, `low`, and `none` become `0`. Every other Task field and Label association
-  is preserved.
+
+The priority conversion for version 2 and converted version 1 databases stores constrained integer
+`0` or `1`. Legacy `high` values become `1`; `medium`, `low`, and `none` become `0`. Every other
+Task field and Label association is preserved.
+
+All legacy databases receive an empty `task_manual_order` table. For version 3, this is the only
+schema addition; existing Task content and Project positions remain unchanged.
 
 ## SQLite schema design
 
@@ -212,9 +228,11 @@ COMMIT;
 
 ## Verification
 
-`tests/shared/production-schema.test.ts` covers fresh creation, populated version 1 and version 2
+`tests/shared/production-schema.test.ts` covers fresh creation, populated version 1, 2, and 3
 conversion, normalized collision merging, empty Sections, high-only priority conversion, ordering,
 lifecycle preservation, rollback, concurrent startup, foreign keys, reopen, and future-version
 rejection.
 `tests/shared/domain-operations.test.ts` covers Label lifecycle and assignment through the
-production SQLite repository. The repository-wide gate is `npm run verify`.
+production SQLite repository. `tests/shared/task-ordering.test.ts` covers manual order, group
+boundaries, shared views, persistence, lifecycle retention, menu-bar order, and backup compatibility.
+The repository-wide gate is `npm run verify`.
