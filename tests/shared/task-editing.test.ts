@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createOperationScopedTaskEditingMutations,
   TaskEditingInteraction,
@@ -103,6 +103,8 @@ function mutations() {
     moveTask: vi.fn<TaskEditingMutations["moveTask"]>((_taskId, projectId) => task({ projectId })),
   };
 }
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("Task editing interaction", () => {
   it("owns new and edit defaults for every Due kind", () => {
@@ -370,6 +372,50 @@ describe("Task editing interaction", () => {
     );
 
     expect(editing.save(undefined, values(), context())).toMatchObject({ status: "failed", field: "form" });
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("keeps scoped create, update, and move results after cleanup fails", () => {
+    const adapter = mutations();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const close = vi.fn(() => {
+      throw new Error("close failed");
+    });
+    const open = vi.fn(() => ({ service: adapter, close }));
+    const editing = new TaskEditingInteraction(createOperationScopedTaskEditingMutations(open));
+
+    expect(editing.save(undefined, values(), context())).toMatchObject({ status: "succeeded", operation: "create" });
+    expect(editing.save(task(), values(), context())).toMatchObject({ status: "succeeded", operation: "update" });
+    expect(editing.move(task().id, taskEditingProjectKey(project.id), [project])).toMatchObject({
+      status: "succeeded",
+      operation: "move",
+    });
+    expect(adapter.createTask).toHaveBeenCalledOnce();
+    expect(adapter.updateTask).toHaveBeenCalledOnce();
+    expect(adapter.moveTask).toHaveBeenCalledOnce();
+    expect(open).toHaveBeenCalledTimes(3);
+    expect(close).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the editing failure when cleanup also fails", () => {
+    const adapter = mutations();
+    adapter.createTask.mockImplementationOnce(() => {
+      throw new Error("Write failed");
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const close = vi.fn(() => {
+      throw new Error("Close failed");
+    });
+    const editing = new TaskEditingInteraction(
+      createOperationScopedTaskEditingMutations(() => ({ service: adapter, close })),
+    );
+
+    expect(editing.save(undefined, values(), context())).toMatchObject({
+      status: "failed",
+      field: "form",
+      message: "Write failed",
+    });
+    expect(adapter.createTask).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
   });
 

@@ -1,6 +1,7 @@
 import { DomainError, type DueValue, type Label, type Project, type Task } from "../domain/model";
 import { addCalendarDays, calendarDateAt, startOfCalendarDate } from "../domain/queries";
 import type { CreateTaskInput, TaskService, UpdateTaskInput } from "../domain/task-service";
+import { runWorktodoOperation } from "./worktodo";
 
 export type DueDatePreset = "none" | "today" | "tomorrow" | "endOfWeek" | "custom";
 
@@ -197,14 +198,8 @@ export function taskEditingDefaults(
 }
 
 export function createOperationScopedTaskEditingMutations(openSession: OpenTaskEditingSession): TaskEditingMutations {
-  const run = <Result>(operation: (service: TaskEditingMutations) => Result): Result => {
-    const session = openSession();
-    try {
-      return operation(session.service);
-    } finally {
-      session.close();
-    }
-  };
+  const run = <Result>(operation: (service: TaskEditingMutations) => Result): Result =>
+    runWorktodoOperation(openSession, (session) => operation(session.service), "task editing");
   return {
     createTask: (input) => run((service) => service.createTask(input)),
     updateTask: (taskId, input) => run((service) => service.updateTask(taskId, input)),

@@ -2,7 +2,7 @@ import { closeMainWindow, Form, PopToRootType } from "@raycast/api";
 import { useState } from "react";
 import { requestMenuBarRefresh } from "./raycast-commands";
 import { createOperationScopedTaskEditingMutations } from "./shared/application/task-editing";
-import { openProductionWorktodo, type WorktodoSession } from "./shared/application/worktodo";
+import { openProductionWorktodo, runWorktodoOperation } from "./shared/application/worktodo";
 import type { Label, Project } from "./shared/domain/model";
 import { TaskForm } from "./task-form";
 
@@ -19,18 +19,18 @@ function messageFrom(error: unknown): string {
 export default function NewTask() {
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [state] = useState<NewTaskState>(() => {
-    let session: WorktodoSession | undefined;
     try {
-      session = openProductionWorktodo();
-      return {
-        projects: session.service.listProjects(),
-        labels: session.service.listLabels(),
-        error: null,
-      };
+      return runWorktodoOperation(
+        openProductionWorktodo,
+        (session) => ({
+          projects: session.service.listProjects(),
+          labels: session.service.listLabels(),
+          error: null,
+        }),
+        "new task catalogs",
+      );
     } catch (error) {
       return { projects: [], labels: [], error: messageFrom(error) };
-    } finally {
-      session?.close();
     }
   });
   const [mutations] = useState(() => createOperationScopedTaskEditingMutations(openProductionWorktodo));

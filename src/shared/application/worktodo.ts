@@ -22,6 +22,27 @@ export type OpenWorktodoOptions = {
   recoveryDirectory?: string;
 };
 
+function closeSession(session: Pick<WorktodoSession, "close">, context: string): void {
+  try {
+    session.close();
+  } catch (error) {
+    console.error(`Worktodo ${context} session close failed`, error);
+  }
+}
+
+export function runWorktodoOperation<Session extends Pick<WorktodoSession, "close">, Result>(
+  openSession: () => Session,
+  operation: (session: Session) => Result,
+  context = "operation",
+): Result {
+  const session = openSession();
+  try {
+    return operation(session);
+  } finally {
+    closeSession(session, context);
+  }
+}
+
 function createSession(databasePath: string, db: DatabaseSync, options: OpenWorktodoOptions): WorktodoSession {
   try {
     (options.migrate ?? applyMigrations)(db);
@@ -34,7 +55,7 @@ function createSession(databasePath: string, db: DatabaseSync, options: OpenWork
       close: () => db.close(),
     };
   } catch (error) {
-    db.close();
+    closeSession(db, "construction");
     throw error;
   }
 }

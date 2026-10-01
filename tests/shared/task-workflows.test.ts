@@ -41,6 +41,54 @@ afterEach(async () => {
 });
 
 describe("main task workflows", () => {
+  it("reports a persisted standalone create as successful when session cleanup fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "worktodo-create-cleanup-test-"));
+    temporaryDirectories.push(directory);
+    const databasePath = join(directory, "worktodo.sqlite");
+    let nextId = 1;
+    const options = { createId: () => id(nextId++), now: () => 1_000 };
+    const diagnostics = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const open = vi.fn(() => {
+      const session = openWorktodoAtPath(databasePath, options);
+      return {
+        service: session.service,
+        close: () => {
+          session.close();
+          throw new Error("injected close failure");
+        },
+      };
+    });
+    try {
+      const editing = new TaskEditingInteraction(createOperationScopedTaskEditingMutations(open));
+      const outcome = editing.save(
+        undefined,
+        {
+          title: "Create once",
+          notes: "",
+          priority: false,
+          dueDatePreset: "none",
+          customDueAtMs: null,
+          selectedProject: taskEditingProjectKey(null),
+          selectedLabelIds: [],
+        },
+        { referenceInstantMs: evaluationInstantMs, viewerTimeZone, projects: [], labels: [] },
+      );
+      expect(outcome).toMatchObject({ status: "succeeded", operation: "create" });
+      expect(open).toHaveBeenCalledOnce();
+      expect(diagnostics).toHaveBeenCalledOnce();
+      const inspection = openWorktodoAtPath(databasePath, options);
+      try {
+        expect(inspection.service.listAllTasks(viewerTimeZone)).toEqual(
+          outcome.status === "succeeded" ? [outcome.task] : [],
+        );
+      } finally {
+        inspection.close();
+      }
+    } finally {
+      diagnostics.mockRestore();
+    }
+  });
+
   it("runs standalone creation through completion, undo, redo, trash, and restore against one real store", async () => {
     vi.useFakeTimers();
     const directory = await mkdtemp(join(tmpdir(), "worktodo-task-workflow-test-"));
