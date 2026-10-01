@@ -75,103 +75,154 @@ describe("secondary human workflows", () => {
     }
   });
 
-  it("loads, completes, reverses, and hides the menu bar through disposable sessions", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "worktodo-menu-workflow-test-"));
-    temporaryDirectories.push(directory);
-    const databasePath = join(directory, "worktodo.sqlite");
-    let nextId = 1;
-    let now = 1_000;
-    let closeCount = 0;
-    const options: OpenWorktodoOptions = {
-      createId: () => id(nextId++),
-      now: () => now,
-      recoveryDirectory: join(directory, "recovery"),
-    };
-    const setup = openWorktodoAtPath(databasePath, options);
-    const task = setup.service.createTask({
-      title: "Complete from menu",
-      projectId: null,
-      due: { kind: "allDay", date: "2026-08-31" },
-    });
-    setup.service.createTask({ title: "Undated task", projectId: null });
-    setup.service.createTask({
-      title: "Task due next week",
-      projectId: null,
-      due: { kind: "allDay", date: "2026-09-07" },
-    });
-    const completedTask = setup.service.createTask({ title: "Completed task", projectId: null });
-    setup.service.completeTask(completedTask.id);
-    const trashedTask = setup.service.createTask({ title: "Trashed task", projectId: null });
-    setup.service.trashTask(trashedTask.id);
-    setup.close();
-    const openSession = () => {
-      const session = openWorktodoAtPath(databasePath, options);
-      return {
-        service: session.service,
-        close: () => {
-          closeCount += 1;
-          session.close();
-        },
+  it.each([false, true])(
+    "loads, completes, reverses, and hides the menu bar with cleanup failure=%s",
+    async (cleanupFails) => {
+      const directory = await mkdtemp(join(tmpdir(), "worktodo-menu-workflow-test-"));
+      temporaryDirectories.push(directory);
+      const databasePath = join(directory, "worktodo.sqlite");
+      let nextId = 1;
+      let now = 1_000;
+      let closeCount = 0;
+      const diagnostics = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const options: OpenWorktodoOptions = {
+        createId: () => id(nextId++),
+        now: () => now,
+        recoveryDirectory: join(directory, "recovery"),
       };
-    };
-    const lifecycle = new TaskLifecycleInteraction({
-      mutations: createOperationScopedTaskLifecycleMutations(openSession),
-      policy: IMMEDIATE_COMPLETION_POLICY,
-      refresh: { refreshView: () => undefined },
-    });
+      const setup = openWorktodoAtPath(databasePath, options);
+      const task = setup.service.createTask({
+        title: "Complete from menu",
+        projectId: null,
+        due: { kind: "allDay", date: "2026-08-31" },
+      });
+      setup.service.createTask({ title: "Undated task", projectId: null });
+      setup.service.createTask({
+        title: "Task due next week",
+        projectId: null,
+        due: { kind: "allDay", date: "2026-09-07" },
+      });
+      const completedTask = setup.service.createTask({ title: "Completed task", projectId: null });
+      setup.service.completeTask(completedTask.id);
+      const trashedTask = setup.service.createTask({ title: "Trashed task", projectId: null });
+      setup.service.trashTask(trashedTask.id);
+      setup.close();
+      const openSession = () => {
+        const session = openWorktodoAtPath(databasePath, options);
+        return {
+          service: session.service,
+          close: () => {
+            closeCount += 1;
+            session.close();
+            if (cleanupFails) throw new Error("injected close failure");
+          },
+        };
+      };
+      const lifecycle = new TaskLifecycleInteraction({
+        mutations: createOperationScopedTaskLifecycleMutations(openSession),
+        policy: IMMEDIATE_COMPLETION_POLICY,
+        refresh: { refreshView: () => undefined },
+      });
 
-    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
-      count: 1,
-      allTasksCount: 3,
-      sections: [{ tasks: [{ id: task.id }] }],
-    });
-    now = 2_000;
-    const completed = lifecycle.runMutation("complete", task.id);
-    expect(completed).toMatchObject({ status: "succeeded", task: { id: task.id, completedAtMs: 2_000 } });
-    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
-      count: 0,
-      allTasksCount: 2,
-      sections: [],
-    });
-    now = 3_000;
-    if (completed.status !== "succeeded" || !completed.history) {
-      throw new Error("Expected completed menu-bar lifecycle action");
-    }
-    lifecycle.runHistory(completed.history);
-    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
-      count: 1,
-      allTasksCount: 3,
-    });
-    now = 4_000;
-    const trashed = lifecycle.runMutation("trash", task.id);
-    expect(trashed).toMatchObject({ status: "succeeded", task: { id: task.id, trashedAtMs: 4_000 } });
-    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
-      count: 0,
-      allTasksCount: 2,
-    });
-    now = 5_000;
-    if (trashed.status !== "succeeded" || !trashed.history) {
-      throw new Error("Expected trashed menu-bar lifecycle action");
-    }
-    lifecycle.runHistory(trashed.history);
-    expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
-      count: 1,
-      allTasksCount: 3,
-    });
-    expect(closeCount).toBe(9);
-    lifecycle.dispose();
+      expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+        count: 1,
+        allTasksCount: 3,
+        sections: [{ tasks: [{ id: task.id }] }],
+      });
+      now = 2_000;
+      const completed = lifecycle.runMutation("complete", task.id);
+      expect(completed).toMatchObject({ status: "succeeded", task: { id: task.id, completedAtMs: 2_000 } });
+      expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+        count: 0,
+        allTasksCount: 2,
+        sections: [],
+      });
+      now = 3_000;
+      if (completed.status !== "succeeded" || !completed.history) {
+        throw new Error("Expected completed menu-bar lifecycle action");
+      }
+      const undone = lifecycle.runHistory(completed.history);
+      expect(undone).toMatchObject({
+        status: "succeeded",
+        task: { completedAtMs: null },
+        history: { direction: "redo" },
+      });
+      expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+        count: 1,
+        allTasksCount: 3,
+      });
+      if (undone.status !== "succeeded") throw new Error("Expected menu-bar Undo");
+      const redone = lifecycle.runHistory(undone.history);
+      expect(redone).toMatchObject({
+        status: "succeeded",
+        task: { completedAtMs: 3_001 },
+        history: { direction: "undo" },
+      });
+      expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+        count: 0,
+        allTasksCount: 2,
+      });
+      if (redone.status !== "succeeded") throw new Error("Expected menu-bar Redo");
+      expect(lifecycle.runHistory(redone.history)).toMatchObject({
+        status: "succeeded",
+        task: { completedAtMs: null },
+      });
+      expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+        count: 1,
+        allTasksCount: 3,
+      });
+      now = 4_000;
+      const trashed = lifecycle.runMutation("trash", task.id);
+      expect(trashed).toMatchObject({ status: "succeeded", task: { id: task.id, trashedAtMs: 4_000 } });
+      expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+        count: 0,
+        allTasksCount: 2,
+      });
+      now = 5_000;
+      if (trashed.status !== "succeeded" || !trashed.history) {
+        throw new Error("Expected trashed menu-bar lifecycle action");
+      }
+      lifecycle.runHistory(trashed.history);
+      expect(loadMenuBarModel(openSession, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toMatchObject({
+        count: 1,
+        allTasksCount: 3,
+      });
+      expect(closeCount).toBe(13);
+      expect(diagnostics).toHaveBeenCalledTimes(cleanupFails ? 13 : 0);
+      lifecycle.dispose();
 
-    const values = new Map<string, string>();
-    const store = {
-      has: (key: string) => values.has(key),
-      remove: (key: string) => void values.delete(key),
-      set: (key: string, value: string) => void values.set(key, value),
-    };
-    expect(initialMenuBarHidden(store, false)).toBe(false);
-    hideMenuBar(store);
-    expect(initialMenuBarHidden(store, false)).toBe(true);
-    expect(initialMenuBarHidden(store, true)).toBe(false);
-    expect(values.size).toBe(0);
+      const values = new Map<string, string>();
+      const store = {
+        has: (key: string) => values.has(key),
+        remove: (key: string) => void values.delete(key),
+        set: (key: string, value: string) => void values.set(key, value),
+      };
+      expect(initialMenuBarHidden(store, false)).toBe(false);
+      hideMenuBar(store);
+      expect(initialMenuBarHidden(store, false)).toBe(true);
+      expect(initialMenuBarHidden(store, true)).toBe(false);
+      expect(values.size).toBe(0);
+    },
+  );
+
+  it("preserves the Menu Bar read failure when cleanup also fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "worktodo-menu-read-failure-test-"));
+    temporaryDirectories.push(directory);
+    const session = openWorktodoAtPath(join(directory, "worktodo.sqlite"));
+    const readError = new Error("menu read failed");
+    const read = vi.spyOn(session.service, "listProjects").mockImplementationOnce(() => {
+      throw readError;
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const close = vi.fn(() => {
+      session.close();
+      throw new Error("close failed");
+    });
+    const open = vi.fn(() => ({ service: session.service, close }));
+    expect(() => loadMenuBarModel(open, "Australia/Melbourne", Date.parse("2026-08-31T02:00:00Z"))).toThrow(readError);
+    expect(open).toHaveBeenCalledOnce();
+    expect(read).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it("exports, prepares, and replaces through the Portability service", async () => {

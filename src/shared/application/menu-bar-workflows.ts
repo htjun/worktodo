@@ -1,6 +1,7 @@
 import type { TaskService } from "../domain/task-service";
 import { buildMenuBarModel, resolveMenuBarVisibility, type MenuBarModel } from "../presentation/menu-bar";
 import { loadTaskView } from "./task-views";
+import { runWorktodoOperation } from "./worktodo";
 
 type MenuBarSession = { service: TaskService; close: () => void };
 
@@ -17,15 +18,21 @@ export function loadMenuBarModel(
   viewerTimeZone: string,
   evaluationInstantMs: number,
 ): MenuBarModel {
-  const session = openSession();
-  try {
-    const context = { evaluationInstantMs, viewerTimeZone };
-    const thisWeek = loadTaskView(session.service, { kind: "thisWeek" }, context);
-    const allTasksCount = session.service.listAllTasks(viewerTimeZone).length;
-    return buildMenuBarModel(thisWeek.result, session.service.listProjects(), allTasksCount, thisWeek.manualTaskOrder);
-  } finally {
-    session.close();
-  }
+  return runWorktodoOperation(
+    openSession,
+    (session) => {
+      const context = { evaluationInstantMs, viewerTimeZone };
+      const thisWeek = loadTaskView(session.service, { kind: "thisWeek" }, context);
+      const allTasksCount = session.service.listAllTasks(viewerTimeZone).length;
+      return buildMenuBarModel(
+        thisWeek.result,
+        session.service.listProjects(),
+        allTasksCount,
+        thisWeek.manualTaskOrder,
+      );
+    },
+    "menu bar",
+  );
 }
 
 export function initialMenuBarHidden(store: MenuBarVisibilityStore, userInitiated: boolean): boolean {

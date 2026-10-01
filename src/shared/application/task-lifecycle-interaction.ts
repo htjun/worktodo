@@ -1,5 +1,6 @@
 import type { Task } from "../domain/model";
 import type { GuardedTaskLifecycleResult, TaskLifecycleOperation, TaskLifecycleRevision } from "../domain/task-service";
+import { runWorktodoOperation } from "./worktodo";
 
 export const TASK_COMPLETION_ACKNOWLEDGEMENT_DURATION_MS = 1_000;
 export const TASK_LIFECYCLE_HISTORY_DURATION_MS = 10_000;
@@ -119,28 +120,24 @@ export function taskLifecycleActionKindForViewKind(viewKind: string): Exclude<Ta
 export function createOperationScopedTaskLifecycleMutations(
   openSession: () => OperationScopedSession,
 ): TaskLifecycleMutations {
-  const run = (operation: TaskLifecycleMutationKind, taskId: string): Task => {
-    const session = openSession();
-    try {
-      return invokeMutation(session.service, operation, taskId);
-    } finally {
-      session.close();
-    }
-  };
+  const run = (operation: TaskLifecycleMutationKind, taskId: string): Task =>
+    runWorktodoOperation(
+      openSession,
+      (session) => invokeMutation(session.service, operation, taskId),
+      "task lifecycle",
+    );
 
   return {
     completeTask: (taskId) => run("complete", taskId),
     reopenTask: (taskId) => run("reopen", taskId),
     trashTask: (taskId) => run("trash", taskId),
     restoreTask: (taskId) => run("restore", taskId),
-    applyTaskLifecycleHistory: (taskId, operation, expected) => {
-      const session = openSession();
-      try {
-        return session.service.applyTaskLifecycleHistory(taskId, operation, expected);
-      } finally {
-        session.close();
-      }
-    },
+    applyTaskLifecycleHistory: (taskId, operation, expected) =>
+      runWorktodoOperation(
+        openSession,
+        (session) => session.service.applyTaskLifecycleHistory(taskId, operation, expected),
+        "task lifecycle history",
+      ),
   };
 }
 

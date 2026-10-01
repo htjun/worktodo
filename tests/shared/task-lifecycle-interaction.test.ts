@@ -95,6 +95,7 @@ function createInteraction(policy: TaskLifecyclePolicy, mutations: TaskLifecycle
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("task lifecycle interaction", () => {
@@ -309,6 +310,94 @@ describe("task lifecycle interaction", () => {
     expect(viewRefresh).toHaveBeenCalledOnce();
     expect(acknowledgements).not.toHaveBeenCalled();
     expect(interaction.acknowledgedTasks.size).toBe(0);
+  });
+
+  it("preserves immediate completion, Undo, Redo, and expiry after cleanup fails", () => {
+    vi.useFakeTimers();
+    const source = mutableTaskMutations();
+    const diagnostics = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const close = vi.fn(() => {
+      throw new Error("close failed");
+    });
+    const open = vi.fn(() => ({ service: source.mutations, close }));
+    const events: string[] = [];
+    const { interaction, history, acknowledgements } = createInteraction(
+      IMMEDIATE_COMPLETION_POLICY,
+      createOperationScopedTaskLifecycleMutations(open),
+      events,
+    );
+
+    const completed = interaction.runMutation("complete", source.getTask().id);
+    expect(completed).toMatchObject({
+      status: "succeeded",
+      history: { direction: "undo" },
+      refresh: { view: "immediate" },
+    });
+    expect(source.getTask().completedAtMs).toBe(2_000);
+    if (completed.status !== "succeeded" || !completed.history) throw new Error("Expected completion history");
+    const undone = interaction.runHistory(completed.history);
+    expect(undone).toMatchObject({ status: "succeeded", history: { direction: "redo" } });
+    expect(source.getTask().completedAtMs).toBeNull();
+    if (undone.status !== "succeeded") throw new Error("Expected Undo history");
+    const redone = interaction.runHistory(undone.history);
+    expect(redone).toMatchObject({ status: "succeeded", history: { direction: "undo" } });
+    expect(source.getTask().completedAtMs).toBe(2_000);
+    expect(history).toEqual(["undo", "redo", "undo"]);
+    expect(acknowledgements).toEqual([]);
+    expect(events.filter((event) => event === "view refreshed")).toHaveLength(3);
+    expect(source.mutations.completeTask).toHaveBeenCalledTimes(2);
+    expect(source.mutations.reopenTask).toHaveBeenCalledOnce();
+    expect(source.mutations.applyTaskLifecycleHistory).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(3);
+    expect(close).toHaveBeenCalledTimes(3);
+    expect(diagnostics).toHaveBeenCalledTimes(3);
+    vi.advanceTimersByTime(TASK_LIFECYCLE_HISTORY_DURATION_MS);
+    expect(interaction.historyState).toBeNull();
+  });
+
+  it("preserves failed mutations and stale history when cleanup also fails", () => {
+    vi.useFakeTimers();
+    const source = mutableTaskMutations();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const close = vi.fn(() => {
+      throw new Error("close failed");
+    });
+    const open = vi.fn(() => ({ service: source.mutations, close }));
+    const events: string[] = [];
+    const { interaction } = createInteraction(
+      IMMEDIATE_COMPLETION_POLICY,
+      createOperationScopedTaskLifecycleMutations(open),
+      events,
+    );
+    const mutationError = new Error("write failed");
+    vi.mocked(source.mutations.completeTask).mockImplementationOnce(() => {
+      throw mutationError;
+    });
+    const failed = interaction.runMutation("complete", source.getTask().id);
+    expect(failed.status).toBe("failed");
+    if (failed.status !== "failed") throw new Error("Expected mutation failure");
+    expect(failed.error).toBe(mutationError);
+    expect(interaction.historyState).toBeNull();
+    expect(events).toEqual([]);
+
+    const completed = interaction.runMutation("complete", source.getTask().id);
+    if (completed.status !== "succeeded" || !completed.history) throw new Error("Expected completion history");
+    const historyError = new Error("history write failed");
+    vi.mocked(source.mutations.applyTaskLifecycleHistory).mockImplementationOnce(() => {
+      throw historyError;
+    });
+    const historyFailure = interaction.runHistory(completed.history);
+    if (historyFailure.status !== "failed") throw new Error("Expected history failure");
+    expect(historyFailure.error).toBe(historyError);
+    expect(interaction.historyState).toEqual(completed.history);
+    source.mutations.trashTask(source.getTask().id);
+    expect(interaction.runHistory(completed.history)).toEqual({ status: "unavailable", history: completed.history });
+    expect(interaction.historyState).toBeNull();
+    expect(source.mutations.reopenTask).not.toHaveBeenCalled();
+    expect(source.mutations.completeTask).toHaveBeenCalledTimes(2);
+    expect(source.mutations.applyTaskLifecycleHistory).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(4);
+    expect(close).toHaveBeenCalledTimes(4);
   });
 
   it("closes every operation-scoped session after success or failure", () => {
