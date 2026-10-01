@@ -128,6 +128,63 @@ describe("Worktodo MCP stdio server", () => {
     await expect(stat(databasePath)).resolves.toMatchObject({ mode: expect.any(Number) });
   });
 
+  it("keeps cleanup diagnostics on stderr while compiled tools return their original results", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "worktodo-mcp-stdio-cleanup-test-"));
+    temporaryDirectories.push(directory);
+    const databasePath = path.join(directory, "worktodo.sqlite");
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [
+        "-e",
+        `
+        const { serveStdio } = require("@modelcontextprotocol/server/stdio");
+        const { createServer } = require("./dist/mcp/create-server.js");
+        const { openWorktodoAtPath } = require("./dist/src/shared/application/worktodo.js");
+        serveStdio(() => createServer({
+          openSession: () => {
+            const session = openWorktodoAtPath(${JSON.stringify(databasePath)});
+            return {
+              service: session.service,
+              close: () => {
+                session.close();
+                throw new Error("private cleanup details");
+              },
+            };
+          },
+        }));
+      `,
+      ],
+      cwd: process.cwd(),
+      env: getDefaultEnvironment(),
+      stderr: "pipe",
+    });
+    let stderr = "";
+    transport.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    const client = new Client({ name: "worktodo-cleanup-test", version: "0.0.0" });
+    try {
+      await client.connect(transport);
+      const created = await client.callTool({ name: "create_task", arguments: { title: "Create once after cleanup" } });
+      expect(created.isError).not.toBe(true);
+      const taskId = (created.structuredContent?.task as { id: string }).id;
+      const listed = await client.callTool({ name: "list_tasks", arguments: { view: "all" } });
+      expect(tasksFrom(listed)).toEqual([expect.objectContaining({ id: taskId, title: "Create once after cleanup" })]);
+      const missing = await client.callTool({
+        name: "get_task",
+        arguments: { id: "00000000-0000-4000-8000-000000000999" },
+      });
+      expect(missing.isError).toBe(true);
+      expect(missing.content).toEqual([{ type: "text", text: "NOT_FOUND: Task not found" }]);
+      expect(JSON.stringify([created, listed, missing])).not.toContain("private cleanup details");
+      await expect.poll(() => stderr).toContain("Worktodo MCP get_task session close failed");
+      expect(stderr).toContain("private cleanup details");
+      expect(stderr.match(/session close failed/g)).toHaveLength(3);
+    } finally {
+      await client.close();
+    }
+  });
+
   it("rejects an unrepresentable timed due value before the compiled process writes it", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "worktodo-mcp-stdio-date-test-"));
     temporaryDirectories.push(directory);

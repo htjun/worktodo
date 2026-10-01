@@ -16,7 +16,7 @@ function id(index: number): string {
   return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 }
 
-async function createContext() {
+async function createContext(cleanupError?: Error) {
   const directory = await mkdtemp(join(tmpdir(), "worktodo-mcp-test-"));
   temporaryDirectories.push(directory);
   const db = openWorktodoDatabase(join(directory, "worktodo.sqlite"));
@@ -24,14 +24,19 @@ async function createContext() {
   const repository = new SqliteTaskRepository(db);
   let nextId = 1;
   let closeCount = 0;
+  let openCount = 0;
   const service = new TaskService(repository, { createId: () => id(nextId++), now: () => 1_000 });
   const server = createServer({
-    openSession: () => ({
-      service,
-      close: () => {
-        closeCount += 1;
-      },
-    }),
+    openSession: () => {
+      openCount += 1;
+      return {
+        service,
+        close: () => {
+          closeCount += 1;
+          if (cleanupError) throw cleanupError;
+        },
+      };
+    },
     now: () => Date.parse("2026-08-31T02:00:00.000Z"),
     viewerTimeZone: () => "Australia/Melbourne",
   });
@@ -45,6 +50,7 @@ async function createContext() {
     server,
     service,
     getCloseCount: () => closeCount,
+    getOpenCount: () => openCount,
     close: async () => {
       await client.close();
       await server.close();
@@ -69,6 +75,68 @@ afterEach(async () => {
 });
 
 describe("Worktodo MCP task tools", () => {
+  it("keeps successful read and write protocol results after cleanup fails without retrying", async () => {
+    const cleanupError = new Error("private cleanup details");
+    const diagnostics = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const stdout = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const context = await createContext(cleanupError);
+    const create = vi.spyOn(context.service, "createTask");
+    const read = vi.spyOn(context.service, "getTask");
+    try {
+      const created = await callTool(context.client, "create_task", { title: "Create once" });
+      const task = taskFrom(created);
+      expect(created.content).toEqual([{ type: "text", text: `Created “Create once” (${task.id}).` }]);
+      const found = await callTool(context.client, "get_task", { id: task.id });
+      expect(taskFrom(found)).toEqual(task);
+      expect(found.content).toEqual([{ type: "text", text: `Found “Create once” (${task.id}).` }]);
+      expect(context.service.listAllTasks("UTC")).toHaveLength(1);
+      expect(create).toHaveBeenCalledOnce();
+      expect(read).toHaveBeenCalledOnce();
+      expect(context.getOpenCount()).toBe(2);
+      expect(context.getCloseCount()).toBe(2);
+      expect(diagnostics).toHaveBeenCalledTimes(2);
+      expect(diagnostics).toHaveBeenCalledWith("Worktodo MCP create_task session close failed", cleanupError);
+      expect(diagnostics).toHaveBeenCalledWith("Worktodo MCP get_task session close failed", cleanupError);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(JSON.stringify([created, found])).not.toContain(cleanupError.message);
+      await callTool(context.client, "ping", {});
+      expect(context.getOpenCount()).toBe(2);
+      expect(context.getCloseCount()).toBe(2);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it("keeps bounded domain and internal errors when cleanup also fails", async () => {
+    const cleanupError = new Error("private cleanup path");
+    const diagnostics = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const context = await createContext(cleanupError);
+    const read = vi.spyOn(context.service, "getTask");
+    try {
+      const domainFailure = await callTool(context.client, "get_task", { id: id(999) });
+      expect(domainFailure.isError).toBe(true);
+      expect(domainFailure.content).toEqual([{ type: "text", text: "NOT_FOUND: Task not found" }]);
+      const operationError = new Error("private database operation path");
+      read.mockImplementationOnce(() => {
+        throw operationError;
+      });
+      const internalFailure = await callTool(context.client, "get_task", { id: id(999) });
+      expect(internalFailure.isError).toBe(true);
+      expect(internalFailure.content).toEqual([
+        { type: "text", text: "INTERNAL_ERROR: Worktodo could not complete the operation" },
+      ]);
+      expect(JSON.stringify([domainFailure, internalFailure])).not.toContain("private");
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(context.getOpenCount()).toBe(2);
+      expect(context.getCloseCount()).toBe(2);
+      expect(diagnostics).toHaveBeenCalledTimes(3);
+      expect(diagnostics).toHaveBeenCalledWith("Worktodo MCP get_task failed", operationError);
+      expect(diagnostics).toHaveBeenCalledWith("Worktodo MCP get_task session close failed", cleanupError);
+    } finally {
+      await context.close();
+    }
+  });
+
   it("advertises bounded tools, server instructions, and accurate safety annotations", async () => {
     const context = await createContext();
     try {

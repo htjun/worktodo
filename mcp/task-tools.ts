@@ -10,6 +10,7 @@ import {
   tasksInTaskView,
   type TaskViewKind,
 } from "../src/shared/application/task-views";
+import { runWorktodoOperation } from "../src/shared/application/worktodo";
 
 const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 50;
@@ -148,18 +149,10 @@ function withSession(
   dependencies: TaskToolDependencies,
   operation: (service: TaskService) => CallToolResult,
 ): CallToolResult {
-  let session: ToolSession | undefined;
   try {
-    session = dependencies.openSession();
-    return operation(session.service);
+    return runWorktodoOperation(dependencies.openSession, (session) => operation(session.service), `MCP ${toolName}`);
   } catch (error) {
     return failureResult(toolName, error);
-  } finally {
-    try {
-      session?.close();
-    } catch (error) {
-      console.error(`Worktodo MCP ${toolName} session close failed`, error);
-    }
   }
 }
 
